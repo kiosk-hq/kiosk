@@ -8,7 +8,8 @@ module DefaultAgentIdpSpec
   # example.
   SAMPLE_PEM = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
 
-  def bearer(token) = { 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+  # The IdP reads the token alone; the proof is IdentityResolution's (spec Section 5.6).
+  def presented(token) = { 'HTTP_AUTHORIZATION' => "DPoP #{token}" }
 
   # Decode a token this IdP minted, against the configured signing key, so an
   # assertion reads a claim off the ISSUED token rather than off a fixture.
@@ -47,7 +48,9 @@ RSpec.shared_context 'with an issuing DefaultAgentIdp' do
   include_context 'with a DefaultAgentIdp on a configured origin'
 
   let(:idp) do
-    described_class.new.tap { |i| allow(i).to receive(:lookup_user_id).and_return('u-1') }
+    described_class.new.tap do |i|
+      allow(i).to receive(:lookup_agent).and_return('user_id' => 'u-1', 'public_key' => DefaultAgentIdpSpec::SAMPLE_PEM)
+    end
   end
 end
 
@@ -79,7 +82,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
         claims: { sub: 'user-1', agent_id: 'agent-1', role: 'customer', actor: 'agent' },
         audience: 'https://demo.example'
       )
-      identity = idp.verify(bearer(token))
+      identity = idp.verify(presented(token))
       expect(identity).to be_a(Kiosk::Identity)
       expect(identity.user_id).to  eq('user-1')
       expect(identity.agent_id).to eq('agent-1')
@@ -91,27 +94,48 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(idp.verify({})).to be_nil
     end
 
+    it 'returns nil for a valid token sent as a Bearer token: the scheme is DPoP' do
+      token = agent_token(agent_id: 'agent-1')
+      expect(idp.verify('HTTP_AUTHORIZATION' => "Bearer #{token}")).to be_nil
+    end
+
+    # Operator key rotation (spec Section 4.4): the previous key still verifies.
+    it 'verifies a token that the previous signing key signed' do
+      previous = Kiosk.configuration.signing_key
+      Kiosk.configure do |c|
+        c.signing_key          = Kiosk::Server::SigningKey.generate
+        c.previous_signing_key = Kiosk::Server::SigningKey.from_pem(previous.rsa.public_key.to_pem)
+      end
+      expect(idp.verify(presented(agent_token(agent_id: 'agent-1', signing_key: previous)))).to be_a(Kiosk::Identity)
+    end
+
+    it 'returns nil for a token that neither the current nor the previous key signed' do
+      Kiosk.configure { |c| c.previous_signing_key = Kiosk::Server::SigningKey.generate }
+      token = agent_token(agent_id: 'a', signing_key: Kiosk::Server::SigningKey.generate)
+      expect(idp.verify(presented(token))).to be_nil
+    end
+
     # Verification failures resolve to nil (→ 401 at the controller), never escape
     # as JwtIssuer::Error (which would surface as HTTP 500).
     it 'returns nil for a token signed by a different key' do
       token = agent_token(agent_id: 'a', signing_key: Kiosk::Server::SigningKey.generate)
-      expect(idp.verify(bearer(token))).to be_nil
+      expect(idp.verify(presented(token))).to be_nil
     end
 
     it 'returns nil for an expired token' do
       # default 1h lifetime + 60s leeway long gone
       token = agent_token(agent_id: 'a', now: Time.current - 7200)
-      expect(idp.verify(bearer(token))).to be_nil
+      expect(idp.verify(presented(token))).to be_nil
     end
 
     it 'returns nil for a malformed (garbage) token' do
-      expect(idp.verify(bearer('definitely-not-a-jwt'))).to be_nil
+      expect(idp.verify(presented('definitely-not-a-jwt'))).to be_nil
     end
 
     it 'returns nil for a revoked token' do
       token = agent_token(agent_id: 'agent-rev', now: Time.current - 10)
       Kiosk.configuration.revocation_store.revoke_all('agent-rev', at: Time.now.to_i)
-      expect(idp.verify(bearer(token))).to be_nil
+      expect(idp.verify(presented(token))).to be_nil
     end
   end
 
@@ -127,8 +151,8 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(binds).to eq(['agent-1'])
     end
 
-    it 'scopes lookup_user_id lookups to non-revoked agents' do
-      idp.send(:lookup_user_id, 'agent-1')
+    it 'scopes lookup_agent lookups to non-revoked agents' do
+      idp.send(:lookup_agent, 'agent-1')
       sql, binds = recorder.last
       expect(sql).to include('FROM kiosk.agents WHERE id = $1 AND revoked_at IS NULL')
       expect(binds).to eq(['agent-1'])
@@ -137,9 +161,9 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
     # The column is the only interpolated part, and it is one of four literals
     # in the file rather than anything a caller can reach — Postgres cannot
     # bind an identifier in any case.
-    it 'selects only the column its caller asked for' do
-      idp.send(:lookup_user_id, 'agent-1')
-      expect(recorder.last.first).to start_with('SELECT user_id FROM')
+    it 'selects only the columns its caller asked for' do
+      idp.send(:lookup_agent, 'agent-1')
+      expect(recorder.last.first).to start_with('SELECT user_id, public_key FROM')
       idp.agent_payment_key('agent-1')
       expect(recorder.last.first).to start_with('SELECT public_key FROM')
     end
@@ -188,6 +212,12 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   describe '#issue — the claims every minted token carries' do
     include_context 'with an issuing DefaultAgentIdp'
 
+    # RFC 9449 Section 6.1: the token is bound to the key the agent registered.
+    it 'binds every token it mints to the agent key, as `cnf.jkt`' do
+      jkt = Kiosk::Server::SigningKey.from_pem(DefaultAgentIdpSpec::SAMPLE_PEM).kid
+      expect(decode(idp.issue(agent_id: 'a-1', role: nil))['cnf']).to eq('jkt' => jkt)
+    end
+
     it 'stamps an `actor` claim of `agent` on every token it mints, role or no role' do
       with_role    = decode(idp.issue(agent_id: 'a-1', role: :customer))
       without_role = decode(idp.issue(agent_id: 'a-1', role: nil))
@@ -200,7 +230,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
     # whose `actor` were dropped or rewritten between issue and verify would
     # still satisfy the assertion above.
     it 'carries the `actor` claim through verification into the resolved Identity' do
-      identity = idp.verify(bearer(idp.issue(agent_id: 'a-1', role: :customer)))
+      identity = idp.verify(presented(idp.issue(agent_id: 'a-1', role: :customer)))
 
       expect(identity.claims[:actor]).to eq('agent')
       expect(identity.actor).to eq('agent')
@@ -226,7 +256,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(decode(first)['jti']).not_to eq(decode(second)['jti'])
 
       [first, second].each do |token|
-        identity = idp.verify(bearer(token))
+        identity = idp.verify(presented(token))
         expect(identity).to          be_a(Kiosk::Identity)
         expect(identity.agent_id).to eq('a-1')
         expect(identity.user_id).to  eq('u-1')
@@ -240,8 +270,8 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       second = idp.issue(agent_id: 'a-1', role: :customer)
       Kiosk.configuration.revocation_store.revoke_all('a-1', at: Time.now.to_i + 120)
 
-      expect(idp.verify(bearer(first))).to  be_nil
-      expect(idp.verify(bearer(second))).to be_nil
+      expect(idp.verify(presented(first))).to  be_nil
+      expect(idp.verify(presented(second))).to be_nil
     end
   end
 

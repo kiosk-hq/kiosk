@@ -18,7 +18,7 @@ module Kiosk
 
       def resolve_identity!
         identity = IdentityResolution.resolve(request)
-        raise Errors::Unauthenticated, 'no identity resolved from request' if identity.nil?
+        raise Errors::AccessTokenRefused if identity.nil?
 
         identity
       end

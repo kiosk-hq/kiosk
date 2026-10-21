@@ -109,13 +109,13 @@ RSpec.describe Kiosk::Server::IssuerMiddleware do
 
       def token_on(origin)
         Kiosk.with_issuer(origin) do
-          Kiosk::Server::JwtIssuer.issue(claims: { sub: 'u-1', agent_id: 'a-1', actor: 'agent' },
+          Kiosk::Server::JwtIssuer.issue(claims: { sub: 'u-1', agent_id: 'a-1', actor: 'agent', cnf: cnf_for },
                                          audience: Kiosk.current_issuer)
         end
       end
 
       def verify_on(origin, token)
-        Kiosk.with_issuer(origin) { idp.verify('HTTP_AUTHORIZATION' => "Bearer #{token}") }
+        Kiosk.with_issuer(origin) { idp.verify('HTTP_AUTHORIZATION' => "DPoP #{token}") }
       end
 
       it 'mints a token whose iss and aud are the origin being served' do

@@ -518,10 +518,10 @@ RSpec.describe Kiosk::Server::OpenApi do
       expect(document.dig(:info, :version)).to eq(Kiosk::Protocol::API_VERSION)
     end
 
-    it 'requires the same Bearer identity the wire does' do
-      expect(document[:security]).to eq([{ bearerAuth: [] }])
-      expect(document.dig(:components, :securitySchemes, :bearerAuth))
-        .to include(type: 'http', scheme: 'bearer')
+    it 'requires the same DPoP-bound identity the wire does' do
+      expect(document[:security]).to eq([{ dpopAuth: [] }])
+      expect(document.dig(:components, :securitySchemes, :dpopAuth))
+        .to include(type: 'http', scheme: 'DPoP')
     end
 
     it 'points at the normative specification as the authority' do

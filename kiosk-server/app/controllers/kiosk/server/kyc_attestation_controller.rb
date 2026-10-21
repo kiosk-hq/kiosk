@@ -49,10 +49,7 @@ module Kiosk
 
       # Only an assistant submits an attestation, so only the agent IdP answers.
       def authenticate!
-        identity = IdentityResolution.agent_idp.verify(request)
-        raise Errors::Unauthenticated, 'missing or invalid agent token' if identity.nil?
-
-        identity
+        IdentityResolution.resolve(request) || raise(Errors::AccessTokenRefused)
       end
 
       def render_error(err)

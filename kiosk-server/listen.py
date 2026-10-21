@@ -8,10 +8,15 @@ cadence to invent.
 
     python3 listen.py --url wss://shop.example/kiosk/events \
                       --token-file ~/.kiosk/https_shop.example_443/token \
+                      --proof-command "python3 ~/.kiosk/dpop.py ~/.kiosk/https_shop.example_443/key.pem" \
                       --topic order_delivery:<order-id>
 
-The bearer token is read from a file, never from the command line, where every
-process listing and shell history would show it.
+The access token is read from a file, never from the command line, where every
+process listing and shell history would show it. The token works only with a
+DPoP proof (RFC 9449) that your private key signs. This file never reads that
+key: before each connection it runs your --proof-command, writes the URL to
+prove and the token to its stdin, one per line, and sends the proof that the
+command prints.
 
 WAKE ON THE EVENT: run it as a background process your runtime TRACKS and wakes
 you on when it exits. With `--until-event` it prints the first event and exits 0
@@ -21,7 +26,7 @@ on the event, tell your human, and start it again with `--since <its id>`. Keep
 process the runtime does not track -- nohup, `&`, setsid -- wakes nobody, and
 neither does a line landing in a file.
 
-    python3 listen.py --url … --token-file … --topic kyc_verification \
+    python3 listen.py --url … --token-file … --proof-command … --topic kyc_verification \
                       --until-event --max-seconds 300
 
 Each line is a JSON object with a `type`:
@@ -36,7 +41,8 @@ Each line is a JSON object with a `type`:
     {"type":"error","message":…}
 
 EXIT CODES: 0 you asked it to stop (--max-seconds), or --until-event got its
-event; 2 the arguments or the URL are wrong; 3 the operator will not have this
+event; 2 the arguments or the URL are wrong, or --proof-command printed no
+proof; 3 the operator will not have this
 token back and no --token-command was given — mint a fresh one and start it
 again; 4 nothing you asked for can arrive: every topic you named was refused,
 or the origin serves no event stream (`501 module_not_served`); 5
@@ -86,6 +92,22 @@ def problem_code(response):
         return json.loads(response.body)["code"]
     except (TypeError, ValueError, KeyError):
         return None
+
+
+def proof_url(url):
+    """The `htu` of the upgrade: the events URL with `wss` written as `https`,
+    no query."""
+    parts = urlsplit(url)
+    scheme = {"wss": "https", "ws": "http"}[parts.scheme]
+    return urlunsplit((scheme, parts.netloc, parts.path, "", ""))
+
+
+def dpop_proof(command, url, token):
+    """The proof your --proof-command prints for this URL and token, or None."""
+    made = subprocess.run(command, shell=True, input=f"{proof_url(url)}\n{token}\n",
+                          capture_output=True, text=True, check=False)
+    proof = made.stdout.strip()
+    return proof if made.returncode == 0 and proof else None
 
 
 def stream_url(url, topics, since):
@@ -145,7 +167,7 @@ def read_frames(socket, state, deadline):
                  reconnect=frame.get("reconnect", True))
             # `reconnect: false` is the operator saying this credential is done:
             # it expired, or the human revoked the assistant. A retry with the
-            # same bearer loses the same argument, so mint a new one or stop.
+            # same token loses the same argument, so mint a new one or stop.
             if frame.get("reconnect", True):
                 return "retry"
             return "retry" if state["refresh"] else "credential"
@@ -191,12 +213,15 @@ def main():
     parser = argparse.ArgumentParser(description="Kiosk event-stream listener")
     parser.add_argument("--url", required=True, help="the operator's events_url")
     parser.add_argument("--token-file", required=True, metavar="PATH",
-                        help="a file holding your bearer token")
+                        help="a file holding your access token")
+    parser.add_argument("--proof-command", required=True,
+                        help="shell command that reads a URL and a token on stdin and prints "
+                             "the DPoP proof your private key signs for them")
     parser.add_argument("--topic", action="append", required=True, metavar="NAME[:SUBJECT]",
                         help="repeatable; NAME:SUBJECT narrows to one row")
     parser.add_argument("--since", type=int, help="resume after this event id")
     parser.add_argument("--token-command",
-                        help="shell command printing a fresh bearer token; run when the "
+                        help="shell command printing a fresh access token; run when the "
                              "operator says this one will not be accepted back")
     parser.add_argument("--max-seconds", type=float, help="stop after this long")
     parser.add_argument("--until-event", action="store_true",
@@ -224,10 +249,15 @@ def main():
         if deadline and time.monotonic() >= deadline:
             return 5 if args.until_event else 0
         renew = True
+        proof = dpop_proof(args.proof_command, args.url, state["token"])
+        if proof is None:
+            emit(type="error", message="--proof-command produced no proof")
+            return 2
         try:
             with connect(stream_url(args.url, args.topic, state["since"]),
                          subprotocols=[SUBPROTOCOL],
-                         additional_headers={"Authorization": f"Bearer {state['token']}"},
+                         additional_headers={"Authorization": f"DPoP {state['token']}",
+                                             "DPoP": proof},
                          open_timeout=15, close_timeout=5) as socket:
                 emit(type="open")
                 attempt = 0

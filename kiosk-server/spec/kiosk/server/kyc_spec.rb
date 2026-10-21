@@ -60,7 +60,7 @@ module KycSpec
 
   def token(user_id: 'u-1', agent_id: 'a-1')
     Kiosk::Server::JwtIssuer.issue(
-      claims: { sub: user_id, agent_id: agent_id, role: 'customer', actor: 'agent' },
+      claims: { sub: user_id, agent_id: agent_id, role: 'customer', actor: 'agent', cnf: cnf_for },
       audience: 'https://shop.example'
     )
   end
@@ -75,7 +75,8 @@ module KycSpec
   def request_kyc(user_id: 'u-1')
     env = Rack::MockRequest.env_for(
       '/kiosk/request_kyc', method: 'POST', input: '{}',
-                            'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token(user_id: user_id)}"
+                            'CONTENT_TYPE' => 'application/json',
+                            **dpop_env(token(user_id: user_id), method: 'POST', url: 'https://shop.example/kiosk/request_kyc')
     )
     env['action_dispatch.request.path_parameters'] =
       { controller: 'kiosk/server/verb', action: 'create', kiosk_verb: 'request_kyc' }
@@ -92,7 +93,8 @@ module KycSpec
   def submit(kyc_jws, user_id: 'u-1')
     env = Rack::MockRequest.env_for('/kiosk/agents/kyc', method: 'POST', input: JSON.generate(kyc_jws: kyc_jws),
                                                          'CONTENT_TYPE' => 'application/json',
-                                                         'HTTP_AUTHORIZATION' => "Bearer #{token(user_id: user_id)}")
+                                                         **dpop_env(token(user_id: user_id), method: 'POST',
+                                                                                             url: 'https://shop.example/kiosk/agents/kyc'))
     env['action_dispatch.request.path_parameters'] = { controller: 'kiosk/server/kyc_attestation', action: 'create' }
     dispatch(Kiosk::Server::KycAttestationController, env)
   end

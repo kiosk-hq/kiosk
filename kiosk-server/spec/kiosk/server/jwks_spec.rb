@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'rack/mock'
+
 RSpec.describe Kiosk::Server::Jwks do
   let(:key)  { Kiosk::Server::SigningKey.generate }
   let(:key2) { Kiosk::Server::SigningKey.generate }
@@ -26,6 +28,38 @@ RSpec.describe Kiosk::Server::Jwks do
       parsed = JSON.parse(json, symbolize_names: true)
       jwk = parsed[:keys].first
       expect(jwk.keys).to match_array(%i[kty use kid n e])
+    end
+  end
+
+  # Operator key rotation (spec Section 4.4): the document holds the current key
+  # and, while it is set, the previous one.
+  describe Kiosk::Server::JwksController do
+    def served_kids
+      _, _, body = described_class.action(:show).call(Rack::MockRequest.env_for('/kiosk/.well-known/jwks.json'))
+      raw = +''
+      body.each { |chunk| raw << chunk }
+      JSON.parse(raw).fetch('keys').map { it.fetch('kid') }
+    end
+
+    let(:current)  { Kiosk::Server::SigningKey.generate }
+    let(:previous) { Kiosk::Server::SigningKey.generate }
+
+    it 'serves the current key alone when no previous key is set' do
+      Kiosk.configure { |c| c.signing_key = current }
+      expect(served_kids).to eq([current.kid])
+    end
+
+    it 'serves the current key first and the previous key after it' do
+      Kiosk.configure do |c|
+        c.signing_key          = current
+        c.previous_signing_key = previous.rsa.public_key.to_pem
+      end
+      expect(served_kids).to eq([current.kid, previous.kid])
+    end
+
+    it 'refuses a previous key that is neither a SigningKey nor a PEM' do
+      expect { Kiosk.configure { |c| c.previous_signing_key = 42 } }
+        .to raise_error(ArgumentError, /previous_signing_key must be a SigningKey or PEM string/)
     end
   end
 end

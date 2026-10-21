@@ -10,7 +10,7 @@
 #
 # It boots a Rails application with kiosk-server loaded and the engine mounted,
 # declares the topics the scenarios need, installs a fake agent-IdP that accepts
-# one bearer token, serves the app on an ephemeral port, then drives the
+# one access token bound to one probe key, serves the app on an ephemeral port, then drives the
 # scenarios below over a REAL WebSocket and prints one JSON report on stdout.
 #
 # The client is built on `websocket-driver`, which Action Cable already depends
@@ -29,6 +29,7 @@ require 'puma/launcher'
 require 'websocket/driver'
 require 'openssl'
 require 'stringio'
+require 'kiosk/test_helpers/dpop'
 require_relative 'memory_event_store'
 
 report = {}
@@ -40,8 +41,10 @@ LOG = StringIO.new
 # serves no events module at all and answers the mount accordingly.
 NO_TOPICS = ENV['PROBE_NO_TOPICS'] == '1'
 
-# ── a fake agent-IdP: one token, one identity ────────────────────────────────
+# ── a fake agent-IdP: one token, one identity, bound to one key ───────────────
 GOOD_TOKEN = 'good-token'
+AGENT_KEY  = OpenSSL::PKey::RSA.generate(2048)
+AGENT_JKT  = Kiosk::Server::SigningKey.new(AGENT_KEY.public_key).kid
 
 # The switches a scenario flips under a socket that is already open.
 module ProbeState
@@ -67,12 +70,12 @@ class ProbeIdp
   def verify(request)
     ProbeState.issuers_seen << Kiosk.current_issuer
     header = request.headers['Authorization'] || request.headers['HTTP_AUTHORIZATION']
-    return nil unless header.to_s == "Bearer #{GOOD_TOKEN}"
+    return nil unless header.to_s == "DPoP #{GOOD_TOKEN}"
     return nil if ProbeState.revoked
     return nil if Time.now.to_i >= ProbeState.expires_at
 
     Kiosk::Identity.new(user_id: 'u1', role: 'customer', actor: 'agent', agent_id: 'a1',
-                        claims: { exp: ProbeState.expires_at })
+                        claims: { exp: ProbeState.expires_at, cnf: { jkt: AGENT_JKT } })
   end
 end
 
@@ -345,11 +348,19 @@ def response_complete?(raw)
   length && body.bytesize >= length.to_i
 end
 
+# `Authorization: DPoP` and a proof AGENT_KEY signs for GET of `path` on this
+# host: the events URL with `ws` written as `http`, no query (spec Section 8.5.3).
+# `proof` may name another :token, :key or :iat.
+def credential(port, path: '/kiosk/events', host: '127.0.0.1', **proof)
+  token, key, iat = proof.values_at(:token, :key, :iat)
+  Kiosk::TestHelpers::Dpop.headers(token || GOOD_TOKEN, key || AGENT_KEY, method: 'GET',
+                                                                          url: "http://#{host}:#{port}#{path}",
+                                                                          iat: iat || Time.now.to_i)
+end
+
 def connect(port, headers: nil, path: '/kiosk/events', host: '127.0.0.1')
-  ProbeSocket.new(port, path, headers || {
-                    'Origin' => Kiosk.configuration.issuer,
-                    'Authorization' => "Bearer #{GOOD_TOKEN}"
-                  }, host: host)
+  headers ||= { 'Origin' => Kiosk.configuration.issuer, **credential(port, path: path, host: host) }
+  ProbeSocket.new(port, path, headers, host: host)
 end
 
 # ── boot Puma ────────────────────────────────────────────────────────────────
@@ -391,7 +402,7 @@ if NO_TOPICS
         .dig('kiosk', 'capabilities')
   report[:plain]   = raw_get(port, '/kiosk/events', 'Connection' => 'close')
   report[:upgrade] =
-    raw_get(port, '/kiosk/events', UPGRADE_HEADERS.merge('Authorization' => "Bearer #{GOOD_TOKEN}"))
+    raw_get(port, '/kiosk/events', UPGRADE_HEADERS.merge(credential(port)))
   report[:anonymous_upgrade] = raw_get(port, '/kiosk/events', UPGRADE_HEADERS)
   # And what a real client makes of it: the driver never opens, and no frame
   # arrives for it to read.
@@ -411,8 +422,8 @@ begin
   # 0 — the toll is on: a verb called with a good credential and no proof is
   #     challenged, which is what makes every accepted upgrade below free.
   report[:tolled_verb_status] =
-    raw_get(port, '/kiosk/list_nothing', 'Authorization' => "Bearer #{GOOD_TOKEN}",
-                                         'Connection' => 'close')['status']
+    raw_get(port, '/kiosk/list_nothing', credential(port, path: '/kiosk/list_nothing')
+                                           .merge('Connection' => 'close'))['status']
 
   # 1 — no Authorization: the upgrade is refused.
   sock = connect(port, headers: { 'Origin' => Kiosk.configuration.issuer })
@@ -429,10 +440,32 @@ begin
   sock.close
 
   # 2 — a bad token: refused.
-  sock = connect(port, headers: { 'Origin' => Kiosk.configuration.issuer,
-                                  'Authorization' => 'Bearer nope' })
+  sock = connect(port, headers: { 'Origin' => Kiosk.configuration.issuer, **credential(port, token: 'nope') })
   sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
   report[:bad_token_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
+  sock.close
+
+  # 2a — the good token as a Bearer token, with no proof: refused (spec
+  #      Section 5.6). A copy of the token is worth nothing on its own.
+  sock = connect(port, headers: { 'Origin' => Kiosk.configuration.issuer,
+                                  'Authorization' => "Bearer #{GOOD_TOKEN}" })
+  sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
+  report[:bearer_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
+  sock.close
+
+  # 2c — the good token with a proof another key signed: refused.
+  sock = connect(port, headers: { 'Origin' => Kiosk.configuration.issuer,
+                                  **credential(port, key: OpenSSL::PKey::RSA.generate(2048)) })
+  sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
+  report[:foreign_key_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
+  sock.close
+
+  # 2d — a proof for another URL: refused, so a captured proof does not open
+  #      a stream it was not signed for.
+  sock = connect(port, headers: { 'Origin' => Kiosk.configuration.issuer,
+                                  **credential(port, path: '/kiosk/list_nothing') })
+  sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
+  report[:other_url_proof_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
   sock.close
 
   # 2b — a GOOD token, but in the query string: refused. Spec Section 8.5.3
@@ -577,7 +610,7 @@ begin
   # 13 — NO `Origin` header at all, and the upgrade is accepted. The
   #      `Authorization` header is the authorisation; `Origin` is a browser's
   #      forgery control and there is no browser on this exchange.
-  sock = connect(port, headers: { 'Authorization' => "Bearer #{GOOD_TOKEN}" })
+  sock = connect(port, headers: credential(port))
   sock.pump_until { sock.frames.any? }
   report[:no_origin_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
   sock.close
@@ -585,8 +618,7 @@ begin
   # 14 — an `Origin` naming somewhere else entirely, same answer: a browser
   #      cannot attach the `Authorization` header cross-origin, so the header
   #      that decides this upgrade is one an attacker's page cannot send.
-  sock = connect(port, headers: { 'Origin' => 'https://example.com',
-                                  'Authorization' => "Bearer #{GOOD_TOKEN}" })
+  sock = connect(port, headers: { 'Origin' => 'https://example.com', **credential(port) })
   sock.pump_until { sock.frames.any? }
   report[:foreign_origin_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
   sock.close
@@ -736,6 +768,12 @@ begin
   idle.pump_until { idle.frames.any? { |f| f['type'] == 'welcome' } }
   dormant = connect(port)
   dormant.pump_until { dormant.frames.any? { |f| f['type'] == 'welcome' } }
+  # A socket whose upgrade proof was signed 56 seconds ago: accepted, and past
+  # its 60-second window within the next few re-authorisations. It stays open
+  # only if a re-authorisation reads the token alone (spec Section 8.5.6).
+  aged = connect(port, headers: { 'Origin' => Kiosk.configuration.issuer, **credential(port, iat: Time.now.to_i - 56) })
+  aged.pump_until { aged.frames.any? { |f| f['type'] == 'welcome' } }
+  report[:aged_proof_welcomed] = aged.frames.any? { |f| f['type'] == 'welcome' }
 
   # 16 — nothing has changed, so several periods later neither socket has been
   #      told anything. A timer that tore a valid subscription down would be as
@@ -744,6 +782,10 @@ begin
   plain.pump_until(seconds: 1) { false }
   report[:steady_unsubscribed] = held.messages.any? { |m| m['type'] == 'unsubscribed' }
   report[:steady_disconnected] = plain.frames.any? { |f| f['type'] == 'disconnect' }
+  aged.pump_until(seconds: 2) { false }
+  report[:aged_proof_frames] = aged.frames.reject { |f| f['type'] == 'welcome' }
+  report[:aged_proof_closed] = aged.closed?
+  aged.close
 
   # 17 — the operator's own rule stops saying yes. Delivery stops and the
   #      client is told why, on the subscription that lost it and no other.

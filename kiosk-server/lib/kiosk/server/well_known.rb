@@ -88,7 +88,8 @@ module Kiosk
           jwks_uri: "#{endpoint}/.well-known/jwks.json",
           # No authorization endpoint, so no response type.
           response_types_supported: [], grant_types_supported: [DEVICE_CODE_GRANT],
-          token_endpoint_auth_methods_supported: ['none'], service_documentation: "#{base}/auth.md" }
+          token_endpoint_auth_methods_supported: ['none'], service_documentation: "#{base}/auth.md",
+          dpop_signing_alg_values_supported: [Dpop::ALGORITHM] }
       end
 
       # `/.well-known/agent-skills/index.json` (Agent Skills Discovery v0.2.0):
@@ -185,7 +186,8 @@ module Kiosk
             challenge: "#{endpoint}/auth/challenge",
             register: "#{endpoint}/auth/register",
             login: "#{endpoint}/auth/login",
-            revoke: "#{endpoint}/auth/revoke"
+            revoke: "#{endpoint}/auth/revoke",
+            rotate: "#{endpoint}/auth/rotate"
           }
         end
 
@@ -365,9 +367,11 @@ module Kiosk
 
             ## Use the access_token
 
-            Send `Authorization: Bearer <access_token>` to the wire verbs
-            under `#{endpoint}` — every query, every action, and `pay`. Tokens
-            are RS256 JWTs verifiable against the JWKS above.
+            Send `Authorization: DPoP <access_token>` to the wire verbs
+            under `#{endpoint}` — every query, every action, and `pay` — with a
+            `DPoP` header: a proof (RFC 9449) that your registered key signs
+            for that method and URL. A token is bound to that key and works
+            with no other. Tokens are RS256 JWTs verifiable against the JWKS above.
             `GET #{endpoint}/schema` is the exception: it is PUBLIC, so read
             the catalogue before you register if you like.
 
@@ -414,8 +418,14 @@ module Kiosk
 
             ## Revocation
 
-            - Credential layer: `POST #{urls[:revoke]}` (Bearer) revokes every
+            - Credential layer: `POST #{urls[:revoke]}` (DPoP) revokes every
               outstanding token for your identity and returns a fresh one.
+            - Key rotation: `POST #{urls[:rotate]}`
+              `{ public_key, signed, new_public_key, new_signed }` puts a new
+              key on your identity. Each key signs a challenge issued for it,
+              and the old key's proof carries `new_key`, the RFC 7638
+              thumbprint of the new key. Your identity and its reputation stay;
+              every earlier token is revoked.
             - Registration layer (unlink): the account holder — or the
               provider — deactivates a key's binding (`POST
               #{endpoint}/auth/unlink`, session-authenticated, or the

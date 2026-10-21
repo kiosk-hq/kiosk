@@ -108,7 +108,7 @@ module Kiosk
         when 'pow_required'
           %(Kiosk-PoW realm="#{issuer}")
         when 'payment_setup_required'
-          %(Payment realm="#{issuer}", method="ap2")
+          %(Kiosk-Payment-Setup realm="#{issuer}")
         end
       end
     end

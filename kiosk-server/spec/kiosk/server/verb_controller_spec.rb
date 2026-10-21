@@ -21,7 +21,7 @@ require 'kiosk/reputation'
 module VerbControllerSpec
   def token
     @token ||= Kiosk::Server::JwtIssuer.issue(
-      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent' },
+      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent', cnf: cnf_for },
       audience: 'https://demo.example'
     )
   end
@@ -30,7 +30,7 @@ module VerbControllerSpec
   # action for a POST. `headers` takes `auth:` (default true), `accept:`,
   # `timezone:` and `pow:`.
   def call_verb(method, name, query: nil, body: nil, **headers)
-    opts = { method: method.to_s.upcase }.merge(body_env(body), header_env(**headers))
+    opts = { method: method.to_s.upcase }.merge(body_env(body), header_env(method, "/kiosk/#{name}", **headers))
     env = Rack::MockRequest.env_for("/kiosk/#{name}#{"?#{query}" if query}", opts)
 
     answer(Kiosk::Server::Routing::VerbRoute.new(method == :get ? :query : :action, name).call(env))
@@ -41,15 +41,14 @@ module VerbControllerSpec
   end
 
   # Rack::MockRequest sends no `Accept` by default; a real assistant does, and
-  # it is the input Rails' `_set_vary_header` keys off.
-  def header_env(auth: true, accept: nil, timezone: nil, pow: nil)
-    {
-      'HTTP_AUTHORIZATION' => ("Bearer #{token}" if auth),
-      'HTTP_ACCEPT' => accept,
-      'HTTP_KIOSK_TIMEZONE' => timezone,
-      'HTTP_KIOSK_POW' => pow
-    }.compact
+  # it is the input Rails' `_set_vary_header` keys off. `auth` sends the token
+  # with a DPoP proof for this method and path on this origin.
+  def header_env(method, path, auth: true, **headers)
+    credential = auth ? dpop_env(token, method: method.to_s.upcase, url: "https://demo.example#{path}") : {}
+    credential.merge(headers.to_h { |name, value| [PLAIN_HEADERS.fetch(name), value] }).compact
   end
+
+  PLAIN_HEADERS = { accept: 'HTTP_ACCEPT', timezone: 'HTTP_KIOSK_TIMEZONE', pow: 'HTTP_KIOSK_POW' }.freeze
 
   # Returns [status, parsed body, headers]. The media type is half of what
   # makes a problem document one, and the cache policy is response shape
@@ -246,7 +245,7 @@ RSpec.describe Kiosk::Server::VerbController do
 
     def pay_answer(auth:)
       env = Rack::MockRequest.env_for('/kiosk/pay', method: 'POST', input: '{}', 'CONTENT_TYPE' => 'application/json',
-                                                    **header_env(auth: auth))
+                                                    **header_env(:post, '/kiosk/pay', auth: auth))
       dispatch(Kiosk::Server::WireController, :pay, env)
     end
 

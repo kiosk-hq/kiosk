@@ -6,7 +6,10 @@ module Kiosk
     # (`c.agent_idp`). The engine calls only `verify`: it mints tokens and reads
     # mandate-signing keys through its bundled DefaultAgentIdp. The `agent_id` it
     # returns must be a uuid: every schema column and `kiosk.current_agent_id()`
-    # are typed `uuid`, so map foreign ids.
+    # are typed `uuid`, so map foreign ids. The token comes as
+    # `Authorization: DPoP <token>`, and the identity's `claims` carry
+    # `cnf: { jkt: }`, the thumbprint of the key that must sign the request's
+    # DPoP proof (RFC 9449).
     class Base
       # @return [Kiosk::Identity, nil] nil when the credential is absent or invalid (the caller answers 401)
       def verify(_request)

@@ -56,7 +56,7 @@ module WireControllerPowHeaderSpec
   end
 
   def env_for(path, method:, pow_header: nil, input: nil)
-    opts = { 'HTTP_AUTHORIZATION' => "Bearer #{agent_token}", method: method }
+    opts = { method: method, **dpop_env(agent_token, method: method, url: "https://demo.example#{path}") }
     opts['HTTP_KIOSK_POW'] = pow_header if pow_header
     if input
       opts[:input] = input
@@ -82,7 +82,7 @@ module WireControllerPowHeaderSpec
 
   def agent_token
     @agent_token ||= Kiosk::Server::JwtIssuer.issue(
-      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent' },
+      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent', cnf: cnf_for },
       audience: 'https://demo.example'
     )
   end

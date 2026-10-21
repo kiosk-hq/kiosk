@@ -42,20 +42,22 @@ module WireController402Spec
     [status, headers, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
   end
 
-  def bearer_env(path, token, **)
-    Rack::MockRequest.env_for(path, 'HTTP_AUTHORIZATION' => "Bearer #{token}", **)
+  # `path` carrying `token` and its DPoP proof for this method on this origin.
+  def token_env(path, token, **opts)
+    proof = dpop_env(token, method: opts.fetch(:method, 'GET'), url: "https://demo.example#{path}")
+    Rack::MockRequest.env_for(path, **proof, **opts)
   end
 
   # `POST /kiosk/pay` with three placeholder mandates.
   def pay_env
-    bearer_env('/kiosk/pay', agent_token,
-               method: 'POST', 'CONTENT_TYPE' => 'application/json',
-               input: JSON.generate(checkout_mandate: 'x~', payment_mandate: 'y~'))
+    token_env('/kiosk/pay', agent_token,
+              method: 'POST', 'CONTENT_TYPE' => 'application/json',
+              input: JSON.generate(checkout_mandate: 'x~', payment_mandate: 'y~'))
   end
 
   def agent_token
     Kiosk::Server::JwtIssuer.issue(
-      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent' },
+      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent', cnf: cnf_for },
       audience: 'https://demo.example'
     )
   end
@@ -117,7 +119,7 @@ RSpec.describe Kiosk::Server::WireController do
       # `pow_required`, a top-level `code` member and also the `type` URI.
       it 'answers a per-verb GET the same gate as a problem document, uncacheable' do
         declare_query('menu') { render json: [] }
-        status, headers, body = dispatch_verb(:show, 'menu', bearer_env('/kiosk/menu', agent_token))
+        status, headers, body = dispatch_verb(:show, 'menu', token_env('/kiosk/menu', agent_token))
 
         expect(status).to eq(402)
         expect(headers['WWW-Authenticate']).to eq('Kiosk-PoW realm="https://demo.example"')
@@ -143,9 +145,9 @@ RSpec.describe Kiosk::Server::WireController do
       # the tolled plane refuses the conditional request on purpose.
       it 'answers 402 to a CONDITIONAL request — the toll runs before freshness' do
         declare_query('menu') { render json: [] }
-        env = bearer_env('/kiosk/menu', agent_token,
-                         'HTTP_IF_NONE_MATCH' => '*',
-                         'HTTP_IF_MODIFIED_SINCE' => 'Sun, 06 Nov 2044 08:49:37 GMT')
+        env = token_env('/kiosk/menu', agent_token,
+                        'HTTP_IF_NONE_MATCH' => '*',
+                        'HTTP_IF_MODIFIED_SINCE' => 'Sun, 06 Nov 2044 08:49:37 GMT')
         status, = dispatch_verb(:show, 'menu', env)
 
         expect(status).to eq(402)
@@ -158,7 +160,7 @@ RSpec.describe Kiosk::Server::WireController do
       end
     end
 
-    # ─── Payment-setup gate → WWW-Authenticate: Payment ────────────────────
+    # ─── Payment-setup gate → WWW-Authenticate: Kiosk-Payment-Setup ────────
     describe 'the payment_setup_required 402' do
       before do
         # A provider that knows the principal has no card on file → the pay verb
@@ -173,10 +175,10 @@ RSpec.describe Kiosk::Server::WireController do
         stub_const('ActiveRecord::Base', Class.new { define_singleton_method(:lease_connection) { Object.new } })
       end
 
-      it 'carries WWW-Authenticate: Payment ... method="ap2" AND the body pointer' do
+      it 'carries WWW-Authenticate: Kiosk-Payment-Setup AND the body pointer' do
         status, headers, problem = dispatch(:pay, pay_env)
         expect(status).to eq(402)
-        expect(headers['WWW-Authenticate']).to eq('Payment realm="https://demo.example", method="ap2"')
+        expect(headers['WWW-Authenticate']).to eq('Kiosk-Payment-Setup realm="https://demo.example"')
         expect(headers['Content-Type']).to include('application/problem+json')
         # The other 402 of the pair — same status, same endpoint, different
         # code — which is why the code member is the branch point.
@@ -215,8 +217,8 @@ RSpec.describe Kiosk::Server::WireController do
 
       it 'carries NO WWW-Authenticate header — no scheme names this gate (§9)' do
         declare_action('checkout')
-        env = bearer_env('/kiosk/checkout', agent_token, method: 'POST',
-                                                         input: '{}', 'CONTENT_TYPE' => 'application/json')
+        env = token_env('/kiosk/checkout', agent_token, method: 'POST',
+                                                        input: '{}', 'CONTENT_TYPE' => 'application/json')
         status, headers, problem = dispatch_verb(:create, 'checkout', env)
 
         expect(status).to eq(402)
@@ -227,15 +229,15 @@ RSpec.describe Kiosk::Server::WireController do
       end
     end
 
-    # ─── non-402 errors carry NO WWW-Authenticate header ───────────────────
+    # ─── a 401 names the DPoP scheme, not a 402 gate ──────────────────────
     #
     # Dialed at `pay`: `GET /kiosk/schema` is public, resolves no identity and
     # cannot produce a 401. `pay` reaches `resolve_identity!`.
-    it 'does not emit WWW-Authenticate on a non-402 error (e.g. 401)' do
-      status, headers, = dispatch(:pay, bearer_env('/kiosk/pay', 'garbage', method: 'POST',
-                                                                            input: '{}', 'CONTENT_TYPE' => 'application/json'))
+    it 'names the DPoP scheme on a 401, and no 402 gate (RFC 9449 §7.1)' do
+      status, headers, = dispatch(:pay, token_env('/kiosk/pay', 'garbage', method: 'POST',
+                                                                           input: '{}', 'CONTENT_TYPE' => 'application/json'))
       expect(status).to eq(401)
-      expect(headers).not_to have_key('WWW-Authenticate')
+      expect(headers['WWW-Authenticate']).to eq('DPoP algs="RS256"')
     end
   end
 end

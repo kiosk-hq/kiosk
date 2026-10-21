@@ -113,6 +113,7 @@ RSpec.describe Kiosk::Server::Engine do
       it 'routes the RESERVED `pay` into WireController (401 problem, not 404)' do
         res = probe('mounted', 'POST /kiosk/pay')
         expect(res['status']).to eq(401)
+        expect(res['headers']['www-authenticate']).to eq('DPoP algs="RS256"')
         expect(res['headers']['content-type']).to include('application/problem+json')
         expect(JSON.parse(res['body'])['code']).to eq('unauthenticated')
       end
@@ -132,10 +133,10 @@ RSpec.describe Kiosk::Server::Engine do
       end
 
       it 'has no 0.3 multiplexed wire left: /query and /run name no route at all' do
-        # Dialed WITH a Bearer token, so the identity gate cannot be what produced
+        # Dialed WITH a token and its DPoP proof, so the identity gate cannot be what produced
         # the answer. Nothing draws these paths, so the answer is the host
         # framework's ordinary 404 with no Kiosk body.
-        ['POST /kiosk/query (bearer)', 'POST /kiosk/run (bearer)'].each do |request_line|
+        ['POST /kiosk/query (token)', 'POST /kiosk/run (token)'].each do |request_line|
           res = probe('mounted', request_line)
           expect(res['status']).to eq(404), "#{request_line}: got #{res['status']}"
           expect(res['headers']['content-type']).not_to include('application/problem+json')
@@ -150,7 +151,7 @@ RSpec.describe Kiosk::Server::Engine do
         # Declaring a verb publishes it in the catalogue; it does not put it on
         # the network. Nothing matches the path, so the answer is the host
         # framework's ordinary 404.
-        res = probe('mounted', 'GET /kiosk/ping (bearer)')
+        res = probe('mounted', 'GET /kiosk/ping (token)')
 
         expect(res['status']).to eq(404)
         expect(res['headers']['content-type']).not_to include('application/problem+json')
@@ -161,7 +162,7 @@ RSpec.describe Kiosk::Server::Engine do
         # problem document — reaching the controller at all is what this route
         # proof needs, and a top-level `code` is what says a Kiosk controller
         # answered rather than the router.
-        %w[register login revoke].each do |action|
+        %w[register login revoke rotate].each do |action|
           res = probe('mounted', "POST /kiosk/auth/#{action}")
           expect(res['status']).to be_between(400, 401), "#{action}: got #{res['status']}"
           expect(JSON.parse(res['body'])).to have_key('code')
@@ -389,13 +390,13 @@ RSpec.describe Kiosk::Server::Engine do
 
       # §4.3: the auth block is core discovery, so nothing about the declined
       # module is visible before a caller dials it.
-      it 'publishes all six auth URLs and no binding capability' do
+      it 'publishes all seven auth URLs and no binding capability' do
         res = probe('binding_declined', 'GET /.well-known/kiosk.json')
         expect(res['status']).to eq(200)
 
         kiosk = JSON.parse(res['body']).fetch('kiosk')
         expect(kiosk.fetch('auth').keys).to include(
-          'challenge_url', 'register_url', 'login_url', 'revoke_url',
+          'challenge_url', 'register_url', 'login_url', 'revoke_url', 'rotate_url',
           'device_authorization_url', 'claim_url'
         )
         expect(kiosk.fetch('capabilities')).to include('queries')

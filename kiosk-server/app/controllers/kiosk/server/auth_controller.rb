@@ -5,8 +5,8 @@ require 'json'
 
 module Kiosk
   module Server
-    # The spec's challenge-response auth paths (§6), drawn by the engine: challenge, register, login,
-    # revoke, and the account-binding link, claim and unlink.
+    # The spec's challenge-response auth paths (§5, §6), drawn by the engine: challenge, register,
+    # login, rotate, revoke, and the account-binding link, claim and unlink.
     class AuthController < ::ActionController::API
       # The JSON answers and RFC 9457 problem documents of the auth paths.
       module Answers
@@ -37,7 +37,7 @@ module Kiosk
           issuer = Kiosk.current_issuer
           case err
           when Errors::PowRequired          then %(Kiosk-PoW realm="#{issuer}")
-          when Errors::PaymentSetupRequired then %(Payment realm="#{issuer}", method="ap2")
+          when Errors::PaymentSetupRequired then %(Kiosk-Payment-Setup realm="#{issuer}")
           end
         end
       end
@@ -95,10 +95,22 @@ module Kiosk
         render_error(e)
       end
 
+      # Puts a new key on a registered agent; both keys sign (§5.7).
+      def rotate
+        body   = parse_body!('POST <endpoint>/auth/rotate')
+        result = AgentRotation.call(public_key_pem: body.fetch(:public_key), signed: body.fetch(:signed),
+                                    new_public_key_pem: body.fetch(:new_public_key), new_signed: body.fetch(:new_signed))
+        respond(result, :ok)
+      rescue KeyError => e
+        render_error(Errors.missing_field(e))
+      rescue Errors::Base => e
+        render_error(e)
+      end
+
       # Revokes every token of the caller's agent and returns a fresh one.
       def revoke
-        identity = authenticated_agent
-        raise Errors::Unauthenticated, 'agent authentication required' if identity.nil? || identity.agent_id.nil?
+        identity = IdentityResolution.resolve(request)
+        raise Errors::AccessTokenRefused if identity.nil? || identity.agent_id.nil?
 
         Kiosk.configuration.revocation_store.revoke_all(identity.agent_id, at: Time.now.to_i)
         token = fresh_token(identity)
@@ -160,13 +172,6 @@ module Kiosk
         raise Errors::BadRequest, 'Content-Type must be application/json' unless request.media_type == 'application/json'
 
         identity
-      end
-
-      # nil for a missing, invalid or revoked bearer token.
-      def authenticated_agent
-        IdentityResolution.agent_idp.verify(request)
-      rescue Kiosk::Server::JwtIssuer::Error, Kiosk::AgentIdentityProviders::InvalidToken
-        nil
       end
 
       # Schema-checked before any `fetch`, so a wrong-typed member is a 400 naming it (§17).

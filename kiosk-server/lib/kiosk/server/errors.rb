@@ -231,6 +231,13 @@ module Kiosk
         HTTP_STATUS = 401
       end
 
+      # The 401 of a request that needs an access token: it names the DPoP scheme (RFC 9449 §7.1).
+      class AccessTokenRefused < Unauthenticated
+        def initialize(message = 'a valid access token with its DPoP proof is required', hint: Dpop::HINT) = super
+
+        def response_headers = { 'WWW-Authenticate' => Dpop::CHALLENGE }
+      end
+
       class Forbidden < Base
         CODE        = 'forbidden'
         HTTP_STATUS = 403

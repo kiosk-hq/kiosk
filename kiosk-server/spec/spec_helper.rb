@@ -44,6 +44,7 @@ require_relative 'support/memory_event_store'
 require_relative 'support/memory_auth_challenge_store'
 require_relative 'support/verb_route_call'
 require_relative 'support/checkout_payment'
+require_relative 'support/dpop_agent'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
@@ -56,6 +57,7 @@ RSpec.configure do |config|
 
   config.shared_context_metadata_behavior = :apply_to_host_groups
   config.include VerbRouteCall
+  config.include DpopAgent
   config.example_status_persistence_file_path = '.rspec_status'
   config.disable_monkey_patching!
   config.warnings = false

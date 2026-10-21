@@ -20,6 +20,7 @@ require 'json'
 require 'kiosk/server'
 require 'action_controller/railtie'
 require 'rack/mock'
+require 'kiosk/test_helpers/dpop'
 require_relative 'memory_revocation_store'
 require_relative 'memory_auth_challenge_store'
 
@@ -72,19 +73,28 @@ class BlowingUpIdp
   def verify(_request) = raise('agent IdP adapter is broken')
 end
 
-# A Bearer token the bundled kiosk-pop IdP accepts: the probe configured the
-# signing key and the issuer above, and DefaultAgentIdp#verify checks nothing
-# else — no database is touched. It exists so the probe can reach a gate PAST
-# `401`, which is the only way to tell "this path is the 0.3 wire" apart from
-# "this path is an unregistered verb name" through the real Rack stack.
+# A token the bundled kiosk-pop IdP accepts, bound to AGENT_KEY: the probe
+# configured the signing key and the issuer above, and DefaultAgentIdp#verify
+# checks nothing else — no database is touched. It exists so the probe can
+# reach a gate PAST `401`, which is the only way to tell "this path is the 0.3
+# wire" apart from "this path is an unregistered verb name" through the real
+# Rack stack. Every call carries it with a DPoP proof AGENT_KEY signs.
+AGENT_KEY = OpenSSL::PKey::RSA.generate(2048)
+CNF = { jkt: Kiosk::Server::SigningKey.new(AGENT_KEY.public_key).kid }.freeze
 TOKEN = Kiosk::Server::JwtIssuer.issue(
-  claims: { sub: 'u-1', agent_id: 'a-1', actor: 'agent' },
+  claims: { sub: 'u-1', agent_id: 'a-1', actor: 'agent', cnf: CNF },
   audience: 'http://localhost'
 ).freeze
 
+# `auth` true sends TOKEN, a String sends that token; either with its proof.
+def credential(auth, method, url)
+  return {} unless auth
+
+  Kiosk::TestHelpers::Dpop.env(auth == true ? TOKEN : auth, AGENT_KEY, method: method, url: url)
+end
+
 def request(method, path, auth: false, origin: 'http://localhost')
-  env = Rack::MockRequest.env_for("#{origin}#{path}", method: method)
-  env['HTTP_AUTHORIZATION'] = "Bearer #{auth == true ? TOKEN : auth}" if auth
+  env = Rack::MockRequest.env_for("#{origin}#{path}", method: method, **credential(auth, method, "#{origin}#{path}"))
   status, headers, raw = Rails.application.call(env)
   {
     'status' => status,
@@ -116,6 +126,7 @@ SURFACE = [
   ['POST', '/kiosk/auth/register'],
   ['POST', '/kiosk/auth/login'],
   ['POST', '/kiosk/auth/revoke'],
+  ['POST', '/kiosk/auth/rotate'],
   ['GET',  '/kiosk/.well-known/jwks.json'],
   ['POST', '/kiosk/agents/kyc'],
   ['POST', '/kiosk/oauth/device_authorization'],
@@ -131,7 +142,7 @@ SURFACE = [
 ].freeze
 
 # Three single-segment paths under the mount that nothing draws a route for,
-# dialed WITH a Bearer token so the answer cannot be blamed on the identity
+# dialed WITH a token and its proof so the answer cannot be blamed on the identity
 # gate. Scenario 1 draws the mount and NOTHING else, so none of the three
 # matches a route at all and the answer is the host framework's ordinary 404
 # rather than anything Kiosk composed.
@@ -148,7 +159,7 @@ AUTHENTICATED = [
 def surface_snapshot
   snapshot = SURFACE.to_h { |method, path| ["#{method} #{path}", request(method, path)] }
   AUTHENTICATED.each do |method, path|
-    snapshot["#{method} #{path} (bearer)"] = request(method, path, auth: true)
+    snapshot["#{method} #{path} (token)"] = request(method, path, auth: true)
   end
   snapshot['GET /kiosk/schema?v= (schema_url)'] = request('GET', URI(schema_url(snapshot)).request_uri)
   snapshot
@@ -279,7 +290,7 @@ report['operator_verbs'] = {
 # error object — and a Metal dispatch cannot show it arriving through a mount.
 #
 # The discovery document is snapshotted beside the refusals because the profile
-# is as much about what does NOT move: all six auth URLs stay published and
+# is as much about what does NOT move: all seven auth URLs stay published and
 # `capabilities` gains no binding member.
 Rails.application.routes.draw do
   mount Kiosk::Server::Engine => '/kiosk'
@@ -307,7 +318,7 @@ report['binding_declined'] = {
 # on one origin presented on the other.
 Kiosk.configure { |c| c.additional_origins = ['http://buymilk.example'] }
 SECOND_TOKEN = Kiosk.with_issuer('http://buymilk.example') do
-  Kiosk::Server::JwtIssuer.issue(claims: { sub: 'u-1', agent_id: 'a-1', actor: 'agent' },
+  Kiosk::Server::JwtIssuer.issue(claims: { sub: 'u-1', agent_id: 'a-1', actor: 'agent', cnf: CNF },
                                  audience: 'http://buymilk.example')
 end
 report['two_origins'] = {

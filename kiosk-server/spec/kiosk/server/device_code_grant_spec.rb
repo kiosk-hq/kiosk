@@ -250,7 +250,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
       expect(result).to include(
         ok: true,
         access_token: 'kiosk-pop-jwt',
-        token_type: 'Bearer',
+        token_type: 'DPoP',
         expires_in: Kiosk::Server::JwtIssuer::DEFAULT_EXPIRES_IN,
         scope: 'customer'
       )

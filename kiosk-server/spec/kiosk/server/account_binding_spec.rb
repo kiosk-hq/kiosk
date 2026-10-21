@@ -152,10 +152,10 @@ RSpec.shared_context 'with a real issuer and a known key to rebind' do
       c.revocation_store = MemoryRevocationStore.new
     end
     # Un-stub issue (the outer before stubs it to a fixed string) so bind!
-    # mints a REAL JWT; lookup_user_id (called inside issue) resolves the
-    # rebound principal without a DB.
+    # mints a REAL JWT; lookup_agent (called inside issue) resolves the
+    # rebound principal and its key without a DB.
     allow(idp).to receive(:issue).and_call_original
-    allow(idp).to receive(:lookup_user_id).and_return(user_id)
+    allow(idp).to receive(:lookup_agent).and_return('user_id' => user_id, 'public_key' => agent_pem)
     route_known_agent(previous_user, '{customer}', agent_id: agent_id)
     ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)

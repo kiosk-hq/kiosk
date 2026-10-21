@@ -195,7 +195,7 @@ RSpec.describe Kiosk::Server::OauthDeviceAuthorizationController do
         )
         expect(status).to eq(200)
         expect(body[:access_token]).to eq('kiosk-pop-jwt')
-        expect(body[:token_type]).to eq('Bearer')
+        expect(body[:token_type]).to eq('DPoP')
         expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
           public_key_pem: pem.strip, user_id: user_id, requested_role: nil
         )

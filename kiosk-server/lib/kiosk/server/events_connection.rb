@@ -103,7 +103,7 @@ module Kiosk
 
       # Closes with `token_expired` or `revoked` once the credential no longer resolves (§8.5.6).
       def kiosk_credential_holds?
-        return true if resolve_identity
+        return true if token_holds?
 
         if kiosk_credential_expired?
           close(reason: 'token_expired', reconnect: true)
@@ -156,13 +156,23 @@ module Kiosk
         end
       end
 
+      # The token and the DPoP proof of the upgrade request.
+      def resolve_identity
+        under_issuer { Kiosk::Server::IdentityResolution.resolve(request) }
+      end
+
+      # §8.5.6: the proof was checked once, at the upgrade, and is past its
+      # 60-second window by now; a re-check reads the token alone.
+      def token_holds?
+        under_issuer { Kiosk::Server::IdentityResolution.agent_idp.verify(request) }
+      end
+
       # Under the upgrade's own issuer: this runs outside {IssuerMiddleware}.
       # A raising IdP refuses the upgrade rather than failing the socket.
-      def resolve_identity
-        issuer = Kiosk.configuration.issuer_for(request.base_url)
-        Kiosk.with_issuer(issuer) { Kiosk::Server::IdentityResolution.resolve(request) }
+      def under_issuer(&)
+        Kiosk.with_issuer(Kiosk.configuration.issuer_for(request.base_url), &)
       rescue StandardError => e
-        logger&.error("[kiosk] events connection identity resolution failed: #{e.class}")
+        logger&.error("[kiosk] events connection identity resolution failed: #{e.class}: #{e.message}")
         nil
       end
     end

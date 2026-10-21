@@ -41,7 +41,7 @@ RSpec.describe Kiosk::Server::AgentLogin do
       c.issuer      = 'https://demo.example'
     end
     allow(idp).to receive(:issue).and_call_original
-    route_exec_query(con) { [{ 'id' => 'agent-1', 'user_id' => 42, 'allowed_roles' => '{customer}' }] }
+    route_exec_query(con) { [{ 'id' => 'agent-1', 'user_id' => 42, 'allowed_roles' => '{customer}', 'public_key' => agent_pem }] }
 
     subs = Array.new(2) do
       token = described_class.call(public_key_pem: pem, signed: 'sig').fetch(:access_token)

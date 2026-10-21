@@ -27,10 +27,11 @@ module Kiosk
         { id: issuer, name: Kiosk.configuration.owner[:name] || issuer, website: issuer }
       end
 
-      # @return [Hash] the claims of a checkout this origin signed for this account
+      # @return [Hash] the claims of a checkout this origin signed, with its current or previous key, for this account
       # @raise [Errors::Forbidden]
       def verify(checkout_jwt, identity:)
-        claims, = ::JWT.decode(checkout_jwt, Kiosk.configuration.signing_key.public_key, true, algorithms: [ALGORITHM])
+        jwks = Jwks.build(keys: Kiosk.configuration.signing_keys)
+        claims, = ::JWT.decode(checkout_jwt, nil, true, algorithms: [ALGORITHM], jwks: jwks)
         raise Errors::Forbidden.new('checkout is not from this origin', hint: ISSUER_HINT) unless claims['iss'] == Kiosk.current_issuer
         return claims if claims['sub'] == identity.user_id.to_s
 

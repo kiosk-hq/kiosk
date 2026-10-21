@@ -5,14 +5,14 @@ require 'kiosk/agent_identity_providers/base'
 module Kiosk
   module Server
     module AgentIdentityProviders
-      # The bundled agent IdP: RS256 tokens signed with the origin's own key;
-      # payment keys from the agents table.
+      # The bundled agent IdP: RS256 tokens signed with the origin's own key and
+      # bound to the agent's registered key (`cnf.jkt`); payment keys from the agents table.
       class DefaultAgentIdp < Kiosk::AgentIdentityProviders::Base
         def verify(request)
-          header = authorization_for(request)
-          return nil if header.blank?
+          token = Dpop.token(authorization_for(request))
+          return nil if token.nil?
 
-          claims = verified_claims(header.sub(/\ABearer\s+/i, ''))
+          claims = verified_claims(token)
           Kiosk::Identity.new(
             user_id: claims[:sub], role: claims[:role], actor: 'agent',
             agent_id: claims[:agent_id], claims: claims
@@ -22,7 +22,9 @@ module Kiosk
         end
 
         def issue(agent_id:, role:)
-          claims = { sub: lookup_user_id(agent_id), agent_id: agent_id, actor: 'agent' }
+          agent  = lookup_agent(agent_id)
+          claims = { sub: agent.fetch('user_id'), agent_id: agent_id, actor: 'agent',
+                     cnf: { jkt: SigningKey.from_pem(agent.fetch('public_key')).kid } }
           claims[:role] = role.to_s unless role.nil? || role.to_s.empty?
           JwtIssuer.issue(
             claims: claims, audience: Kiosk.current_issuer, now: mint_instant(agent_id),
@@ -31,7 +33,7 @@ module Kiosk
         end
 
         def agent_payment_key(agent_id)
-          pem = agents_column('public_key', agent_id)&.fetch('public_key', nil)
+          pem = agent_row('public_key', agent_id)&.fetch('public_key', nil)
           raise Kiosk::AgentIdentityProviders::InvalidToken, "no key for agent #{agent_id}" if pem.nil?
 
           OpenSSL::PKey::RSA.new(pem)
@@ -42,7 +44,7 @@ module Kiosk
         def verified_claims(token)
           JwtIssuer.verify(
             token: token,
-            jwks: Jwks.build(keys: [Kiosk.configuration.signing_key]),
+            jwks: Jwks.build(keys: Kiosk.configuration.signing_keys),
             audience: Kiosk.current_issuer,
             issuer: Kiosk.current_issuer
           )
@@ -58,18 +60,18 @@ module Kiosk
           Time.at(watermark).utc
         end
 
-        def lookup_user_id(agent_id)
-          row = agents_column('user_id', agent_id)
+        def lookup_agent(agent_id)
+          row = agent_row('user_id, public_key', agent_id)
           raise Kiosk::AgentIdentityProviders::InvalidToken, "unknown agent #{agent_id}" if row.nil?
 
-          row.fetch('user_id')
+          row
         end
 
-        # `column` is always a literal from this class, never caller input.
-        def agents_column(column, agent_id)
+        # `columns` is always a literal from this class, never caller input.
+        def agent_row(columns, agent_id)
           ::ActiveRecord::Base.lease_connection.exec_query(
-            "SELECT #{column} FROM #{schema}.agents WHERE id = $1 AND revoked_at IS NULL",
-            "Kiosk agent #{column}",
+            "SELECT #{columns} FROM #{schema}.agents WHERE id = $1 AND revoked_at IS NULL",
+            "Kiosk agent #{columns}",
             [agent_id]
           ).to_a.first
         end

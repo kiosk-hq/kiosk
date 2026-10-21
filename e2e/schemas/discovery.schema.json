@@ -67,6 +67,7 @@
             "register_url",
             "login_url",
             "revoke_url",
+            "rotate_url",
             "device_authorization_url",
             "claim_url"
           ],
@@ -84,6 +85,9 @@
               "type": "string"
             },
             "revoke_url": {
+              "type": "string"
+            },
+            "rotate_url": {
               "type": "string"
             },
             "device_authorization_url": {

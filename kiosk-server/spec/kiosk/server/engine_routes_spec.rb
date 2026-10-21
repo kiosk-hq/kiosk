@@ -76,6 +76,8 @@ RSpec.describe Kiosk::Server::Engine do
         .to include(controller: 'kiosk/server/auth', action: 'login')
       expect(recognize(:post, '/auth/revoke'))
         .to include(controller: 'kiosk/server/auth', action: 'revoke')
+      expect(recognize(:post, '/auth/rotate'))
+        .to include(controller: 'kiosk/server/auth', action: 'rotate')
     end
 
     it 'draws JWKS under the mount' do

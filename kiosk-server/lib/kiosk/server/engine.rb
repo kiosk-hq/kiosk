@@ -167,10 +167,8 @@ module Kiosk
         # `events` is also in {HandlerMixin::RESERVED_NAMES}; keep the two in step.
         mount Kiosk::Server::EventsCable::RACK_APP => 'events', internal: true, anchor: true, as: :kiosk_events
 
-        get  'auth/challenge', to: 'auth#challenge'
-        post 'auth/register',  to: 'auth#register'
-        post 'auth/login',     to: 'auth#login'
-        post 'auth/revoke',    to: 'auth#revoke'
+        get 'auth/challenge', to: 'auth#challenge'
+        %w[register login revoke rotate].each { post "auth/#{it}", to: "auth##{it}" }
 
         # JWKS sits under the mount, not the origin root.
         get '.well-known/jwks.json', to: 'jwks#show'

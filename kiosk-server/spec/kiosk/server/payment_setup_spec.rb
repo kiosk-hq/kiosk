@@ -52,7 +52,7 @@ module PaymentSetupSpecHelpers
 
   def token
     Kiosk::Server::JwtIssuer.issue(
-      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent' },
+      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent', cnf: cnf_for },
       audience: 'https://shop.example'
     )
   end
@@ -67,7 +67,8 @@ module PaymentSetupSpecHelpers
   def post_payment_setup
     env = Rack::MockRequest.env_for(
       '/kiosk/payment_setup', method: 'POST', input: '{}',
-                              'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}"
+                              'CONTENT_TYPE' => 'application/json',
+                              **dpop_env(token, method: 'POST', url: 'https://shop.example/kiosk/payment_setup')
     )
     env['action_dispatch.request.path_parameters'] =
       { controller: 'kiosk/server/verb', action: 'create', kiosk_verb: 'payment_setup' }

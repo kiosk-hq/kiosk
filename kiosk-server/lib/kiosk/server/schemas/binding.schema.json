@@ -55,8 +55,8 @@
           "description": "The access token. Its claims are auth.schema.json#/$defs/accessTokenClaims."
         },
         "token_type": {
-          "const": "Bearer",
-          "description": "Always \"Bearer\"."
+          "const": "DPoP",
+          "description": "Always \"DPoP\": the token is bound to the key that signed the poll (Section 5.6)."
         },
         "expires_in": {
           "type": "integer",

@@ -84,7 +84,7 @@
     },
     "token": {
       "type": "object",
-      "description": "Section 5.3: the 200 answer to POST /auth/login; an unknown key answers 404 not_found. It is ALSO the 200 answer to POST /auth/revoke (Section 5.5), with a token issued after the new watermark.",
+      "description": "Section 5.3: the 200 answer to POST /auth/login; an unknown key answers 404 not_found. It is ALSO the 200 answer to POST /auth/revoke (Section 5.5) and to POST /auth/rotate (Section 5.7), with a token issued after the new watermark.",
       "required": ["access_token"],
       "properties": {
         "access_token": {
@@ -95,8 +95,8 @@
     },
     "accessTokenClaims": {
       "type": "object",
-      "description": "Section 5.4 -- the decoded claim set of `access_token`. A 3-part RS256 JWT signed by the operator and verifiable statelessly against the JWKS of Section 4.4, presented as `Authorization: Bearer`.",
-      "required": ["sub", "agent_id", "actor", "iss", "aud", "iat", "nbf", "exp", "jti"],
+      "description": "Section 5.4 -- the decoded claim set of `access_token`. A 3-part RS256 JWT signed by the operator and verifiable statelessly against the JWKS of Section 4.4, bound to the identity's key and presented as `Authorization: DPoP` with a DPoP proof (Section 5.6).",
+      "required": ["sub", "agent_id", "actor", "iss", "aud", "iat", "nbf", "exp", "jti", "cnf"],
       "properties": {
         "sub": {
           "type": "string",
@@ -128,7 +128,47 @@
         "iat": { "type": "integer", "description": "Issued-at. Also what the revoked-before watermark of Section 15.4 is compared against." },
         "nbf": { "type": "integer", "description": "Not-before." },
         "exp": { "type": "integer", "description": "Expiry. Default lifetime is 1 hour; the durable credential is the private key, not the token." },
-        "jti": { "type": "string", "description": "Unique token id." }
+        "jti": { "type": "string", "description": "Unique token id." },
+        "cnf": {
+          "type": "object",
+          "description": "RFC 9449 Section 6.1 -- the key the token is bound to. Only a DPoP proof that this key signs makes the token usable.",
+          "required": ["jkt"],
+          "properties": {
+            "jkt": { "type": "string", "minLength": 1, "description": "The RFC 7638 thumbprint of the identity's registered key." }
+          }
+        }
+      }
+    },
+    "dpopProof": {
+      "type": "object",
+      "description": "Section 5.6 -- the decoded payload of the `DPoP` request header, a compact RS256 JWS whose header carries `typ: \"dpop+jwt\"` and the public `jwk` of the registered key. The AI assistant signs a new one for each request that carries an access token.",
+      "required": ["jti", "htm", "htu", "iat", "ath"],
+      "properties": {
+        "jti": { "type": "string", "minLength": 1, "description": "A unique id for this proof." },
+        "htm": { "type": "string", "minLength": 1, "description": "The HTTP method of the request." },
+        "htu": { "type": "string", "minLength": 1, "description": "The URL of the request, with no query and no fragment. On the event stream it is `events_url` with `wss` written as `https`." },
+        "iat": { "type": "integer", "description": "The time of signing. The operator refuses a proof more than 60 seconds from its clock." },
+        "ath": { "type": "string", "minLength": 1, "description": "The base64url SHA-256 of the ASCII access token, with no padding." }
+      }
+    },
+    "rotationProof": {
+      "type": "object",
+      "description": "Section 5.7 -- the decoded payload of `signed` in a rotation: a possession proof by the registered key that also names the new key.",
+      "allOf": [{ "$ref": "#/$defs/possessionProof" }],
+      "required": ["new_key"],
+      "properties": {
+        "new_key": { "type": "string", "minLength": 1, "description": "The RFC 7638 thumbprint of `new_public_key`." }
+      }
+    },
+    "rotationRequest": {
+      "type": "object",
+      "description": "Section 5.7 -- the body of POST /auth/rotate. The answer is `#/$defs/token`, with a token bound to the new key.",
+      "required": ["public_key", "signed", "new_public_key", "new_signed"],
+      "properties": {
+        "public_key": { "type": "string", "description": "The registered key, PEM-encoded." },
+        "signed": { "type": "string", "description": "A possession proof by the registered key over a challenge issued for it. Its decoded payload is `#/$defs/rotationProof`." },
+        "new_public_key": { "type": "string", "description": "The new key, PEM-encoded, in the key bounds of Section 5.1." },
+        "new_signed": { "type": "string", "description": "A possession proof by the new key over a challenge issued for the new key. Its decoded payload is `#/$defs/possessionProof`." }
       }
     }
   }

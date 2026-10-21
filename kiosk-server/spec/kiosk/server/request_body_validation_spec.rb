@@ -27,6 +27,10 @@ module RequestBodyValidationSpec
                                          signed: 'eyJ.eyJ.SIG' },
     'POST <endpoint>/auth/login' => { public_key: "-----BEGIN PUBLIC KEY-----\nMII\n-----END PUBLIC KEY-----\n",
                                       signed: 'eyJ.eyJ.SIG' },
+    'POST <endpoint>/auth/rotate' => { public_key: "-----BEGIN PUBLIC KEY-----\nMII\n-----END PUBLIC KEY-----\n",
+                                       signed: 'eyJ.eyJ.SIG',
+                                       new_public_key: "-----BEGIN PUBLIC KEY-----\nMIJ\n-----END PUBLIC KEY-----\n",
+                                       new_signed: 'eyJ.eyJ.SIG2' },
     'POST <endpoint>/auth/claim' => { code: 'ABCD-1234', public_key: "-----BEGIN PUBLIC KEY-----\nMII\n-----END PUBLIC KEY-----\n",
                                       signed: 'eyJ.eyJ.SIG' },
     'POST <endpoint>/auth/unlink' => { agent_id: 'a-1' },
@@ -41,6 +45,7 @@ module RequestBodyValidationSpec
   WRONG_TYPE = {
     'POST <endpoint>/auth/register' => :public_key,
     'POST <endpoint>/auth/login' => :signed,
+    'POST <endpoint>/auth/rotate' => :new_public_key,
     'POST <endpoint>/auth/claim' => :code,
     'POST <endpoint>/auth/unlink' => :agent_id,
     'POST <endpoint>/agents/kyc' => :kyc_jws,

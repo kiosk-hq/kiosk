@@ -176,12 +176,21 @@ module Kiosk
       end
 
       def signing_key=(value)
-        @signing_key = case value
-                       when Kiosk::Server::SigningKey, nil then value
-                       when String then Kiosk::Server::SigningKey.from_pem(value)
-                       else raise ArgumentError, "signing_key must be a SigningKey or PEM string, got #{value.class}"
-                       end
+        @signing_key = signing_key_from(value, 'signing_key')
       end
+
+      # Optional. The key that signed before {#signing_key}: the JWKS still
+      # publishes it, and a token or checkout it signed still verifies. A public
+      # PEM is enough. Keep it for at least one access-token lifetime, and while
+      # a checkout it signed can still be paid.
+      attr_reader :previous_signing_key
+
+      def previous_signing_key=(value)
+        @previous_signing_key = signing_key_from(value, 'previous_signing_key')
+      end
+
+      # The keys the JWKS publishes and verification accepts, the current one first.
+      def signing_keys = [signing_key, previous_signing_key].compact
 
       # The role every self-registered agent is pinned to, and the default a
       # binding falls back to. Required, and one of {#roles}, when {#roles} is set.
@@ -322,6 +331,16 @@ module Kiosk
       def revocation_store
         @revocation_store ||
           LAZY_STORE_MUTEX.synchronize { @revocation_store ||= Kiosk::Server::RevocationStores::ActiveRecord.new }
+      end
+
+      private
+
+      def signing_key_from(value, name)
+        case value
+        when Kiosk::Server::SigningKey, nil then value
+        when String then Kiosk::Server::SigningKey.from_pem(value)
+        else raise ArgumentError, "#{name} must be a SigningKey or PEM string, got #{value.class}"
+        end
       end
     end
   end

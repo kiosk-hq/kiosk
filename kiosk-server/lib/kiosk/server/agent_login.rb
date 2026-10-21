@@ -21,12 +21,9 @@ module Kiosk
         { access_token: token }
       end
 
+      # The live agent of this key at this origin; 404 when there is none.
       def registered_agent(pem)
-        row = ::ActiveRecord::Base.lease_connection.exec_query(<<~SQL.squish, 'Kiosk agent lookup by key', [pem, Kiosk.current_issuer]).to_a.first
-          SELECT id, user_id, allowed_roles FROM #{Kiosk.configuration.schema}.agents
-          WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
-          LIMIT 1
-        SQL
+        row = live_agent(pem)
         return row if row
 
         raise Errors::NotFound.new(
@@ -34,7 +31,17 @@ module Kiosk
           hint: 'POST /auth/register to create an identity for a new key'
         )
       end
-      private_class_method :registered_agent
+
+      def registered_agent?(pem) = !live_agent(pem).nil?
+
+      def live_agent(pem)
+        ::ActiveRecord::Base.lease_connection.exec_query(<<~SQL.squish, 'Kiosk agent lookup by key', [pem, Kiosk.current_issuer]).to_a.first
+          SELECT id, user_id, allowed_roles FROM #{Kiosk.configuration.schema}.agents
+          WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
+          LIMIT 1
+        SQL
+      end
+      private_class_method :live_agent
 
       # `allowed_roles` is an Array or a text[] literal ("{customer}"), by adapter.
       def primary_role(allowed_roles)
@@ -43,7 +50,6 @@ module Kiosk
         else allowed_roles.to_s.delete('{}').split(',').first
         end
       end
-      private_class_method :primary_role
     end
   end
 end

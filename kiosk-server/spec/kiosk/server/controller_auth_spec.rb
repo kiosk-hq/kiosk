@@ -23,8 +23,10 @@ module ControllerAuthSpecHelpers
 
   attr_reader :last_headers
 
-  def bearer_env(path, token, **)
-    Rack::MockRequest.env_for(path, 'HTTP_AUTHORIZATION' => "Bearer #{token}", **)
+  # `path` carrying `token` and its DPoP proof for this method on this origin.
+  def token_env(path, token, **opts)
+    proof = dpop_env(token, method: opts.fetch(:method, 'GET'), url: "https://demo.example#{path}")
+    Rack::MockRequest.env_for(path, **proof, **opts)
   end
 
   # EVERY refusal on the wire and the auth plane is an RFC 9457 problem
@@ -50,7 +52,7 @@ module ControllerAuthSpecHelpers
 
   def agent_token(agent_id: 'a-1', **)
     Kiosk::Server::JwtIssuer.issue(
-      claims: { sub: 'u-1', agent_id: agent_id, role: 'customer', actor: 'agent' },
+      claims: { sub: 'u-1', agent_id: agent_id, role: 'customer', actor: 'agent', cnf: cnf_for },
       audience: 'https://demo.example', **
     )
   end
@@ -69,8 +71,8 @@ module ControllerAuthSpecWireHelpers
   # other RESERVED endpoint reaching the same `resolve_identity!`.
   def wire_status_for(token)
     dispatch(Kiosk::Server::WireController, :pay,
-             bearer_env('/kiosk/pay', token, method: 'POST',
-                                             input: '{}', 'CONTENT_TYPE' => 'application/json'))
+             token_env('/kiosk/pay', token, method: 'POST',
+                                            input: '{}', 'CONTENT_TYPE' => 'application/json'))
   end
 
   # parse_body! raises Errors::BadRequest on a malformed body; it must render
@@ -82,8 +84,8 @@ module ControllerAuthSpecWireHelpers
   # to be REGISTERED for a request to reach the body at all, because name
   # resolution runs before the arguments are read.
   def post_verb(name, raw_body)
-    route(:action, name, bearer_env("/kiosk/#{name}", agent_token, method: 'POST', input: raw_body,
-                                                                   'CONTENT_TYPE' => 'application/json'))
+    route(:action, name, token_env("/kiosk/#{name}", agent_token, method: 'POST', input: raw_body,
+                                                                  'CONTENT_TYPE' => 'application/json'))
   end
 
   # The other surviving body-reading POST, and the SAME
@@ -91,8 +93,8 @@ module ControllerAuthSpecWireHelpers
   # same seam in the same class.
   def post_pay(raw_body)
     dispatch(Kiosk::Server::WireController, :pay,
-             bearer_env('/kiosk/pay', agent_token, method: 'POST',
-                                                   input: raw_body, 'CONTENT_TYPE' => 'application/json'))
+             token_env('/kiosk/pay', agent_token, method: 'POST',
+                                                  input: raw_body, 'CONTENT_TYPE' => 'application/json'))
   end
 end
 
@@ -141,8 +143,8 @@ module ControllerAuthSpecKycHelpers
   # BadRequest, not a 500. The parse previously ran outside the Errors::Base
   # rescue, so an empty body (JSON::ParserError) leaked as an unhandled 500.
   def kyc_env_with_body(input)
-    bearer_env('/kiosk/agents/kyc', 'opaque-custom-token',
-               method: 'POST', input: input, 'CONTENT_TYPE' => 'application/json')
+    token_env('/kiosk/agents/kyc', 'opaque-custom-token',
+              method: 'POST', input: input, 'CONTENT_TYPE' => 'application/json')
   end
 
   def attest(env)
@@ -211,7 +213,7 @@ RSpec.shared_context 'with a KYC attestation and a custom agent idp' do
 
   let(:kyc_key)    { OpenSSL::PKey::RSA.generate(2048) }
   let(:kyc_issuer) { 'https://kyc.example' }
-  let(:identity)   { build_identity(user_id: 'u-kyc', agent_id: 'a-custom') }
+  let(:identity)   { build_identity(user_id: 'u-kyc', agent_id: 'a-custom', claims: { cnf: cnf_for }) }
   let(:custom_idp) do
     # A custom adapter that resolves ANY request to a fixed identity —
     # something the bundled DefaultAgentIdp would never do for the garbage
@@ -298,7 +300,7 @@ RSpec.describe Kiosk::Server::WireController do
       declare_query('probe')
 
       status, = dispatch(described_class, :schema,
-                         bearer_env('/kiosk/schema', 'garbage-not-a-jwt'))
+                         token_env('/kiosk/schema', 'garbage-not-a-jwt'))
       expect(status).to eq(200)
     end
 
@@ -397,9 +399,9 @@ RSpec.describe Kiosk::Server::WireController do
 
     it 'answers 401 before it reads the body, so an unauthenticated pay with invalid JSON is not a 400' do
       status, body = dispatch(described_class, :pay,
-                              bearer_env('/kiosk/pay', 'not-a-token', method: 'POST',
-                                                                      input: '{not valid json',
-                                                                      'CONTENT_TYPE' => 'application/json'))
+                              token_env('/kiosk/pay', 'not-a-token', method: 'POST',
+                                                                     input: '{not valid json',
+                                                                     'CONTENT_TYPE' => 'application/json'))
       expect_problem(status, body, http: 401, code: 'unauthenticated')
     end
 
@@ -418,18 +420,26 @@ RSpec.describe Kiosk::Server::WireController do
       declare_query('probe')
       token = agent_token
       status, = route(:query, 'probe',
-                      probe_env('HTTP_AUTHORIZATION' => "Bearer #{token}"))
+                      probe_env(**dpop_env(token, method: 'GET', url: 'https://demo.example/kiosk/probe')))
       expect(status).to eq(200)
     end
 
     it 'still 401s garbage under the zero-config default' do
       declare_query('probe')
       status, body = route(:query, 'probe',
-                           probe_env('HTTP_AUTHORIZATION' => 'Bearer garbage'))
+                           probe_env(**dpop_env('garbage', method: 'GET', url: 'https://demo.example/kiosk/probe')))
       expect_problem(status, body, http: 401, code: 'unauthenticated')
     end
 
-    it 'answers 401 to a signed-in session with no bearer token: the wire takes no cookie' do
+    # Spec Section 5.6: the token alone, as a Bearer token, buys nothing.
+    it 'refuses a valid token sent as a Bearer token, naming the DPoP scheme' do
+      declare_query('probe')
+      status, body = route(:query, 'probe', probe_env('HTTP_AUTHORIZATION' => "Bearer #{agent_token}"))
+      expect_problem(status, body, http: 401, code: 'unauthenticated')
+      expect(last_headers['WWW-Authenticate']).to eq('DPoP algs="RS256"')
+    end
+
+    it 'answers 401 to a signed-in session with no access token: the wire takes no cookie' do
       declare_query('probe')
       fixed = build_identity(actor: 'human', agent_id: nil, user_id: 'u-web')
       Kiosk.configure { |c| c.user_idp = Class.new { define_method(:verify) { |_r| fixed } }.new }

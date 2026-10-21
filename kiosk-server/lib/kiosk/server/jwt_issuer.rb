@@ -88,9 +88,7 @@ module Kiosk
         end
       end
 
-      def symbolize(hash)
-        hash.each_with_object({}) { |(k, v), out| out[k.to_sym] = v }
-      end
+      def symbolize(hash) = hash.deep_symbolize_keys
 
       private_class_method :registered_claims, :decode, :error_class_for
     end

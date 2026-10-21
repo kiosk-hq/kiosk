@@ -76,7 +76,7 @@ module Kiosk
           info: info(config),
           externalDocs: EXTERNAL_DOCS,
           servers: [{ url: endpoint, description: "This origin's Kiosk endpoint." }],
-          security: [{ bearerAuth: [] }],
+          security: [{ dpopAuth: [] }],
           tags: TAGS,
           paths: paths,
           components: Wire.components(schemas)
@@ -311,7 +311,7 @@ module Kiosk
 
         def components(schemas)
           {
-            securitySchemes: { bearerAuth: Parameters::BEARER_SCHEME },
+            securitySchemes: { dpopAuth: Parameters::DPOP_SCHEME },
             parameters: Parameters::RESERVED_PARAMETERS,
             headers: Parameters::PAGINATION_HEADERS,
             responses: problem_responses,
@@ -324,7 +324,7 @@ module Kiosk
             operationId: 'schema',
             tags: ['wire'],
             description: SCHEMA_DESCRIPTION,
-            # Public: opts out of the global `bearerAuth`.
+            # Public: opts out of the global `dpopAuth`.
             security: [],
             responses: ok_responses('The catalog.', 'schema.response')
           }
@@ -473,15 +473,16 @@ module Kiosk
         }.freeze
       end
 
-      # The reserved query parameters, the shared response headers and the bearer scheme.
+      # The reserved query parameters, the shared response headers and the DPoP scheme.
       module Parameters
-        BEARER_SCHEME = {
+        DPOP_SCHEME = {
           type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
+          scheme: 'DPoP',
           description: 'An access token from the kiosk-pop auth plane ' \
                        '(`POST <endpoint>/auth/register` or `/auth/login`), ' \
-                       'verifiable against `<endpoint>/.well-known/jwks.json`.'
+                       'verifiable against `<endpoint>/.well-known/jwks.json` and bound to the ' \
+                       'registered key: send it as `Authorization: DPoP <token>` with a `DPoP` ' \
+                       'proof header that the key signs (RFC 9449).'
         }.freeze
 
         # §8.4. OAS 3.1 §4.8.21.1: a Header Object carries no `name` or `in`.
@@ -509,7 +510,7 @@ module Kiosk
         CHALLENGE_HEADERS = {
           'WWW-Authenticate' => {
             description: '`Kiosk-PoW realm="<issuer>"` for a proof-of-work toll, ' \
-                         '`Payment realm="<issuer>", method="ap2"` for payment setup.',
+                         '`Kiosk-Payment-Setup realm="<issuer>"` for payment setup.',
             schema: { type: 'string' }
           }
         }.freeze

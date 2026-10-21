@@ -65,6 +65,20 @@ RSpec.describe Kiosk::Server::Events do
         expect(report['bad_token_welcomed']).to be(false)
       end
 
+      # Spec Section 5.6: the token works only with a DPoP proof its key signs.
+      it 'refuses the valid token sent as a Bearer token, with no proof' do
+        expect(report['bearer_welcomed']).to be(false)
+      end
+
+      it 'refuses the valid token with a proof that another key signed' do
+        expect(report['foreign_key_welcomed']).to be(false)
+      end
+
+      # Spec Section 8.5.3: the proof's htu is events_url with `ws` written as `http`.
+      it 'refuses the valid token with a proof signed for another URL' do
+        expect(report['other_url_proof_welcomed']).to be(false)
+      end
+
       # Spec Section 8.5.3: an operator MUST NOT accept the access token anywhere
       # but the `Authorization` header. The token here is the good one — what is
       # refused is the PLACE, so this fails if the engine ever grows a second
@@ -425,6 +439,14 @@ RSpec.describe Kiosk::Server::Events do
       it 'leaves a subscription whose reach and credential still hold alone' do
         expect(report['steady_unsubscribed']).to be(false)
         expect(report['steady_disconnected']).to be(false)
+      end
+
+      # Spec Section 8.5.6: the upgrade's proof is checked once; a re-check
+      # reads the token, so a proof past its 60-second window closes nothing.
+      it 'keeps a socket open after its upgrade proof leaves the 60-second window' do
+        expect(report['aged_proof_welcomed']).to be(true)
+        expect(report['aged_proof_frames']).to eq([])
+        expect(report['aged_proof_closed']).to be(false)
       end
 
       it "stops delivering and says why when the subject's reach is withdrawn" do

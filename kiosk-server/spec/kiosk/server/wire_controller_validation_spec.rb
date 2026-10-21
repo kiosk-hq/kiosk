@@ -41,13 +41,15 @@ module WireControllerValidationSpec
     [status, headers, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
   end
 
-  def bearer_env(path, token, **)
-    Rack::MockRequest.env_for(path, 'HTTP_AUTHORIZATION' => "Bearer #{token}", **)
+  # `path` carrying `token` and its DPoP proof for this method on this origin.
+  def token_env(path, token, **opts)
+    proof = dpop_env(token, method: opts.fetch(:method, 'GET'), url: "https://demo.example#{path}")
+    Rack::MockRequest.env_for(path, **proof, **opts)
   end
 
   def agent_token
     @agent_token ||= Kiosk::Server::JwtIssuer.issue(
-      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent' },
+      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent', cnf: cnf_for },
       audience: 'https://demo.example'
     )
   end
@@ -68,7 +70,7 @@ module WireControllerValidationSpec
     unless header == :absent
       opts['HTTP_KIOSK_POW'] = header.is_a?(String) ? header : JSON.generate(header)
     end
-    dispatch_verb('catalog', bearer_env('/kiosk/catalog', agent_token, **opts))
+    dispatch_verb('catalog', token_env('/kiosk/catalog', agent_token, **opts))
   end
 
   def validate_any_proof! = Kiosk::Server::RequestValidation.validate_proofs!([{ challenge: {}, nonce: {} }])

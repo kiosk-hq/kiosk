@@ -238,6 +238,44 @@ RSpec.shared_context 'with the auth plane manage page' do
   end
 end
 
+# ── assistant key rotation (spec Section 5.7), through POST /auth/rotate ────
+#
+# Real keys, real possession proofs over real challenges, real tokens: the
+# rotation replaces one column of a live row, and the row is what keeps the
+# identity, so this runs against the shipped schema.
+module AgentRotationSpec
+  ISSUER = 'https://provider.example'
+
+  def thumbprint(key) = Kiosk::Server::SigningKey.new(key.public_key).kid
+  def pem_of(key) = key.public_key.to_pem.strip
+
+  # A possession proof by `key` over a fresh challenge issued for it.
+  def proof(key, **claims)
+    nonce = Kiosk::Server::AuthChallenge.issue(public_key_pem: pem_of(key))[:challenge]
+    JWT.encode({ aud: ISSUER, nonce: nonce, jti: SecureRandom.uuid, **claims }, key, 'RS256')
+  end
+
+  def rotation_body(old_key, new_key, signed: proof(old_key, new_key: thumbprint(new_key)), new_signed: proof(new_key))
+    { public_key: pem_of(old_key), signed: signed, new_public_key: pem_of(new_key), new_signed: new_signed }
+  end
+
+  # [status, parsed body] of POST /kiosk/auth/rotate.
+  def rotate(body)
+    env = Rack::MockRequest.env_for("#{ISSUER}/kiosk/auth/rotate", method: 'POST', input: JSON.generate(body),
+                                                                   'CONTENT_TYPE' => 'application/json')
+    status, _headers, raw_body = Kiosk::Server::AuthController.action(:rotate).call(env)
+    raw = +''
+    raw_body.each { |chunk| raw << chunk }
+    [status, JSON.parse(raw)]
+  end
+
+  def claims_of(token) = JWT.decode(token, nil, false).first
+
+  def verified?(token)
+    !Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new.verify('HTTP_AUTHORIZATION' => "DPoP #{token}").nil?
+  end
+end
+
 RSpec.describe Kiosk::Server::AccountBinding do
   # ── AccountBinding: the uuid principal and the text[] role list ───────────
 
@@ -460,10 +498,10 @@ RSpec.describe Kiosk::Server::AccountBinding do
     let!(:agent_id) { bind!(holder)[:agent_id] }
 
     it 'resolves the principal of a live agent and refuses a revoked one' do
-      expect(idp.send(:lookup_user_id, agent_id)).to eq(holder)
+      expect(idp.send(:lookup_agent, agent_id).fetch('user_id')).to eq(holder)
 
       Kiosk::Server::AccountBinding.unlink!(agent_id: agent_id, user_id: holder)
-      expect { idp.send(:lookup_user_id, agent_id) }
+      expect { idp.send(:lookup_agent, agent_id) }
         .to raise_error(Kiosk::AgentIdentityProviders::InvalidToken)
     end
 
@@ -617,6 +655,92 @@ RSpec.describe Kiosk::Server::AccountBinding do
         connection.exec_query(%(UPDATE #{table('agents')} SET spending_cap_cents = 5000 WHERE id = $1),
                               'auth plane spec', [agent_id])
       end.to raise_error(ActiveRecord::StatementInvalid, /spending_cap_currency/)
+    end
+  end
+
+  describe Kiosk::Server::AgentRotation, 'through POST /auth/rotate' do
+    include_context 'with the auth plane database'
+    include AgentRotationSpec
+
+    let(:old_key) { DpopAgent::KEY }
+    let(:new_key) { OpenSSL::PKey::RSA.generate(2048) }
+    let!(:bound)  { Kiosk::Server::AccountBinding.bind!(public_key_pem: pem_of(old_key), user_id: holder) }
+
+    before do
+      Kiosk.configure { |c| c.signing_key = CHECKOUT_SIGNING_KEY }
+      allow(idp).to receive(:issue).and_call_original
+    end
+
+    it 'puts the new key on the same agent, account and role' do
+      before = agent_row(bound[:agent_id])
+      status, body = rotate(rotation_body(old_key, new_key))
+
+      expect(status).to eq(200)
+      expect(body.keys).to eq(['access_token'])
+      after = agent_row(bound[:agent_id])
+      expect(after.fetch('public_key')).to eq(pem_of(new_key))
+      expect(after.values_at('id', 'user_id', 'allowed_roles')).to eq(before.values_at('id', 'user_id', 'allowed_roles'))
+    end
+
+    it 'answers a token bound to the new key, for the same agent and account' do
+      _, body = rotate(rotation_body(old_key, new_key))
+      claims = claims_of(body.fetch('access_token'))
+
+      expect(claims.fetch('cnf')).to eq('jkt' => thumbprint(new_key))
+      expect(claims.values_at('agent_id', 'sub')).to eq([bound[:agent_id], holder])
+      expect(verified?(body.fetch('access_token'))).to be(true)
+    end
+
+    it 'revokes every token issued before it, also in the same second' do
+      earlier = idp.issue(agent_id: bound[:agent_id], role: :customer)
+      rotate(rotation_body(old_key, new_key))
+      expect(verified?(earlier)).to be(false)
+    end
+
+    it 'leaves the old key nothing to log in to' do
+      rotate(rotation_body(old_key, new_key))
+      expect { Kiosk::Server::AgentLogin.call(public_key_pem: pem_of(old_key), signed: proof(old_key)) }
+        .to raise_error(Kiosk::Server::Errors::NotFound)
+    end
+
+    it 'refuses a proof of the old key that names no new key, and changes nothing' do
+      status, body = rotate(rotation_body(old_key, new_key, signed: proof(old_key)))
+      expect([status, body['code']]).to eq([401, 'unauthenticated'])
+      expect(agent_row(bound[:agent_id]).fetch('public_key')).to eq(pem_of(old_key))
+    end
+
+    it 'refuses a proof of the old key that names another key' do
+      stranger = OpenSSL::PKey::RSA.generate(2048)
+      status, = rotate(rotation_body(old_key, new_key, signed: proof(old_key, new_key: thumbprint(stranger))))
+      expect(status).to eq(401)
+    end
+
+    it 'refuses a new key that did not sign its own proof' do
+      status, = rotate(rotation_body(old_key, new_key, new_signed: proof(OpenSSL::PKey::RSA.generate(2048))))
+      expect(status).to eq(401)
+    end
+
+    it 'refuses a challenge that was already used' do
+      signed = proof(old_key, new_key: thumbprint(new_key))
+      new_signed = proof(new_key)
+      Kiosk::Server::AuthChallenge.consume!(public_key_pem: pem_of(old_key), nonce: JWT.decode(signed, nil, false).first['nonce'])
+
+      status, = rotate(rotation_body(old_key, new_key, signed: signed, new_signed: new_signed))
+      expect(status).to eq(401)
+    end
+
+    it 'answers 404 for an old key that is not registered' do
+      unknown = OpenSSL::PKey::RSA.generate(2048)
+      status, body = rotate(rotation_body(unknown, new_key))
+      expect([status, body['code']]).to eq([404, 'not_found'])
+    end
+
+    it 'answers 409 for a new key that is registered already, and changes nothing' do
+      Kiosk::Server::AccountBinding.bind!(public_key_pem: pem_of(new_key), user_id: other)
+      status, body = rotate(rotation_body(old_key, new_key))
+
+      expect([status, body['code']]).to eq([409, 'conflict'])
+      expect(agent_row(bound[:agent_id]).fetch('public_key')).to eq(pem_of(old_key))
     end
   end
 end

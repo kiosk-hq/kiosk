@@ -40,19 +40,23 @@ module AuthControllerSpecHelpers
     expect(body[:code]).to   eq(code)
   end
 
+  REVOKE_URL = 'https://demo.example/kiosk/auth/revoke'
+
+  # The call with `token` and its DPoP proof (spec Section 5.6).
   def revoke_env(token = nil)
     opts = { method: 'POST' }
-    opts['HTTP_AUTHORIZATION'] = "Bearer #{token}" unless token.nil?
-    Rack::MockRequest.env_for('/kiosk/auth/revoke', **opts)
+    opts.merge!(dpop_env(token, method: 'POST', url: REVOKE_URL)) unless token.nil?
+    Rack::MockRequest.env_for(REVOKE_URL, **opts)
   end
 
   # A fake connection whose #exec_query always answers the DefaultAgentIdp's
-  # `SELECT user_id … WHERE id = $1` lookup (issue/verify both call it) with a
-  # user row. No `quote`: since K-782 the IdP binds instead of quoting, so a
+  # `SELECT user_id, public_key … WHERE id = $1` lookup with the row of an
+  # agent registered with the suite's agent key. No `quote`: since K-782 the IdP binds instead of quoting, so a
   # fake that offered one would hide a regression rather than catch it.
   def stub_agents_lookup(user_id: 'u-1')
     fake_conn = Object.new.tap do |conn|
-      conn.define_singleton_method(:exec_query) { |_sql, _name = nil, _binds = []| [{ 'user_id' => user_id }] }
+      pem = agent_pem
+      conn.define_singleton_method(:exec_query) { |_sql, _name = nil, _binds = []| [{ 'user_id' => user_id, 'public_key' => pem }] }
     end
     ar_base = Class.new { define_singleton_method(:lease_connection) { fake_conn } }
     stub_const('ActiveRecord::Base', ar_base)
@@ -114,6 +118,28 @@ RSpec.describe Kiosk::Server::AuthController do
       it 'returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)' do
         status, body = dispatch(described_class, :revoke, revoke_env('garbage-not-a-jwt'))
         expect_problem(status, body, http: 401, code: 'unauthenticated')
+      end
+
+      # RFC 9449 Section 7.1: the 401 names the scheme the call needs.
+      it 'names the DPoP scheme in WWW-Authenticate on its 401' do
+        dispatch(described_class, :revoke, revoke_env)
+        expect(last_headers['WWW-Authenticate']).to eq('DPoP algs="RS256"')
+      end
+
+      it 'refuses a valid token sent as a Bearer token, with no DPoP proof' do
+        stub_agents_lookup(user_id: 'u-1')
+        env = Rack::MockRequest.env_for(AuthControllerSpecHelpers::REVOKE_URL, method: 'POST', 'HTTP_AUTHORIZATION' => "Bearer #{issue_token('a-1')}")
+        status, body = dispatch(described_class, :revoke, env)
+        expect_problem(status, body, http: 401, code: 'unauthenticated')
+      end
+
+      it 'refuses a valid DPoP token whose proof names another URL' do
+        stub_agents_lookup(user_id: 'u-1')
+        token = issue_token('a-1')
+        env = Rack::MockRequest.env_for(AuthControllerSpecHelpers::REVOKE_URL, method: 'POST',
+                                                                               **dpop_env(token, method: 'POST', url: 'https://demo.example/kiosk/auth/login'))
+        status, body = dispatch(described_class, :revoke, env)
+        expect_problem(status, body, http: 401, code: 'unauthenticated', detail: 'htu')
       end
 
       # ─── 401 guard: identity resolves but carries NO agent_id ───────────────

@@ -29,4 +29,29 @@ RSpec.describe Kiosk::Server::Checkout do
   it 'answers the claims of a checkout this origin signed for this account' do
     expect(described_class.verify(checkout_jwt, identity:)).to eq(claims)
   end
+
+  # Operator key rotation (spec Section 4.4): the checkouts the previous key
+  # signed stay payable while that key is still published.
+  describe 'across an operator key rotation' do
+    let(:signed_before) { checkout_jwt }
+
+    before { signed_before }
+
+    it 'verifies a checkout that the previous key signed' do
+      Kiosk.configure do |c|
+        c.signing_key          = Kiosk::Server::SigningKey.generate
+        c.previous_signing_key = CHECKOUT_SIGNING_KEY.rsa.public_key.to_pem
+      end
+      expect(described_class.verify(signed_before, identity:)).to eq(claims)
+    end
+
+    it 'refuses it once the previous key is gone from the JWKS' do
+      Kiosk.configure do |c|
+        c.signing_key          = Kiosk::Server::SigningKey.generate
+        c.previous_signing_key = Kiosk::Server::SigningKey.generate
+      end
+      expect { described_class.verify(signed_before, identity:) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, 'checkout_jwt signature invalid')
+    end
+  end
 end

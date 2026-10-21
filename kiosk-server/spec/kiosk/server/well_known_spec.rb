@@ -71,6 +71,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:kiosk][:auth][:register_url]).to  eq('https://api.acme.example/kiosk/auth/register')
       expect(doc[:kiosk][:auth][:login_url]).to     eq('https://api.acme.example/kiosk/auth/login')
       expect(doc[:kiosk][:auth][:revoke_url]).to    eq('https://api.acme.example/kiosk/auth/revoke')
+      expect(doc[:kiosk][:auth][:rotate_url]).to    eq('https://api.acme.example/kiosk/auth/rotate')
     end
 
     it 'does not advertise a legacy OAuth surface' do
@@ -319,7 +320,8 @@ RSpec.describe Kiosk::Server::WellKnown do
         response_types_supported: [],
         grant_types_supported: ['urn:ietf:params:oauth:grant-type:device_code'],
         token_endpoint_auth_methods_supported: ['none'],
-        service_documentation: 'https://api.acme.example/auth.md'
+        service_documentation: 'https://api.acme.example/auth.md',
+        dpop_signing_alg_values_supported: ['RS256']
       )
     end
 

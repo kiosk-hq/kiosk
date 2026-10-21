@@ -202,7 +202,7 @@ module HandlerMixinWireSpec
     env = Rack::MockRequest.env_for(
       "https://provider.example/kiosk/#{name}#{query}",
       method: 'GET',
-      'HTTP_AUTHORIZATION' => "Bearer #{token}", **
+      **dpop_env(token, method: 'GET', url: "https://provider.example/kiosk/#{name}"), **
     )
     dispatch(:show, name, env)
   end
@@ -211,7 +211,8 @@ module HandlerMixinWireSpec
     env = Rack::MockRequest.env_for(
       "https://provider.example/kiosk/#{name}",
       method: 'POST', input: JSON.generate(payload),
-      'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}", **
+      'CONTENT_TYPE' => 'application/json',
+      **dpop_env(token, method: 'POST', url: "https://provider.example/kiosk/#{name}"), **
     )
     dispatch(:create, name, env)
   end
@@ -245,7 +246,7 @@ RSpec.shared_context 'with a wire token for the handler mixin' do
 
   let(:token) do
     Kiosk::Server::JwtIssuer.issue(
-      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent' },
+      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent', cnf: cnf_for },
       audience: 'https://provider.example'
     )
   end
@@ -706,7 +707,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
 
       expect(status).to eq(402)
       expect(problem['code']).to eq('payment_setup_required')
-      expect(headers['WWW-Authenticate']).to eq(%(Payment realm="https://provider.example", method="ap2"))
+      expect(headers['WWW-Authenticate']).to eq(%(Kiosk-Payment-Setup realm="https://provider.example"))
     end
 
     it 'emits NO WWW-Authenticate on payment_failed — the third 402, which no scheme names' do

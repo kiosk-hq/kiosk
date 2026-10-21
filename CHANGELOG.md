@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.26] — 2026-10-21
+
+- 2026-10-21: **Every gem and `API_VERSION` are 0.5.26, matching skill 0.5.26.** `MIN_CLIENT` stays 0.5.23: the two new discovery documents are additive.
+
+- 2026-10-21: **Every demo and the engine default pin `skill-v0.5.26.md`**, which keeps every file for an operator in its directory and saves each payment's receipts.
+
 - 2026-10-21: Every operator demo answers its landing page in markdown to `Accept: text/markdown`, and serves `/sitemap.xml`, which its robots.txt names.
 - 2026-10-21: The engine serves RFC 9728 protected resource metadata, and the ARD manifest also at `/.well-known/ai-catalog.json`, the path isitagentready.com reads.
 - 2026-10-21: Every deploy script that reaches the box takes the host as its first argument, or `KIOSK_DEPLOY_HOST`. `deploy/deploy.sh` pushes and rolls out.

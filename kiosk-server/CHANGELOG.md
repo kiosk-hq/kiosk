@@ -12,7 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.26] — 2026-10-21
+
 - 2026-10-21: Serves RFC 9728 protected resource metadata at `/.well-known/oauth-protected-resource`, and the ARD manifest also at `/.well-known/ai-catalog.json` with `specVersion`.
+- 2026-10-21: Version 0.5.26, the tree cut that matches skill 0.5.26.
 
 ## [0.5.25] — 2026-10-21
 

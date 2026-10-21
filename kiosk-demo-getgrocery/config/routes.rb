@@ -8,6 +8,10 @@ Rails.application.routes.draw do
   # Devise needs this as its post-sign-in destination too.
   root 'home#index'
 
+  # Crawlers: robots.txt names the sitemap.
+  get '/robots.txt', to: 'crawler#robots'
+  get '/sitemap.xml', to: 'crawler#sitemap'
+
   # ── The Kiosk wire surface ────────────────────────────────────────────────
   kiosk do
     queries :catalog, :delivery_slots, :my_orders

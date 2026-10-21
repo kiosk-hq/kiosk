@@ -11,6 +11,10 @@ Rails.application.routes.draw do
   # Devise needs this as its post-sign-in destination too.
   root 'home#index'
 
+  # Crawlers: robots.txt names the sitemap.
+  get '/robots.txt', to: 'crawler#robots'
+  get '/sitemap.xml', to: 'crawler#sitemap'
+
   # The page a rental verb's `unlock_url` opens, and the App Clip's launch URL.
   get '/unlock', to: 'unlock#show'
 

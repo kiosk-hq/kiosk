@@ -508,7 +508,7 @@ EXTRA_SCANNED = [
   'test/stories/household_test.rb',
   'test/stories/link_test.rb',
   'test/stories/privacy_test.rb',
-  'public/robots.txt',
+  'app/views/crawler/robots.text.erb',
   'public/favicon.ico',
   'public/404.html',
   'public/422.html',
@@ -557,10 +557,15 @@ COPIES = {
     rule: :identical,
     why: 'Nothing in a .gitignore is per-demo; machine-local entries belong in the root .gitignore.'
   },
-  'public/robots.txt' => {
+  'app/views/crawler/robots.text.erb' => {
     rule: :identical,
-    except: { 'prove' => "#{PROVE_SKELETON}, and it serves no discovery document for the agent block to point at." },
-    why: 'One crawling policy for the operator seven, pointing agents at the agent surface.'
+    ships: OPERATOR_SEVEN,
+    why: 'One crawling policy for the operator seven, pointing agents at the agent surface and crawlers at the sitemap.'
+  },
+  'app/controllers/crawler_controller.rb' => {
+    rule: :identical,
+    ships: OPERATOR_SEVEN,
+    why: 'robots.txt and sitemap.xml name absolute URLs on the origin, so each request renders them.'
   },
   'public/favicon.ico' => {
     rule: :identical,

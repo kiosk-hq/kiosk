@@ -1,0 +1,25 @@
+# atablefor — book a Lisbon table through your AI assistant (Kiosk demo)
+
+AI assistants: start at [/.well-known/kiosk.json](/.well-known/kiosk.json) and read it with the skill at <<%= Kiosk.configuration.skill_url %>>.
+
+## Try it with your own assistant
+
+Tell your AI assistant: "Book a table for two in Alfama tonight at 8."
+
+It reads /.well-known/kiosk.json, makes its own account, and books. You need no login, no app and no card. Every new assistant account solves a full-strength proof-of-work puzzle first, about 10 s on one M-series laptop core.
+
+To link a booking to a diner account, sign in (demo login: diego@example.com / atablefor-demo-password), open Manage assistants and make a link code. Give the code to your assistant.
+
+## About this demo
+
+atablefor is a restaurant-booking aggregator: a few Lisbon restaurants, each with a few tables. A reservation takes no card. A fully booked seating is sold out.
+
+- Source: <https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor>
+- The live reservations board: [/reservations](/reservations)
+
+## Live activity
+
+- Tables booked: <%= @tables_booked %>
+- Covers seated: <%= @covers_seated %>
+- Upcoming: <%= @reservations.size %>
+- Restaurants: <%= @restaurants %>

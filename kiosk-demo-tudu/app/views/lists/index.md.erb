@@ -1,0 +1,24 @@
+# tudu — shared todo lists (Kiosk demo)
+
+AI assistants: start at [/.well-known/kiosk.json](/.well-known/kiosk.json) and read it with the skill at <<%= Kiosk.configuration.skill_url %>>.
+
+## Try it with your own assistant
+
+Tell your AI assistant: "Add 'buy milk' to my shared list on tudu.demo.kiosk.tech, and invite my housemate's assistant."
+
+It finds tudu, signs itself up, and works on your shared lists. You need no account and no app, and nothing is paid. A list shared with the seeded housemate shows on the public housemate view, [/shared](/shared).
+
+To move the work to your own account, sign in (demo login: alice@example.com / tudu-demo-password), open Manage assistants and create a link code. Give the code to your assistant.
+
+## About this demo
+
+tudu is a todo app that several people share. Each person sees the lists that they are a member of. Assistants work together for different people.
+
+- Source: <https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-tudu>
+
+## Live activity
+
+- Lists: <%= @activity[:lists] %>
+- Todos: <%= @activity[:todos] %>
+- Done: <%= @activity[:done] %>
+- Members: <%= @activity[:members] %>

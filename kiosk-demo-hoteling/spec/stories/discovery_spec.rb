@@ -38,5 +38,15 @@ RSpec.describe 'Discovering the hotel', type: :story do
       expect(page.body[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1]).to eq(pinned)
       expect(page['Link'][/<([^>]*)>\s*;\s*rel="kiosk"/, 1]).to eq(pinned)
     end
+
+    it 'answers an assistant in markdown, and robots.txt names the sitemap' do
+      page = Net::HTTP.get_response(URI("#{live_url}/"), 'Accept' => 'text/markdown')
+      expect([page.code, page.content_type]).to eq(['200', 'text/markdown'])
+      expect(page.body).to include('/.well-known/kiosk.json')
+
+      sitemap_url = Net::HTTP.get(URI("#{live_url}/robots.txt"))[/^Sitemap: (\S+)$/, 1]
+      expect(sitemap_url).to eq("#{live_url}/sitemap.xml")
+      expect(Net::HTTP.get(URI(sitemap_url))).to include("<loc>#{live_url}/</loc>")
+    end
   end
 end

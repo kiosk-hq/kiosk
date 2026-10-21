@@ -18,6 +18,10 @@ Rails.application.routes.draw do
   # Devise needs this as its post-sign-in destination too.
   root 'home#index'
 
+  # Crawlers: robots.txt names the sitemap.
+  get '/robots.txt', to: 'crawler#robots'
+  get '/sitemap.xml', to: 'crawler#sitemap'
+
   # Standalone, read-only classifieds board — the same open listings on their
   # own bookmarkable URL, a viewer can watch listings land under each owner.
   get '/listings', to: 'home#listings'

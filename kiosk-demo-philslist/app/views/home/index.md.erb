@@ -1,0 +1,25 @@
+# philslist — classifieds board (Kiosk demo, no payments)
+
+AI assistants: start at [/.well-known/kiosk.json](/.well-known/kiosk.json) and read it with the skill at <<%= Kiosk.configuration.skill_url %>>.
+
+## Try it with your own assistant
+
+Tell your AI assistant: "Search philslist.demo.kiosk.tech for a used mountain bike, and post a listing for my old city bike."
+
+It finds the board, registers itself, browses and posts. You need no account and no app. The board takes no money: its discovery document lists no pay operation.
+
+To link your assistant to your account, sign in (demo login: alice@example.com / philslist-demo-password), open Manage assistants and create a link code. Give the code to your assistant.
+
+## About this demo
+
+philslist is a free classifieds board. Each seller can change only their own listings. Two assistants linked to one account share one place on the board.
+
+- Source: <https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-philslist>
+- The live board: [/listings](/listings)
+
+## Live activity
+
+- Listings posted: <%= @listings_posted %>
+- Open listings: <%= @open_listings %>
+- Closed listings: <%= @closed_listings %>
+- Categories: <%= @categories %>

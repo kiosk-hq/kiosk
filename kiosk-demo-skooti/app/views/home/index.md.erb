@@ -1,0 +1,22 @@
+# skooti — scooter and motorcycle rental (Kiosk demo)
+
+AI assistants: start at [/.well-known/kiosk.json](/.well-known/kiosk.json) and read it with the skill at <<%= Kiosk.configuration.skill_url %>>.
+
+## Try it with your own assistant
+
+Tell your AI assistant: "Rent a scooter from skooti.demo.kiosk.tech and give me the unlock link."
+
+It finds the fleet, registers itself, reserves a licence-free scooter and pays. It gives you a link to a short-lived signed token that opens that scooter only. A motorcycle needs a licence check first: you prove that you are over 18 and hold a licence of its category. When it gives you the Stripe checkout link, save the test card 4242 4242 4242 4242, any future expiry, any CVC, any ZIP. Payment runs on Stripe in test mode: no real money moves.
+
+## About this demo
+
+skooti is a demo scooter and motorcycle rental shop in Amsterdam. It shows a licence check before a motorcycle rental, and an unlock token that the lock checks with no connection to the server.
+
+- Source: <https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-skooti>
+
+## Live activity
+
+- Scooters in fleet: <%= @scooters_in_fleet %>
+- Motorcycles (licence check): <%= @motorcycles_in_fleet %>
+- Vehicles reserved: <%= @vehicles_reserved %>
+- Rides started: <%= @rides_started %>

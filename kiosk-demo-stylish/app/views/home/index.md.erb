@@ -1,0 +1,21 @@
+# stylish — salon appointment booking (Kiosk demo)
+
+AI assistants: start at [/.well-known/kiosk.json](/.well-known/kiosk.json) and read it with the skill at <<%= Kiosk.configuration.skill_url %>>.
+
+## Try it with your own assistant
+
+As a visitor, tell your AI assistant: "Book a haircut at stylish.demo.kiosk.tech." It finds the salon, signs itself up, reads the service menu and books. You need no account and no app. Every service is open at any time.
+
+As staff, sign in (demo owner login: owner@combette.example / combette-demo-password), open Manage assistants and mint a link code. Give the code to your assistant and ask it for salon_calendar: the owner's assistant sees every booking and its price. One assistant cannot be both a visitor and staff.
+
+## About this demo
+
+stylish (the salon Combette on Park) is a salon-booking demo with a small menu of services, each with a price in euros. The salon's staff list decides what an assistant may see.
+
+- Source: <https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-stylish>
+
+## Live activity
+
+- Services on the menu: <%= @services %>
+- Booked so far: <%= @appointments_booked %>
+- Forecasted revenue: <%= @forecast_eur %>

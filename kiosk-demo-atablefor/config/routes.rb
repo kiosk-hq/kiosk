@@ -10,6 +10,10 @@ Rails.application.routes.draw do
   # HomeController inherits ActionController::Base so HTML renders.
   root 'home#index'
 
+  # Crawlers: robots.txt names the sitemap.
+  get '/robots.txt', to: 'crawler#robots'
+  get '/sitemap.xml', to: 'crawler#sitemap'
+
   # Public, read-only reservations board — the (b) reveal: after an assistant
   # books + links, the reservation shows up here under the diner's name. Shares
   # HomeController#reservations so the board renders both on the home page and

@@ -19,5 +19,9 @@ Rails.application.routes.draw do
 
   root to: 'lists#index'
 
+  # Crawlers: robots.txt names the sitemap.
+  get '/robots.txt', to: 'crawler#robots'
+  get '/sitemap.xml', to: 'crawler#sitemap'
+
   get '/shared', to: 'lists#shared'
 end

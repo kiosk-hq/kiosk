@@ -54,4 +54,16 @@ class DiscoveryStory < StoryTest
     assert_equal pinned, page['Link'][/<([^>]*)>\s*;\s*rel="kiosk"/, 1]
     assert_equal '/.well-known/api-catalog', page['Link'][/<([^>]*)>\s*;\s*rel="api-catalog"/, 1]
   end
+
+  test 'an assistant reads the landing page as markdown, and a crawler finds the sitemap in robots.txt' do
+    page = Net::HTTP.get_response(URI("#{live_url}/"), 'Accept' => 'text/markdown')
+
+    assert_equal ['200', 'text/markdown'], [page.code, page.content_type]
+    assert_includes page.body, '/.well-known/kiosk.json'
+
+    sitemap = Net::HTTP.get(URI("#{live_url}/robots.txt"))[/^Sitemap: (\S+)$/, 1]
+
+    assert_equal "#{live_url}/sitemap.xml", sitemap
+    assert_includes Net::HTTP.get(URI(sitemap)), "<loc>#{live_url}/</loc>"
+  end
 end

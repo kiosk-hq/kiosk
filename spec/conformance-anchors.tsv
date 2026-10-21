@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2051 anchors.
+# 2065 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -175,13 +175,14 @@ e2e/assistant.sh	db: 1 checkout_mandate
 e2e/assistant.sh	db: 1 payment_mandate
 e2e/assistant.sh	db: settlement amount 1599
 e2e/assistant.sh	declares OpenAPI 3.1
+e2e/assistant.sh	es256: the token with its ES256 proof → 200
 e2e/assistant.sh	every parameter writes style and explode
 e2e/assistant.sh	exactly 1 salon
 e2e/assistant.sh	garbage token → 401
+e2e/assistant.sh	jwks: alg=EdDSA
 e2e/assistant.sh	jwks: keys[] present
-e2e/assistant.sh	jwks: no alg (RS256 and PS256)
+e2e/assistant.sh	jwks: kty=OKP
 e2e/assistant.sh	jwks: no private d field
-e2e/assistant.sh	jwks: no private p field
 e2e/assistant.sh	jwks: use=sig
 e2e/assistant.sh	kiosk.auth has no kind
 e2e/assistant.sh	kiosk.auth.registration_url"
@@ -221,6 +222,7 @@ e2e/assistant.sh	rotate: a token from before the rotation → 401
 e2e/assistant.sh	rotate: both keys signed → 200
 e2e/assistant.sh	rotate: the old key gets no token → 401
 e2e/assistant.sh	rotate: the same agent_id
+e2e/assistant.sh	rsa: registration of an RSA key → 400
 e2e/assistant.sh	salon name is Combette
 e2e/assistant.sh	schema publishes {queries, actions, events} and nothing else
 e2e/assistant.sh	status restates the HTTP status
@@ -276,7 +278,7 @@ e2e/fixtures/equihash_register.rb	def client_token(
 e2e/fixtures/equihash_register.rb	def equihash_register(
 e2e/fixtures/equihash_register.rb	def registration_body(key) = { jwks: { keys: [Kiosk::TestHelpers::Dpop.jwk(key)] } }
 e2e/fixtures/pay_flow.rb	# Register the key (RFC 7591), then get a token from the token endpoint with a
-e2e/fixtures/pay_flow.rb	checkout_jwt = JWT.encode(checkout, operator_key, 'PS256', { kid:, typ: 'JWT' })
+e2e/fixtures/pay_flow.rb	checkout_jwt = JWT.encode(checkout, operator_key, 'EdDSA', { kid:, typ: 'JWT' })
 e2e/fixtures/pay_flow.rb	mandates    = Kiosk::TestHelpers::Mandate.pay(key, checkout_jwt, instrument: 'pm_demo')
 e2e/fixtures/pay_flow.rb	pay_request = { checkout_mandate: mandates[:checkout], payment_mandate: mandates[:payment] }
 e2e/fixtures/pay_flow.rb	two closed AP2 mandates for a checkout the operator signed for that
@@ -321,10 +323,10 @@ kiosk-all/kiosk-all.gemspec	      - Adapter gems (kiosk-user-idp-*, kiosk-pay-*)
 kiosk-all/kiosk-all.gemspec	      - Test harnesses (kiosk-test-support, kiosk-rls-rspec,
 kiosk-all/kiosk-all.gemspec	      - kiosk-rls — opt-in DB-level RLS defense-in-depth; add it
 kiosk-all/kiosk-all.gemspec	    Deliberately out of scope:
-kiosk-all/kiosk-all.gemspec	  spec.add_dependency 'kiosk-core',   '~> 0.5.0'
-kiosk-all/kiosk-all.gemspec	  spec.add_dependency 'kiosk-server', '~> 0.5.0'
-kiosk-all/kiosk-all.gemspec	spec.add_dependency 'kiosk-core',   '~> 0.5.0'
-kiosk-all/kiosk-all.gemspec	spec.add_dependency 'kiosk-server', '~> 0.5.0'
+kiosk-all/kiosk-all.gemspec	  spec.add_dependency 'kiosk-core',   '~> 0.6.0'
+kiosk-all/kiosk-all.gemspec	  spec.add_dependency 'kiosk-server', '~> 0.6.0'
+kiosk-all/kiosk-all.gemspec	spec.add_dependency 'kiosk-core',   '~> 0.6.0'
+kiosk-all/kiosk-all.gemspec	spec.add_dependency 'kiosk-server', '~> 0.6.0'
 kiosk-all/lib/kiosk-all.rb	require 'kiosk'
 kiosk-all/lib/kiosk-all.rb	require 'kiosk/all/version'
 kiosk-all/lib/kiosk-all.rb	require 'kiosk/server'
@@ -342,7 +344,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.27'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.0'
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -567,8 +569,8 @@ kiosk-demo-prove/app/models/operator_registry.rb	# and the broker posts its call
 kiosk-demo-prove/app/models/operator_registry.rb	def callback_allowed?(operator, callback_url)
 kiosk-demo-prove/app/models/operator_registry.rb	uri.hostname == operator[:callback_host]
 kiosk-demo-prove/app/models/prove_request.rb	def confirmable? = pending? && !expired?
+kiosk-demo-prove/app/services/prove_key.rb	alg: 'EdDSA', typ: 'JWT'
 kiosk-demo-prove/app/services/prove_key.rb	def mint(prove_request, attributes)
-kiosk-demo-prove/app/services/prove_key.rb	keypair, 'RS256'
 kiosk-demo-prove/config/environments/development.rb	ENV['KIOSK_PROVE_ISSUER']                   ||= 'https://kyc.test.local'
 kiosk-demo-prove/config/initializers/prove.rb	Rails.configuration.x.prove.issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
 kiosk-demo-prove/config/initializers/prove.rb	operators = %w[skooti getgrocery].to_h do |operator|
@@ -1096,7 +1098,7 @@ kiosk-server/lib/kiosk/server/configuration_extension.rb	      # `agents.spendin
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      attr_accessor :spending_cap_window_days
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      def computed_capabilities
 kiosk-server/lib/kiosk/server/configuration_extension.rb	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
-kiosk-server/lib/kiosk/server/configuration_extension.rb	c.signing_key is not set. Generate one with
+kiosk-server/lib/kiosk/server/configuration_extension.rb	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
 kiosk-server/lib/kiosk/server/device_code_grant.rb	# The claim ceremony on the RFC 8628 device-grant wire: binds a registered
 kiosk-server/lib/kiosk/server/device_code_grant.rb	da = authorization_of(client, store.lookup_by_device_code_hash(hash))
 kiosk-server/lib/kiosk/server/engine.rb	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
@@ -1278,10 +1280,11 @@ kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a malformed date
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a name used as both scalar and array in one query string
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses an EMPTY value where a scalar type is declared
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses the same whole-valued float spelling on a RESERVED integer name — limit=20.0
-kiosk-server/spec/kiosk/server/assistant_key_spec.rb	lists RS256 as the one signing algorithm
+kiosk-server/spec/kiosk/server/assistant_key_spec.rb	accepts EdDSA alone by default
+kiosk-server/spec/kiosk/server/assistant_key_spec.rb	loads a P-256 key, which signs ES256, and still an Ed25519 key
 kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses a JWK with a private member
-kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses a key outside 2048 to 4096 bits
-kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses a key that is not RSA, or not a JWK
+kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses a P-256 key at an operator that does not accept ES256, and says what it accepts
+kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses an RSA key, a key on another curve, and what is not a JWK
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	answers a rebind to the same account as a rebind from another account, and stamps the watermark again
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	captures the human's user_idp role onto the link row (roles-from-IdP)
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	deactivates one of the holder's own bindings and answers 204 with no body
@@ -1326,9 +1329,10 @@ kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	publishes all five au
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	still serves the token endpoint, which refuses the device-code grant as OAuth does
 kiosk-server/spec/kiosk/server/caller_timezone_spec.rb	refuses a UTC offset by name
 kiosk-server/spec/kiosk/server/checkout_spec.rb	answers the claims of a checkout this origin signed for this account
+kiosk-server/spec/kiosk/server/checkout_spec.rb	carries a jti of 128 random bits
 kiosk-server/spec/kiosk/server/checkout_spec.rb	gives the merchant the issuer for a name when the owner has none
 kiosk-server/spec/kiosk/server/checkout_spec.rb	names the origin, the account, the merchant and what to pay
-kiosk-server/spec/kiosk/server/checkout_spec.rb	signs PS256 with the key of the JWKS, naming its kid
+kiosk-server/spec/kiosk/server/checkout_spec.rb	signs EdDSA with the key of the JWKS, naming its kid
 kiosk-server/spec/kiosk/server/checkout_spec.rb	signs the same checkout to other bytes each time, so its hash names one checkout
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	accepts `aud` as a one-element array
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	accepts each jti one time
@@ -1338,7 +1342,7 @@ kiosk-server/spec/kiosk/server/client_assertion_spec.rb	logs the signed `aud` an
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses a client_id that is not the sub
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an `aud` that is another origin, or that names a second audience
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an absent assertion and a wrong assertion type
-kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an algorithm outside AssistantKey::ALGORITHMS, also an HMAC keyed with the public key
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an algorithm other than the one of the registered key: RS256, ES256, an HMAC keyed with the public key
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an assertion that another key signed
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an assertion that is not a JWT
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an assertion with no jti, or with iss other than sub
@@ -1367,6 +1371,8 @@ kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil when the 
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	includes schema + queries when only a query is registered
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	offers no way to set capabilities
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	offers no way to set min_client: kiosk-core states it
+kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	reads the PEM of an Ed25519 key, and refuses an RSA key
+kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	refuses a list without EdDSA first, or with another algorithm
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	answers 304 to If-None-Match on the current digest
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	does NOT fall back to user_idp — KYC is an agent-only surface
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	emits no Vary even when the request negotiates content
@@ -1425,7 +1431,12 @@ kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns the index, v
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns the manifest, valid against the ARD v0.91 schema
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the four pointer documents public, one minute
 kiosk-server/spec/kiosk/server/dpop_spec.rb	accepts a proof of the registered key with no ath
+kiosk-server/spec/kiosk/server/dpop_spec.rb	accepts an ES256 proof of a P-256 key at an operator that accepts ES256
+kiosk-server/spec/kiosk/server/dpop_spec.rb	refuses an ES256 proof of a P-256 key at an operator that accepts EdDSA alone
+kiosk-server/spec/kiosk/server/dpop_spec.rb	refuses an RS256 proof of an RSA key
 kiosk-server/spec/kiosk/server/dpop_spec.rb	refuses no proof, a proof of another key, and a proof for another method
+kiosk-server/spec/kiosk/server/eddsa_spec.rb	gives the RFC 8037 A.3 thumbprint of the public key
+kiosk-server/spec/kiosk/server/eddsa_spec.rb	signs the RFC 8037 A.4 JWS byte for byte
 kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	boots with no role vocabulary and no default — nothing was made mandatory
 kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	boots — this is what all seven demos and the e2e fixture configure
 kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	does not come up at all
@@ -1654,7 +1665,7 @@ kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	accepts the issuer when suppli
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	defaults to a one-hour lifetime
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	honours an `expires_in` override
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	produces a JWT carrying the supplied claims and the standard time bounds
-kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a bearer signed with PS256 instead of RS256
+kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a bearer signed RS256 under the kid of the JWKS key
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a token signed by a key not in the JWKS
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a token whose agent has been revoked as of now
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a wrong audience
@@ -1694,7 +1705,7 @@ kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	drops any non-true attribute
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	on a bigint-PK host (Integer identity, String attestation sub)
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	puts module_not_served/501 on the wire for it, and names the module in detail
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden for a tampered / wrong-key signature
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden for an attestation signed with the right key under RS512
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden for an attestation signed RS256
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden for an expired attestation
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden when attributes is not an object
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden when aud does not match this operator's kyc_audience
@@ -1718,8 +1729,8 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers the payment mand
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	compares the currency as a code
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a checkout another origin of this deployment signed
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a checkout mandate in the payment place
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a checkout signed by another key, or RS256 by this one
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a checkout signed for another account
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a checkout that another key signs under this key's kid, EdDSA or RS256
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a mandate of an agent revoked since it authenticated
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a mandate signed by any key but the agent key
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a mandate whose exp has passed
@@ -1733,6 +1744,7 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an SD-JWT whose 
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an amount or a currency other than the checkout, and an amount in a string
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an open mandate, and a payment mandate in the checkout place
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	takes the currency in lower case, the spelling the spending cap counts
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	verifies the mandates the key signs ES256
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	answers 401 invalid_client for a missing or refused client assertion
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	opens a claim ceremony for the client, with the client's key on the row
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	refuses a role or a scope, also an empty one: the assistant does not choose its role
@@ -1847,7 +1859,7 @@ kiosk-server/spec/kiosk/server/receipts_spec.rb	answers claims that the publishe
 kiosk-server/spec/kiosk/server/receipts_spec.rb	leaves network_confirmation_id out
 kiosk-server/spec/kiosk/server/receipts_spec.rb	names the checkout mandate by its reference and the order by the checkout's first line item
 kiosk-server/spec/kiosk/server/receipts_spec.rb	names the payment mandate by its reference, the settlement and the confirmations
-kiosk-server/spec/kiosk/server/receipts_spec.rb	signs both receipts PS256 with the key of the JWKS, naming its kid
+kiosk-server/spec/kiosk/server/receipts_spec.rb	signs both receipts EdDSA with the key of the JWKS, naming its kid
 kiosk-server/spec/kiosk/server/reputation_factors_spec.rb	counts no one else's spend
 kiosk-server/spec/kiosk/server/reputation_factors_spec.rb	sums the customer's settlements and recorded visits inside the window
 kiosk-server/spec/kiosk/server/request_body_validation_spec.rb	carries every exchange the engine dials
@@ -1900,6 +1912,8 @@ kiosk-server/spec/kiosk/server/sd_jwt_spec.rb	refuses an _sd_alg other than sha-
 kiosk-server/spec/kiosk/server/sd_jwt_spec.rb	refuses an object disclosure under an array digest, and an array disclosure under an object digest
 kiosk-server/spec/kiosk/server/sd_jwt_spec.rb	refuses two disclosures with one digest
 kiosk-server/spec/kiosk/server/sd_jwt_spec.rb	verifies the closed checkout mandate with the key of its open mandate, and discloses it
+kiosk-server/spec/kiosk/server/signing_key_spec.rb	has the RFC 8037 public members, use sig, alg EdDSA and the kid, and nothing else
+kiosk-server/spec/kiosk/server/signing_key_spec.rb	refuses an RSA key and a P-256 key, and names the command that makes an Ed25519 key
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a checkout signed for the origin being served and refuses one signed for the other
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a token on the origin that minted it and refuses it on the other
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	advertises each origin as its own issuer
@@ -2011,7 +2025,7 @@ kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	    class Assistant
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	# Customer that `payment_setup` maps already lists a card, so that answer settles.
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	On a 402 `payment_setup_required` it calls `payment_setup`, as the hint
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	def setup_required?(answer)
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	key  = OpenSSL::PKey::RSA.generate(2048)
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	key  = Dpop.generate_key
 kiosk-test-support/lib/kiosk/test_helpers/assistant/events.rb	def self.payload_errors(schema_document, events)
 kiosk-test-support/lib/kiosk/test_helpers/customer.rb	def pays(checkout_jwt) = Answer.new(@assistant.pay(principal, checkout_jwt))
 kiosk-test-support/lib/kiosk/test_helpers/customer.rb	def refused?(code)

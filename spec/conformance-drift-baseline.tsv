@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-21 at d8208b47
+# recorded: 2026-10-22 at e5e6e447
 # 2065 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	d8208b47	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	d8208b47	        if: matrix.demo != 'kiosk-demo-prove'
@@ -325,7 +325,7 @@ kiosk-core/lib/kiosk/configuration.rb	f93913e953f166ea	d8208b47	    # to the iss
 kiosk-core/lib/kiosk/configuration.rb	3509e124dce01fd7	d8208b47	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	eb55ac83bee281d4	d8208b47	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	0b9b9bb8049ae29f	d8208b47	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	45577ebafa0e3a3d	d8208b47	API_VERSION = '0.6.0'
+kiosk-core/lib/kiosk/protocol.rb	d27bc8bc11710237	e5e6e447	API_VERSION = '0.6.1'
 kiosk-core/spec/spec_helper.rb	c89ca3f73742cd52	d8208b47	require 'kiosk'
 kiosk-demo-atablefor/README.md	9c41ef23a955233a	d8208b47	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	90d2d7b9f9107588	d8208b47	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.

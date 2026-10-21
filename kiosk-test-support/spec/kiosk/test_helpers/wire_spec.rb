@@ -8,6 +8,18 @@ RSpec.describe Kiosk::TestHelpers::Wire do
 
   let(:key) { OpenSSL::PKey.generate_key('ED25519') }
 
+  it 'refuses a toll in a proof of work it has no solver for' do
+    expect { described_class.solve([{ 'alg' => 'cuckatoo' }]) }
+      .to raise_error(ArgumentError, 'The origin asks for a "cuckatoo" proof of work. Wire solves only Equihash.')
+  end
+
+  it 'names the gem to add when the bundle has no Equihash solver' do
+    allow(Kiosk::TestHelpers::PowSolver).to receive(:require).and_raise(LoadError)
+
+    expect { described_class.solve([{ 'alg' => 'equihash' }]) }
+      .to raise_error(LoadError, /Add gem 'kiosk-pow-equihash' to the Gemfile/)
+  end
+
   it 'holds a token and its key as the Authorization value' do
     expect(described_class.dpop('tok', key)).to eq('Authorization' => described_class::DpopCredential.new(token: 'tok', key:))
     expect(wire.dpop('tok', key)).to eq(described_class.dpop('tok', key))

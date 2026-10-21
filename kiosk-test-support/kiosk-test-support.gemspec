@@ -36,8 +36,10 @@ Gem::Specification.new do |spec|
 
     `InProcessExecutor`, `InProcessWire` and `Conformance::InProcessOrigin`
     run against kiosk-server, and `Person` signs in through
-    kiosk-user-idp-devise; both are dependencies. The Minitest and RSpec
-    adapters use the test framework the host already runs.
+    kiosk-user-idp-devise; both are dependencies. The host's bundle brings
+    the rest: the Minitest and RSpec adapters use the test framework the
+    host runs, `LiveServer` serves the app with Puma, and `Wire` solves
+    Equihash tolls with kiosk-pow-equihash.
   DESC
   spec.homepage      = 'https://kiosk.tech'
   spec.license       = 'Apache-2.0'
@@ -55,9 +57,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'json_schemer', '>= 2.3', '< 3.0'
   spec.add_dependency 'jwt', '>= 2.10', '< 4.0'
   spec.add_dependency 'kiosk-core', '~> 0.6.0'
-  spec.add_dependency 'kiosk-pow-equihash', '~> 0.6.0'
   spec.add_dependency 'kiosk-server', '~> 0.6.0'
   spec.add_dependency 'kiosk-user-idp-devise', '~> 0.6.0'
-  spec.add_dependency 'puma', '>= 5.0'
   spec.add_dependency 'websocket-driver', '~> 0.7'
 end

@@ -3,8 +3,8 @@
 require 'json'
 require 'net/http'
 require 'uri'
-require 'kiosk/pow/equihash/solver'
 require 'kiosk/test_helpers/dpop'
+require 'kiosk/test_helpers/pow_solver'
 
 module Kiosk
   module TestHelpers
@@ -51,7 +51,7 @@ module Kiosk
       def self.dpop(token, key) = { 'Authorization' => DpopCredential.new(token:, key:) }
 
       # A solved proof of work for each challenge, as the `Kiosk-PoW` header carries them.
-      def self.solve(challenges) = challenges.map { { challenge: it, nonce: Kiosk::Pow::Equihash.solve(it) } }
+      def self.solve(challenges) = challenges.map { { challenge: it, nonce: PowSolver.for(it).solve(it) } }
 
       attr_reader :base_url
 

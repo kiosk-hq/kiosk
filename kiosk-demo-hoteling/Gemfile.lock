@@ -64,10 +64,8 @@ PATH
       json_schemer (>= 2.3, < 3.0)
       jwt (>= 2.10, < 4.0)
       kiosk-core (~> 0.6.0)
-      kiosk-pow-equihash (~> 0.6.0)
       kiosk-server (~> 0.6.0)
       kiosk-user-idp-devise (~> 0.6.0)
-      puma (>= 5.0)
       websocket-driver (~> 0.7)
 
 PATH

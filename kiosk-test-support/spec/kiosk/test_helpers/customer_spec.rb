@@ -190,8 +190,10 @@ RSpec.describe Kiosk::TestHelpers::Customer do
     it 'solves the toll a refusal demands, one proof per challenge' do
       allow(Kiosk::Pow::Equihash).to receive(:solve) { { 'indices' => [it['id']] } }
 
-      expect(answer(402, { 'code' => 'pow_required', 'challenges' => [{ 'id' => 1 }, { 'id' => 2 }] }).solved_toll)
-        .to eq([{ challenge: { 'id' => 1 }, nonce: { 'indices' => [1] } }, { challenge: { 'id' => 2 }, nonce: { 'indices' => [2] } }])
+      challenges = [{ 'id' => 1, 'alg' => 'equihash' }, { 'id' => 2, 'alg' => 'equihash' }]
+
+      expect(answer(402, { 'code' => 'pow_required', 'challenges' => challenges }).solved_toll)
+        .to eq(challenges.map { { challenge: it, nonce: { 'indices' => [it['id']] } } })
     end
 
     it 'inspects as its status and body' do

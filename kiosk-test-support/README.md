@@ -29,6 +29,8 @@ end
 
 Both harnesses pull `kiosk-test-support` as a transitive dependency.
 
+Your bundle brings what the helpers drive: `puma` for `LiveServer` (`rails new` writes it), and `kiosk-pow-equihash` for the solver that pays Equihash tolls. `Wire` solves no other proof of work.
+
 ## DSL
 
 ```ruby

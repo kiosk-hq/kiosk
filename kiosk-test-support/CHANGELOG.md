@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: Drops the `kiosk-pow-equihash` and `puma` dependencies; the host's bundle brings them. `Wire` names the gem to add, and refuses a toll in another proof of work.
+
 ## [0.6.0] — 2026-10-21
 
 - 2026-10-21: The helpers make Ed25519 assistant keys and sign EdDSA; `Principal#key` replaces `#rsa_key`, and `Dpop.generate_key('ES256')` makes a P-256 key.

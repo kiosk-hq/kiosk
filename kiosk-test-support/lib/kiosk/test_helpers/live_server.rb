@@ -1,7 +1,11 @@
 # frozen_string_literal: true
 
-require 'puma'
 require 'socket'
+begin
+  require 'puma'
+rescue LoadError
+  raise LoadError, "Kiosk::TestHelpers::LiveServer serves the app with Puma. Add gem 'puma' to the Gemfile."
+end
 require 'kiosk/test_helpers/assistant'
 
 module Kiosk

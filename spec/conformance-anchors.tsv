@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2050 anchors.
+# 2051 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1282,6 +1282,7 @@ kiosk-server/spec/kiosk/server/assistant_key_spec.rb	lists RS256 as the one sign
 kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses a JWK with a private member
 kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses a key outside 2048 to 4096 bits
 kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses a key that is not RSA, or not a JWK
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	answers a rebind to the same account as a rebind from another account, and stamps the watermark again
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	captures the human's user_idp role onto the link row (roles-from-IdP)
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	deactivates one of the holder's own bindings and answers 204 with no body
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	delegates to LinkCode.redeem and answers 204 with no body

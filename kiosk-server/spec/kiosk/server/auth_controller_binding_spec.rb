@@ -161,6 +161,38 @@ RSpec.describe Kiosk::Server::AuthController do
       end
     end
 
+    describe 'POST /auth/claim against the agents table' do
+      include_context 'with registered clients'
+      include AuthControllerBindingSpecHelpers
+
+      let(:store)  { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
+      let(:client) { register_client }
+
+      before { Kiosk.configure { |c| c.device_authorization_store = store } }
+
+      # [status, body, headers] of a claim of a link code that `user_id` mints.
+      def claim_for(user_id)
+        code = Kiosk::Server::LinkCode.mint(user_id: user_id, requested_role: 'customer', store: store)[:link_code]
+        status, body = dispatch(:claim, body: { code: code, client_assertion_type: Kiosk::Server::ClientAssertion::TYPE,
+                                                client_assertion: client_assertion(client.id) })
+        [status, body, last_headers]
+      end
+
+      def watermark = Kiosk.configuration.revocation_store.watermark_for(client.id)
+
+      # §6.3: the operator MUST NOT treat a rebind to the same account specially.
+      it 'answers a rebind to the same account as a rebind from another account, and stamps the watermark again' do
+        holder = holder!
+        from_another = claim_for(holder)
+        stamped = watermark
+        to_same = claim_for(holder)
+
+        expect(from_another.first).to eq(204)
+        expect(to_same).to eq(from_another)
+        expect(watermark).to be > stamped
+      end
+    end
+
     describe 'POST /auth/unlink' do
       include_context 'with a holder signed in to the auth controller'
 

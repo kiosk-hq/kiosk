@@ -46,7 +46,7 @@ module Kiosk
                       stars: { type: 'integer' },
                       address: { type: %w[string null] },
                       amenities: { type: 'array', items: { type: 'string' } },
-                      currency: { type: 'string', description: 'Sign the cart in this currency.' },
+                      currency: { type: 'string', description: 'The currency of the checkout this hotel signs.' },
                       check_in: { type: %w[string null],
                                   description: 'The first night `room_types` is free for; null when no dates were given.' },
                       check_out: { type: %w[string null], description: 'The checkout day; null when no dates were given.' },

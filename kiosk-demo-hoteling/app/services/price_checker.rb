@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# The price this hotel quoted for the booking a cart pays for, or why it no
-# longer sells it — what `c.cart_price_checker` answers. Kiosk::Server::PaymentClaim
+# The price this hotel quoted for the booking a checkout pays for, or why it no
+# longer sells it — what `c.checkout_price_checker` answers. Kiosk::Server::PaymentClaim
 # checks the rest.
 module PriceChecker
   def self.call(booking_id, _lines)

@@ -17,7 +17,6 @@ require 'json'
 require_relative '../support/prove_test_issuer'
 
 BASE_URL = ENV.fetch('SERVER_URL')
-ISSUER   = BASE_URL
 # The KYC broker as the demo's development and test environments point this origin at it.
 BROKER_URL     = 'http://127.0.0.1:3020'
 TRUSTED_ISSUER = ProveTestIssuer.issuer
@@ -66,28 +65,11 @@ ensure
   stream&.close
 end
 
-# An intent mandate capped at `cap`, and a one-line cart for `total`, as script/rental_flow.rb builds them.
-def mobility_mandates(customer, line_item, total, cap)
-  now       = Time.now.to_i
-  intent_id = SecureRandom.uuid
-  { intent: { id: intent_id, user_id: customer.user_id, agent_id: customer.agent_id, iss: ISSUER,
-              scope: 'mobility', cap_amount_cents: cap, currency: 'eur', exp: now + 600, iat: now },
-    cart: { id: SecureRandom.uuid, intent_mandate_id: intent_id, user_id: customer.user_id,
-            agent_id: customer.agent_id, iss: ISSUER, line_items: [line_item],
-            total_amount_cents: total, currency: 'eur', exp: now + 600, iat: now } }
-end
-
 # Raises SkootiScenarios::SetupFailed unless the setup step answered 200.
 def setup!(step, resp)
   raise SkootiScenarios::SetupFailed, "SETUP FAILED: #{step} returned HTTP #{resp.status} #{resp.body.inspect}" unless resp.status == 200
 
   resp
-end
-
-# The quoted price of a reservation, or 100 when the quote is not positive.
-def quoted_cents(price_per_min_cents)
-  price = price_per_min_cents.to_i
-  price.positive? ? price : 100
 end
 
 # The first licence-free vehicle no live reservation holds. A vehicle holds one
@@ -128,7 +110,8 @@ profile = Kiosk::Redteam::Profile.new(
 
     {
       id: rsv_resp.body['reservation_id'],
-      price_per_min_cents: rsv_resp.body['price_per_min_cents'].to_i
+      price_per_min_cents: rsv_resp.body['price_per_min_cents'].to_i,
+      checkout_jwt: rsv_resp.body['checkout_jwt']
     }
   },
 
@@ -139,11 +122,7 @@ profile = Kiosk::Redteam::Profile.new(
   gated_action: 'start_rental',
   gated_args: ->(ref) { { reservation_id: ref[:id] } },
 
-  pay_for: lambda { |_client, customer, owned_ref|
-    total_cents = quoted_cents(owned_ref[:price_per_min_cents])
-    mobility_mandates(customer, { qty: 1, price_cents: total_cents, reservation_id: owned_ref[:id] },
-                      total_cents, total_cents + 100)
-  },
+  pay_for: ->(_client, _customer, owned_ref) { owned_ref[:checkout_jwt] },
 
   kyc_valid: ->(user_id) { ProveTestIssuer.attest(user_id: user_id) },
   kyc_expired: ->(user_id) { ProveTestIssuer.attest_expired(user_id: user_id) },
@@ -155,53 +134,47 @@ module SkootiScenarios
   # A setup step a local beat needs failed, so its attack never reached its gate.
   class SetupFailed < StandardError; end
 
-  # A fresh customer, the reservation it owns, and the mandates that pay for it.
-  def self.paid_reservation(client, profile)
+  # A fresh customer, the reservation it owns, and the checkout the operator signed for it.
+  def self.reserved(client, profile)
     customer = client.register!
     owned    = profile.create_owned.call(client, customer)
     [customer, owned, profile.pay_for.call(client, customer, owned)]
   end
 
-  # Cashier checks on the agent's own reservation: the operator prices what lands on the counter.
+  # The operator signs what lands on the counter: a checkout changed after it signed it is refused.
 
-  # A cart whose total is below the operator's quoted rental price must be rejected at capture.
-  class TamperedPriceCart < Kiosk::Redteam::Scenario
+  # A checkout whose total is below the operator's quoted rental price must be refused before capture.
+  class TamperedPriceCheckout < Kiosk::Redteam::Scenario
     def initialize
-      super(name: 'TamperedPriceCart')
+      super(name: 'TamperedPriceCheckout')
     end
 
     def call(client, profile)
-      a, owned, m = SkootiScenarios.paid_reservation(client, profile)
-      # The line matches the lowered total, so only the quote check can refuse it.
-      lowered_total = quoted_cents(owned[:price_per_min_cents]) - 50
-      m[:cart] = m[:cart].merge(
-        line_items: [{ qty: 1, price_cents: lowered_total, reservation_id: owned[:id] }],
-        total_amount_cents: lowered_total
-      )
-      resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-      # 403 by name: a 401 would mean the cashier never priced the cart.
-      verdict_from(resp, expect: 403, detail: "below-quote total settled (HTTP #{resp.status})")
+      a, owned, checkout_jwt = SkootiScenarios.reserved(client, profile)
+      lowered = owned[:price_per_min_cents] - 5
+      forged = tampered_checkout(checkout_jwt, line_items: [{ reservation_id: owned[:id] }, { qty: 1, price_cents: lowered }],
+                                               total_amount_cents: lowered)
+      resp = client.pay(a, forged)
+      # 403 by name: a 401 would mean the checkout was never verified.
+      verdict_from(resp, expect: 403, expect_code: %w[forbidden], detail: "below-quote checkout settled (HTTP #{resp.status})")
     end
   end
 
-  # A cart whose total exceeds the sum of its line items must be rejected at capture.
-  class InflatedTotalCart < Kiosk::Redteam::Scenario
+  # A checkout whose total exceeds the sum of its line items must be refused before capture.
+  class InflatedTotalCheckout < Kiosk::Redteam::Scenario
     def initialize
-      super(name: 'InflatedTotalCart')
+      super(name: 'InflatedTotalCheckout')
     end
 
     def call(client, profile)
-      a, owned, m = SkootiScenarios.paid_reservation(client, profile)
-      # pay_for's single priced line sums to total_cents; inflate the total only.
-      m[:cart] = m[:cart].merge(total_amount_cents: quoted_cents(owned[:price_per_min_cents]) + 50)
-      resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-      # 403 by name — see TamperedPriceCart above.
-      verdict_from(resp, expect: 403, detail: "total above the line-item sum settled (HTTP #{resp.status})")
+      a, owned, checkout_jwt = SkootiScenarios.reserved(client, profile)
+      resp = client.pay(a, tampered_checkout(checkout_jwt, total_amount_cents: owned[:price_per_min_cents] + 50))
+      # 403 by name — see TamperedPriceCheckout above.
+      verdict_from(resp, expect: 403, expect_code: %w[forbidden], detail: "total above the line-item sum settled (HTTP #{resp.status})")
     end
   end
 
-  # A junk reservation_id — on start_rental, rent_motorcycle and inside a signed cart — is a typed 400
-  # with no SQL internals; the cart probe reaches Kiosk::UuidCheck, which no input_schema covers.
+  # A junk reservation_id on start_rental and rent_motorcycle is a typed 400 with no SQL internals.
   class MalformedUuidArg < Kiosk::Redteam::Scenario
     MALFORMED     = ['not-a-uuid', '1; DROP TABLE reservations', ''].freeze
     SQL_INTERNALS = ['::uuid', 'PG::', '22P02', 'invalid input syntax'].freeze
@@ -237,18 +210,16 @@ module SkootiScenarios
             client.run(customer, name: 'start_rental', reservation_id: junk), supplied: junk)
       check("rent_motorcycle(#{junk.inspect})",
             client.run(customer, name: 'rent_motorcycle', reservation_id: junk), supplied: junk)
-      check("pay cart reservation_id=#{junk.inspect}",
-            pay_with_ref(client, customer, junk), supplied: junk)
     end
 
-    # Control: a well-formed unknown id must reach the cashier's 403, or the 400s above prove nothing.
+    # Control: a well-formed unknown id must pass the shape check, or the 400s above prove nothing.
     def check_control(client, customer)
-      control = pay_with_ref(client, customer, '00000000-0000-4000-8000-000000000000')
-      return if control.status == 403
+      control = client.run(customer, name: 'start_rental', reservation_id: '00000000-0000-4000-8000-000000000000')
+      return unless control.status == 400 || control.status >= 500
       return @unevaluated << "CONTROL → HTTP #{control.status} code=#{body_field(control, 'code').inspect}" if Kiosk::Redteam.unevaluated?(control)
 
       @failures << "CONTROL well-formed-but-unknown reservation_id → HTTP #{control.status} " \
-                   "(want the cashier's 403; a 400 here means the malformed-uuid probes never reached the cashier)"
+                   '(want a refusal past the shape check; a 400 here means the malformed-uuid probes never reached it)'
     end
 
     # supplied: the probe's own bytes, so an echoed value is not reported as a leak.
@@ -261,11 +232,6 @@ module SkootiScenarios
       return if resp.status == 400 && body_field(resp, 'code') == 'bad_request' && !scan.leak?
 
       @failures << "#{answer}#{leak_note(scan)}"
-    end
-
-    # Reserves nothing: the shape check runs before the cashier, so the shared fleet is untouched.
-    def pay_with_ref(client, customer, junk)
-      client.pay(customer, **mobility_mandates(customer, { qty: 1, price_cents: 100, reservation_id: junk }, 100, 200))
     end
   end
 
@@ -363,9 +329,9 @@ scenarios = [
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   # Role self-selection at the unauthenticated device_authorization request.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-  Kiosk::Redteam::Scenarios::WrongCurrencyCart.new, # cashier check — currency
-  SkootiScenarios::TamperedPriceCart.new,                # cashier check — below quote
-  SkootiScenarios::InflatedTotalCart.new,                # cashier check — total ≠ line sum
+  Kiosk::Redteam::Scenarios::WrongCurrencyPayment.new, # payment currency ≠ checkout currency
+  SkootiScenarios::TamperedPriceCheckout.new,            # forged checkout — below quote
+  SkootiScenarios::InflatedTotalCheckout.new,            # forged checkout — total ≠ line sum
   SkootiScenarios::MalformedUuidArg.new,                 # junk uuid → typed 400, no 500
   SkootiScenarios::HostileArgShapes.new # boolean/array/object/number shapes → typed 400
 ]
@@ -397,12 +363,9 @@ end
 def reserve_and_pay(client, customer, code)
   rsv = setup!("reserve #{code}", client.run(customer, name: 'reserve', scooter_code: code))
 
-  reservation_id = rsv.body['reservation_id']
-  total          = quoted_cents(rsv.body['price_per_min_cents'])
-  line           = { qty: 1, price_cents: total, reservation_id: }
-  setup!("pay #{code}", client.pay(customer, **mobility_mandates(customer, line, total, total + 100)))
+  setup!("pay #{code}", client.pay(customer, rsv.body['checkout_jwt']))
 
-  reservation_id
+  rsv.body['reservation_id']
 end
 
 # The rider, with no attestation, who holds MC-001 reserved and paid, so only the

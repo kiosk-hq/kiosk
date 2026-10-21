@@ -4,8 +4,8 @@ require 'spec_helper'
 
 # A PSP that settles every capture at once.
 class InstantPsp
-  def capture(cart, **)
-    { psp_reference: 'pi_fixture', settled_amount_cents: cart.total_amount_cents, settled_at: Time.now.utc }
+  def capture(checkout, **)
+    { psp_reference: 'pi_fixture', settled_amount_cents: checkout.total_amount_cents, settled_at: Time.now.utc }
   end
 end
 
@@ -22,12 +22,12 @@ RSpec.shared_context 'with a booking two customers can pay for' do
 
   let(:cashier) { Kiosk.configuration.payment_provider.over(InstantPsp.new) }
 
-  def cart(payer)
-    Kiosk::Mandate::CartMandate.new(
-      id: SecureRandom.uuid, intent_mandate_id: SecureRandom.uuid, user_id: payer.id,
+  def checkout(payer)
+    Kiosk::Mandate::CheckoutMandate.new(
+      reference: SecureRandom.uuid, checkout_hash: SecureRandom.uuid, user_id: payer.id,
       agent_id: SecureRandom.uuid, issuer: 'https://hoteling.test',
       line_items: [{ 'booking_id' => booking.id }, { 'qty' => 1, 'price_cents' => 18_000 }],
-      total_amount_cents: 18_000, currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'cart'
+      total_amount_cents: 18_000, currency: 'eur', expires_at: nil, sd_jwt: 'checkout'
     )
   end
 end
@@ -37,13 +37,13 @@ RSpec.describe Booking do
     include_context 'with a booking two customers can pay for'
 
     it "refuses a customer paying for somebody else's booking" do
-      expect { cashier.capture(cart(ben)) }
+      expect { cashier.capture(checkout(ben)) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, 'booking not found or not yours')
       expect(booking.reload).to be_unpaid
     end
 
     it "takes the owner's payment, and the property confirms the paid booking" do
-      paid = cart(ada)
+      paid = checkout(ada)
       cashier.capture(paid)
       cashier.settled(paid)
 

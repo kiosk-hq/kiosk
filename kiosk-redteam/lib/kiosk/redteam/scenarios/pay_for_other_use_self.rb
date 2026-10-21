@@ -3,8 +3,8 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # B pays a mandate that references A's resource, then invokes the gated
-      # action on it: the ownership gate must refuse at use time, not only at pay time.
+      # B pays the checkout of A's resource, then invokes the gated action on
+      # it: the ownership gate must refuse at use time, not only at pay time.
       class PayForOtherUseSelf < Scenario
         KYC_BECAUSE = 'B would otherwise be refused for want of KYC, and this scenario would ' \
                       'credit that refusal to the ownership gate it exists to prove.'

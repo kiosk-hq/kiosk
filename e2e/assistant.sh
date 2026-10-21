@@ -956,7 +956,8 @@ assert "…with the stream's own URL published beside it" \
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
 #
 # /kiosk/.well-known/jwks.json publishes the RSA public key that signs
-# the kiosk-pop JWTs minted by the bundled IdP (register/login/revoke).
+# the kiosk-pop JWTs minted by the bundled IdP (register/login/revoke) and
+# the PS256 checkouts, so the key names no alg.
 
 printf "\n\033[1m=== /kiosk/.well-known/jwks.json ===\033[0m\n"
 
@@ -964,7 +965,7 @@ jwks=$(curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json")
 assert "jwks: keys[] present"          "$(echo "$jwks" | jq -r '.keys | length')"          "1"
 assert "jwks: kty=RSA"                 "$(echo "$jwks" | jq -r '.keys[0].kty')"            "RSA"
 assert "jwks: use=sig"                 "$(echo "$jwks" | jq -r '.keys[0].use')"            "sig"
-assert "jwks: alg=RS256"               "$(echo "$jwks" | jq -r '.keys[0].alg')"            "RS256"
+assert "jwks: no alg (RS256 and PS256)" "$(echo "$jwks" | jq -r '.keys[0] | has("alg")')"   "false"
 assert "jwks: kid present"             "$(echo "$jwks" | jq -r '.keys[0].kid | length > 0')" "true"
 assert "jwks: n (modulus) present"     "$(echo "$jwks" | jq -r '.keys[0].n | length > 0')"   "true"
 assert "jwks: e (exponent) present"    "$(echo "$jwks" | jq -r '.keys[0].e | length > 0')"   "true"
@@ -1088,7 +1089,7 @@ assert "two origins: own token → 200"              "$(echo "$reg_out" | jq -r 
 assert "two origins: first's token on second → 401" "$(echo "$reg_out" | jq -r '.first_token_on_second')" "401"
 assert "two origins: second's token on first → 401" "$(echo "$reg_out" | jq -r '.second_token_on_first')" "401"
 
-# ─── no-human AP2 pay flow (register → intent → cart → payment mandate → pay → persist) ───
+# ─── no-human AP2 pay flow (register → checkout → checkout and payment mandates → pay → persist) ───
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"
 
 # `payment_setup` is the engine's, served against the provider port: this
@@ -1113,9 +1114,8 @@ assert "pay: a Stripe PaymentIntent"  "$(echo "$pay_out" | jq -r '.response.psp_
 assert "pay: settled 1599"            "$(echo "$pay_out" | jq -r '.response.settled_amount_cents')" "1599"
 assert "pay: settlement_id"           "$(echo "$pay_out" | jq -r '.response.settlement_id | length > 0')" "true"
 
-# The full AP2 trail landed in Postgres — one row each, no human anywhere.
-assert "db: 1 intent_mandate"         "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.intent_mandates')"   "1"
-assert "db: 1 cart_mandate"           "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.cart_mandates')"     "1"
+# The AP2 trail landed in Postgres — one row each, no human anywhere.
+assert "db: 1 checkout_mandate"       "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.checkout_mandates')" "1"
 assert "db: 1 payment_mandate"        "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates')"  "1"
 assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT settled_amount_cents FROM kiosk.settlements LIMIT 1')" "1599"
 assert "db: settlement is the charge" "$(psql -X -d "$DB_NAME" -tAc 'SELECT psp_reference FROM kiosk.settlements LIMIT 1')" "$(echo "$pay_out" | jq -r '.response.psp_reference')"

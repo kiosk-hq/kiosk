@@ -29,7 +29,7 @@ the final step is physical rather than a form post.
 
 `test/stories/ride_test.rb` runs the errand with no human account and no sign-in: the
 assistant generates a keypair, proves possession, pays the Equihash
-registration toll, reserves `SK-001`, signs the three AP2 mandates, pays, and
+registration toll, reserves `SK-001`, signs the AP2 checkout and payment mandates, pays, and
 calls `start_rental`. The server checks three gates — the reservation is the
 caller's and still held, the vehicle needs no licence, payment settled for this
 reservation — and issues a short-lived Ed25519 rental token. A lock simulator

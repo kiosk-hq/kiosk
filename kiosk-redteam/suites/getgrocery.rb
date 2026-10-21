@@ -22,7 +22,6 @@ SLOT_AT   = slot_at(DUBLIN.today + 1)
 SLOT_AT_2 = slot_at(DUBLIN.today + 1, 10)
 
 BASE_URL = ENV.fetch('SERVER_URL')
-ISSUER   = BASE_URL
 
 REDTEAM_ADDRESS = '1 Redteam St, Dublin 1'
 
@@ -64,14 +63,14 @@ def refusal_failure(label, resp, leaks, supplied)
   "#{label} → HTTP #{resp.status} code=#{code.inspect}#{" LEAKS #{scan.leak.inspect}" if scan.leak}#{scan.note}"
 end
 
-# The items are kept so pay_for can mirror the order at catalog prices (the cashier check).
+# The items are kept so an attack can rewrite the order's lines; the checkout pays for it.
 def create_owned_order(client, customer)
   catalog = catalog_rows(client, customer)
   raise 'redteam: catalog returned empty' if catalog.empty?
 
   product = catalog.first
   order = place_owned_order(client, customer, product['sku'])
-  { id: order['order_id'], total_cents: order['total_cents'].to_i,
+  { id: order['order_id'], total_cents: order['total_cents'].to_i, checkout_jwt: order['checkout_jwt'],
     items: [{ sku: product['sku'], qty: 1, price_cents: product['price_cents'].to_i }] }
 end
 
@@ -83,20 +82,6 @@ def place_owned_order(client, customer, sku)
   raise 'redteam: create_order missing order_id' unless resp.body['order_id']
 
   resp.body
-end
-
-# An intent mandate capped 200 cents above the order, and a cart for the order at catalog prices.
-def grocery_mandates(customer, owned_ref)
-  now         = Time.now.to_i
-  intent_id   = SecureRandom.uuid
-  total_cents = owned_ref[:total_cents].to_i
-  principal   = { user_id: customer.user_id, agent_id: customer.agent_id, iss: ISSUER }
-  intent = { id: intent_id, **principal, scope: 'grocery', cap_amount_cents: total_cents + 200,
-             currency: 'eur', exp: now + 600, iat: now }
-  cart = { id: SecureRandom.uuid, intent_mandate_id: intent_id, **principal,
-           line_items: [{ order_id: owned_ref[:id] }] + (owned_ref[:items] || []),
-           total_amount_cents: total_cents, currency: 'eur', exp: now + 600, iat: now }
-  { intent: intent, cart: cart }
 end
 
 profile = Kiosk::Redteam::Profile.new(
@@ -126,7 +111,7 @@ profile = Kiosk::Redteam::Profile.new(
   gated_args: ->(owned_ref) { { order_id: owned_ref[:id], slot_at: SLOT_AT_2 } },
 
   # On payment_setup_required the client calls payment_setup and pays again.
-  pay_for: ->(_client, customer, owned_ref) { grocery_mandates(customer, owned_ref) },
+  pay_for: ->(_client, _customer, owned_ref) { owned_ref[:checkout_jwt] },
 
   kyc_valid: nil,
   kyc_expired: nil,
@@ -135,20 +120,18 @@ profile = Kiosk::Redteam::Profile.new(
 
 # getgrocery's own attacks, beside the shared ones in Kiosk::Redteam::Scenarios.
 module GetgroceryScenarios
-  # A below-catalog line price, with total and cap kept chain-consistent.
-  class TamperedPriceCart < Kiosk::Redteam::Scenario
+  # A below-catalog line price, with the total kept consistent, in a checkout the shop never signed.
+  class TamperedPriceCheckout < Kiosk::Redteam::Scenario
     def initialize
-      super(name: 'TamperedPriceCart')
+      super(name: 'TamperedPriceCheckout')
     end
 
     def call(client, profile)
       a = client.register!
       owned = profile.create_owned.call(client, a)
-      m = profile.pay_for.call(client, a, owned)
-      m[:cart] = m[:cart].merge(tampered_lines(owned))
-      resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-      # 403 exactly: a 401 would mean the cashier never priced this cart.
-      verdict_from(resp, expect: 403, detail: "below-catalog line price settled (HTTP #{resp.status})")
+      resp = client.pay(a, tampered_checkout(profile.pay_for.call(client, a, owned), **tampered_lines(owned)))
+      # 403 exactly: a 401 would mean the checkout was never verified.
+      verdict_from(resp, expect: 403, expect_code: %w[forbidden], detail: "below-catalog line price settled (HTTP #{resp.status})")
     end
 
     private
@@ -163,19 +146,18 @@ module GetgroceryScenarios
     end
   end
 
-  # A cart whose total exceeds the sum of its lines must be rejected at capture.
-  class InflatedTotalCart < Kiosk::Redteam::Scenario
+  # A checkout whose total exceeds the sum of its lines must be refused before capture.
+  class InflatedTotalCheckout < Kiosk::Redteam::Scenario
     def initialize
-      super(name: 'InflatedTotalCart')
+      super(name: 'InflatedTotalCheckout')
     end
 
     def call(client, profile)
       a = client.register!
       owned = profile.create_owned.call(client, a)
-      m = profile.pay_for.call(client, a, owned)
-      m[:cart] = m[:cart].merge(total_amount_cents: owned[:total_cents].to_i + 100)
-      resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-      verdict_from(resp, expect: 403, detail: "total above the order's catalog sum settled (HTTP #{resp.status})")
+      forged = tampered_checkout(profile.pay_for.call(client, a, owned), total_amount_cents: owned[:total_cents].to_i + 100)
+      resp = client.pay(a, forged)
+      verdict_from(resp, expect: 403, expect_code: %w[forbidden], detail: "total above the order's catalog sum settled (HTTP #{resp.status})")
     end
   end
 
@@ -646,9 +628,9 @@ scenarios = [
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-  Kiosk::Redteam::Scenarios::WrongCurrencyCart.new,
-  GetgroceryScenarios::TamperedPriceCart.new,
-  GetgroceryScenarios::InflatedTotalCart.new,
+  Kiosk::Redteam::Scenarios::WrongCurrencyPayment.new,
+  GetgroceryScenarios::TamperedPriceCheckout.new,
+  GetgroceryScenarios::InflatedTotalCheckout.new,
   GetgroceryScenarios::MalformedItemsCart.new,
   GetgroceryScenarios::HostileArgShapes.new,
   GetgroceryScenarios::UnregisteredVerbIsOrdinaryRefusal.new,

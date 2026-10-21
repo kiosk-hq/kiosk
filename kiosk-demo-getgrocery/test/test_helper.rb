@@ -41,7 +41,7 @@ class Shopper < Kiosk::TestHelpers::Customer
     does(:create_order, items: skus.map { { sku: it, qty: 1 } }, slot_at:, delivery_address: address, **extra)
   end
 
-  def pays_for(order) = pays_cart(order['cart'], scope: 'grocery')
+  def pays_for(order) = pays(order['checkout_jwt'])
 
   def moves(order, to_window:, on: Date.current + 1)
     does(:reschedule_delivery, order_id: order['order_id'], slot_at: window_start(to_window, on, HOME))
@@ -61,9 +61,9 @@ class StoryTest < Kiosk::StoryTest
   # Runs the block while the shelf of `sku` empties right after the price check passes.
   def another_payment_takes(sku)
     config = Kiosk.configuration
-    config.cart_price_checker = ->(*args) { PriceChecker.call(*args).tap { sells_out(sku) } }
+    config.checkout_price_checker = ->(*args) { PriceChecker.call(*args).tap { sells_out(sku) } }
     yield
   ensure
-    config.cart_price_checker = PriceChecker
+    config.checkout_price_checker = PriceChecker
   end
 end

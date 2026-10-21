@@ -21,8 +21,19 @@ class Guest < Kiosk::TestHelpers::Customer
     does(:reserve_room, **a_free_room(check_in:, check_out:), **extra)
   end
 
-  def pays_for(booking, currency: booking['cart']['currency'])
-    pays_cart(booking['cart'], scope: 'lodging', currency:)
+  # `currency:` spells the checkout's currency another way in the payment mandate.
+  def pays_for(booking, currency: nil)
+    return pays(booking['checkout_jwt']) if currency.nil?
+
+    Kiosk::TestHelpers::Answer.new(@assistant.pay_raw(principal, **respelled(booking['checkout_jwt'], currency)))
+  end
+
+  # The two mandates for `checkout_jwt`, the payment one signed again with `currency`.
+  def respelled(checkout_jwt, currency)
+    mandates = Kiosk::TestHelpers::Mandate.pay(principal.rsa_key, checkout_jwt)
+    payment = Kiosk::TestHelpers::Mandate.content(mandates[:payment])
+    payment['payment_amount']['currency'] = currency
+    mandates.merge(payment: Kiosk::TestHelpers::Mandate.sign(principal.rsa_key, payment))
   end
 
   def a_free_room(check_in:, check_out:)

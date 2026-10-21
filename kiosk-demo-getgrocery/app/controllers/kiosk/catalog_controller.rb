@@ -6,7 +6,7 @@ module Kiosk
     include Kiosk::Handler
 
     kind :query
-    description 'Every product, at the price a cart is signed at. One with nothing left carries `sold_out`; ' \
+    description 'Every product, at the price a checkout is signed at. One with nothing left carries `sold_out`; ' \
                 'the shelves are restocked every morning. Alcohol is marked `age_restricted`: `create_order` ' \
                 'takes it only after an 18+ check (`request_kyc`).'
     input_schema type: 'object', additionalProperties: false, properties: {}, required: []
@@ -15,7 +15,7 @@ module Kiosk
                   items: {
                     type: 'object', additionalProperties: false,
                     properties: {
-                      sku: { type: 'string', description: "The product's handle in a cart." },
+                      sku: { type: 'string', description: "The product's handle in an order." },
                       name: { type: 'string' },
                       price_cents: { type: 'integer', description: 'EUR cents.' },
                       price_eur: { type: 'string', description: 'The price as a human reads it, e.g. "€4.49".' },

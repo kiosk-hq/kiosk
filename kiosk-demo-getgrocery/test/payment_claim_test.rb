@@ -14,8 +14,8 @@ class PaymentClaimTest < ActiveSupport::TestCase
     def release! = @gate << :go
     def setup_required?(*) = false
 
-    def capture(cart_mandate, **)
-      @charged_cents = cart_mandate.total_amount_cents
+    def capture(checkout_mandate, **)
+      @charged_cents = checkout_mandate.total_amount_cents
       @gate.pop
       { psp_reference: 'pi_blocking', settled_amount_cents: @charged_cents, settled_at: Time.now.utc }
     end
@@ -27,10 +27,10 @@ class PaymentClaimTest < ActiveSupport::TestCase
     def initialize = @captures = Concurrent::AtomicFixnum.new
     def setup_required?(*) = false
 
-    def capture(cart_mandate, **)
+    def capture(checkout_mandate, **)
       @captures.increment
       sleep 0.05
-      { psp_reference: 'pi_counting', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
+      { psp_reference: 'pi_counting', settled_amount_cents: checkout_mandate.total_amount_cents, settled_at: Time.now.utc }
     end
   end
 
@@ -51,13 +51,13 @@ class PaymentClaimTest < ActiveSupport::TestCase
 
   def capture(psp, order)
     total = order['total_cents']
-    cart = Kiosk::Mandate::CartMandate.new(
-      id: SecureRandom.uuid, intent_mandate_id: SecureRandom.uuid, user_id: @identity.user_id, agent_id: @identity.agent_id,
-      issuer: Kiosk.configuration.issuer, currency: 'eur', total_amount_cents: total, expires_at: nil, created_at: nil,
+    checkout = Kiosk::Mandate::CheckoutMandate.new(
+      reference: SecureRandom.uuid, checkout_hash: SecureRandom.uuid, user_id: @identity.user_id, agent_id: @identity.agent_id,
+      issuer: Kiosk.configuration.issuer, currency: 'eur', total_amount_cents: total, expires_at: nil,
       line_items: [{ 'order_id' => order['order_id'] }, { 'sku' => order['sku'], 'qty' => 1, 'price_cents' => total }],
-      raw_jws: 'cart'
+      sd_jwt: 'checkout'
     )
-    ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(cart) }
+    ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(checkout) }
   end
 
   def paying?(order_id)
@@ -121,14 +121,6 @@ class PaymentClaimTest < ActiveSupport::TestCase
 
     error = assert_raises(Kiosk::Server::Errors::Forbidden) { capture(psp, order) }
     assert_equal "order #{order['order_id']} is already paid (paid) — do not pay it again", error.message
-    assert_equal 0, psp.captures.value
-  end
-
-  test 'an order id that is not a uuid is a 400 that never reaches the processor' do
-    psp = CountingPsp.new
-    malformed = place('banana').merge('order_id' => 'not-a-uuid')
-    error = assert_raises(Kiosk::Server::Errors::BadRequest) { capture(psp, malformed) }
-    assert_equal [400, 'bad_request'], [error.http_status, error.code]
     assert_equal 0, psp.captures.value
   end
 

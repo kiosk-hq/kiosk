@@ -14,8 +14,8 @@ Kiosk.configure do |c|
   c.roles             = %i[customer]
   c.registration_role = :customer
   c.owner             = { name: 'GetGrocery', support: 'demo@kiosk.tech' }
-  c.skill_url         = 'https://kiosk.tech/skill-v0.5.21.md'
-  c.skill_sha256      = '7d05d8fd3b686a08c7f2739372d3708d61a0159863c40d81d7712179ed55fda0'
+  c.skill_url         = 'https://kiosk.tech/skill-v0.5.22.md'
+  c.skill_sha256      = '804d0c28deea354a91e5586d992ec9d928c3181ba48bf62b0fba695f38d19ec0'
 
   # Demo only: checks every answer in production too. The generated default checks outside production only.
   c.validate_responses = true
@@ -32,8 +32,8 @@ Kiosk.configure do |c|
                                         api_base: ENV.fetch('STRIPE_MOCK_URL', nil)),
     currency: 'eur', model: 'Order', reference: 'order_id', query: 'my_orders'
   )
-  c.cart_price_checker = PriceChecker
-  c.after_payment      = ->(order_id) { FulfilOrderOperation.call(order_id) }
+  c.checkout_price_checker = PriceChecker
+  c.after_payment          = ->(order_id) { FulfilOrderOperation.call(order_id) }
 end
 
 # KYC: the broker that checks the customer, and the claims this origin asks for.

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_100018) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_21_100020) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -269,9 +269,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_100018) do
     t.index ["expires_at"], name: "idx_auth_challenges_expires_at"
   end
 
-  create_table "kiosk.cart_mandates", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.text "mandate_id", null: false
-    t.uuid "intent_mandate_id", null: false
+  create_table "kiosk.checkout_mandates", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.text "reference", null: false
     t.uuid "user_id", null: false
     t.uuid "agent_id", null: false
     t.text "issuer", null: false
@@ -280,11 +279,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_100018) do
     t.text "currency", null: false
     t.timestamptz "expires_at", null: false
     t.timestamptz "created_at", default: -> { "now()" }, null: false
-    t.text "raw_jws", null: false
+    t.text "sd_jwt", null: false
     t.timestamptz "declined_at"
-    t.index ["intent_mandate_id"], name: "idx_cart_mandates_intent"
-    t.index ["user_id"], name: "idx_cart_mandates_user_id"
-    t.unique_constraint ["user_id", "mandate_id"], name: "cart_mandates_user_id_mandate_id_key"
+    t.text "checkout_hash", null: false
+    t.index ["user_id", "checkout_hash"], name: "idx_checkout_mandates_live_checkout", unique: true, where: "(declined_at IS NULL)"
+    t.index ["user_id"], name: "idx_checkout_mandates_user_id"
+    t.unique_constraint ["user_id", "reference"], name: "checkout_mandates_user_id_reference_key"
   end
 
   create_table "kiosk.device_authorizations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -317,22 +317,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_100018) do
     t.index ["identity_key", "id"], name: "idx_events_identity_key_id"
   end
 
-  create_table "kiosk.intent_mandates", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.text "mandate_id", null: false
-    t.uuid "user_id", null: false
-    t.uuid "agent_id", null: false
-    t.text "issuer", null: false
-    t.text "scope", null: false
-    t.bigint "cap_amount_cents", null: false
-    t.text "currency", null: false
-    t.timestamptz "expires_at", null: false
-    t.timestamptz "created_at", default: -> { "now()" }, null: false
-    t.text "raw_jws", null: false
-    t.index ["agent_id"], name: "idx_intent_mandates_agent_id"
-    t.index ["user_id"], name: "idx_intent_mandates_user_id"
-    t.unique_constraint ["user_id", "mandate_id"], name: "intent_mandates_user_id_mandate_id_key"
-  end
-
   create_table "kiosk.kyc_attributes", primary_key: ["user_id", "name"], force: :cascade do |t|
     t.uuid "user_id", null: false
     t.text "name", null: false
@@ -348,20 +332,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_100018) do
   end
 
   create_table "kiosk.payment_mandates", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.text "mandate_id", null: false
-    t.uuid "cart_mandate_id", null: false
+    t.text "reference", null: false
+    t.uuid "checkout_mandate_id", null: false
     t.uuid "user_id", null: false
     t.uuid "agent_id", null: false
     t.text "issuer", null: false
-    t.text "payment_method", null: false
+    t.text "payment_instrument", null: false
     t.bigint "amount_cents", null: false
     t.text "currency", null: false
     t.timestamptz "expires_at"
     t.timestamptz "created_at", default: -> { "now()" }, null: false
-    t.text "raw_jws", null: false
-    t.index ["cart_mandate_id"], name: "idx_payment_mandates_cart"
+    t.text "sd_jwt", null: false
+    t.index ["checkout_mandate_id"], name: "idx_payment_mandates_checkout"
     t.index ["user_id"], name: "idx_payment_mandates_user_id"
-    t.unique_constraint ["user_id", "mandate_id"], name: "payment_mandates_user_id_mandate_id_key"
+    t.unique_constraint ["user_id", "reference"], name: "payment_mandates_user_id_reference_key"
   end
 
   create_table "kiosk.pow_spent", id: :text, force: :cascade do |t|
@@ -384,7 +368,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_100018) do
   end
 
   create_table "kiosk.settlements", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "cart_mandate_id", null: false
+    t.uuid "checkout_mandate_id", null: false
     t.uuid "user_id", null: false
     t.uuid "agent_id", null: false
     t.text "issuer", null: false
@@ -392,9 +376,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_100018) do
     t.bigint "settled_amount_cents", null: false
     t.text "currency", null: false
     t.timestamptz "settled_at", null: false
-    t.index ["cart_mandate_id"], name: "idx_settlements_cart"
+    t.index ["checkout_mandate_id"], name: "idx_settlements_checkout"
     t.index ["user_id"], name: "idx_settlements_user_id"
-    t.unique_constraint ["cart_mandate_id"], name: "settlements_cart_mandate_id_key"
+    t.unique_constraint ["checkout_mandate_id"], name: "settlements_checkout_mandate_id_key"
   end
 
   create_table "kiosk.visits", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -408,11 +392,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_100018) do
   add_foreign_key "kiosk.agent_mappings", "kiosk.agents", name: "agent_mappings_agent_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.agent_tokens", "kiosk.agents", name: "agent_tokens_agent_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.agents", "public.users", name: "agents_user_id_fkey", on_delete: :cascade
-  add_foreign_key "kiosk.cart_mandates", "kiosk.intent_mandates", name: "cart_mandates_intent_mandate_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.kyc_attributes", "public.users", name: "kyc_attributes_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.kyc_requests", "public.users", name: "kyc_requests_user_id_fkey", on_delete: :cascade
-  add_foreign_key "kiosk.payment_mandates", "kiosk.cart_mandates", name: "payment_mandates_cart_mandate_id_fkey", on_delete: :cascade
+  add_foreign_key "kiosk.payment_mandates", "kiosk.checkout_mandates", name: "payment_mandates_checkout_mandate_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.refunds", "kiosk.settlements", name: "refunds_settlement_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.revocations", "kiosk.agents", name: "revocations_agent_id_fkey", on_delete: :cascade
-  add_foreign_key "kiosk.settlements", "kiosk.cart_mandates", name: "settlements_cart_mandate_id_fkey", on_delete: :cascade
+  add_foreign_key "kiosk.settlements", "kiosk.checkout_mandates", name: "settlements_checkout_mandate_id_fkey", on_delete: :cascade
 end

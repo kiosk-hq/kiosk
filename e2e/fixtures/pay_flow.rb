@@ -2,15 +2,16 @@
 
 # No-human payment proof. The agent generates its own keypair, SELF-REGISTERS
 # a synthetic principal (no human, no device-grant), sets up payment, signs the
-# full AP2 mandate trail (intent → cart → payment) bound to that principal, and
-# pays. Prints a JSON line on stdout.
+# two closed AP2 mandates for a checkout the operator signed for that
+# principal, and pays. Prints a JSON line on stdout.
+require 'base64'
 require 'jwt'
 require 'json'
 require 'net/http'
+require 'kiosk/test_helpers/mandate'
 require 'kiosk/test_helpers/wire'
 require 'uri'
 require 'openssl'
-require 'securerandom'
 
 SERVER = ENV.fetch('SERVER_URL')
 ISSUER = ENV.fetch('KIOSK_ISSUER')
@@ -56,36 +57,34 @@ auth = { 'Authorization' => "Bearer #{token}" }
 # lists a saved card for that Customer, so the second answer is ready.
 setup = Array.new(2) { post_json("#{SERVER}/kiosk/payment_setup", {}, auth).last }
 
-now = Time.now.to_i
-intent_id = SecureRandom.uuid
-cap_amount_cents = 2000
-total_amount_cents = 1599
-intent = { id: intent_id, user_id: user_id, agent_id: agent_id, iss: ISSUER,
-           scope: 'food', cap_amount_cents: cap_amount_cents, currency: 'eur', exp: now + 600, iat: now }
-cart_id = SecureRandom.uuid
-cart = { id: cart_id, intent_mandate_id: intent_id, user_id: user_id, agent_id: agent_id,
-         iss: ISSUER, line_items: [{ sku: 'pizza', qty: 1 }], total_amount_cents: total_amount_cents,
-         currency: 'eur', exp: now + 600, iat: now }
-payment_id = SecureRandom.uuid
-payment = { id: payment_id, cart_mandate_id: cart_id, user_id: user_id, agent_id: agent_id,
-            iss: ISSUER, payment_method: 'pm_demo', amount_cents: total_amount_cents,
-            currency: 'eur', exp: now + 600, iat: now }
+# The e2e origin has no action that answers a checkout, so the harness signs one
+# here as the operator does: PS256 with the operator's key, naming its kid.
+operator_key = OpenSSL::PKey::RSA.new(Base64.decode64(ENV.fetch('KIOSK_SIGNING_KEY_B64')))
+jwk = { e: Kiosk::TestHelpers::Mandate.b64(operator_key.e.to_s(2)), kty: 'RSA', n: Kiosk::TestHelpers::Mandate.b64(operator_key.n.to_s(2)) }
+kid = Kiosk::TestHelpers::Mandate.digest(JSON.generate(jwk)) # RFC 7638
+checkout = { iss: ISSUER, sub: user_id, iat: Time.now.to_i,
+             merchant: { id: ISSUER, name: 'Combette E2E Demo', website: ISSUER },
+             currency: 'eur', total_amount_cents: 1599,
+             line_items: [{ order_id: '0b9e6f1c-3d2a-4e5b-8c7d-9a0f1e2d3c4b' }, { sku: 'pizza', qty: 1, price_cents: 1599 }] }
+checkout_jwt = JWT.encode(checkout, operator_key, 'PS256', { kid:, typ: 'JWT' })
 
-pay_request = { intent_mandate_jws: JWT.encode(intent, key, 'RS256'),
-                cart_mandate_jws: JWT.encode(cart, key, 'RS256'),
-                payment_mandate_jws: JWT.encode(payment, key, 'RS256') }
+mandates    = Kiosk::TestHelpers::Mandate.pay(key, checkout_jwt, instrument: 'pm_demo')
+pay_request = { checkout_mandate: mandates[:checkout], payment_mandate: mandates[:payment] }
 
 rc, pay = post_json("#{SERVER}/kiosk/pay", pay_request, auth)
 
 # THE BYTES, KEPT. `PAY_CAPTURE` names a file to write the request this
-# origin ACCEPTED, the mandate claims inside it, and the settlement it answered
-# — so `e2e/schema_conformance.rb` can validate all five against the published
-# `mandates.schema.json` rather than against a hand-written example. Nothing is
-# reconstructed here: these are the same objects the request carried.
+# origin ACCEPTED, the checkout and the two mandates inside it, and the
+# settlement it answered — so `e2e/schema_conformance.rb` can validate all five
+# against the published `mandates.schema.json` rather than against a
+# hand-written example. Nothing is reconstructed here: these are the same
+# objects the request carried.
 if (capture = ENV.fetch('PAY_CAPTURE', nil))
   File.write(capture, JSON.generate(
                         request: pay_request,
-                        claims: { intent: intent, cart: cart, payment: payment },
+                        claims: { checkout: checkout,
+                                  checkout_mandate: Kiosk::TestHelpers::Mandate.content(mandates[:checkout]),
+                                  payment_mandate: Kiosk::TestHelpers::Mandate.content(mandates[:payment]) },
                         response: pay
                       ))
 end

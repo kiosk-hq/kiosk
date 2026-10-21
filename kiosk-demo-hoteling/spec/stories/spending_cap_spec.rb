@@ -3,10 +3,10 @@
 require 'story_helper'
 
 RSpec.describe "An assistant's spending cap", type: :story do
-  def the_hotel_caps_spending(of:, at:)
+  def the_hotel_caps_spending(of:, at:, currency: 'eur')
     ActiveRecord::Base.connection.exec_update(
-      "UPDATE kiosk.agents SET spending_cap_cents = $1, spending_cap_currency = 'eur' WHERE id = $2",
-      'cap', [at, of.principal.agent_id]
+      'UPDATE kiosk.agents SET spending_cap_cents = $1, spending_cap_currency = $2 WHERE id = $3',
+      'cap', [at, currency, of.principal.agent_id]
     )
   end
 
@@ -19,7 +19,7 @@ RSpec.describe "An assistant's spending cap", type: :story do
 
     expect(guest.pays_for(first, currency: 'eur')).to be_ok
     expect(guest.pays_for(second, currency: 'EUR')).to be_refused(:spending_cap_exceeded)
-    expect(Kiosk::CartMandate.where(user_id: guest.principal.user_id).count).to eq(1)
+    expect(Kiosk::CheckoutMandate.where(user_id: guest.principal.user_id).count).to eq(1)
 
     the_hotel_caps_spending(of: guest, at: cap + 1)
     raised = guest.pays_for(second, currency: 'EUR')
@@ -31,9 +31,9 @@ RSpec.describe "An assistant's spending cap", type: :story do
   it "a guest's assistant cannot pay in a currency other than its cap's" do
     guest = a_guest
     stay  = guest.reserves(check_in: Date.current + 90, check_out: Date.current + 92)
-    the_hotel_caps_spending(of: guest, at: stay['total_cents'])
+    the_hotel_caps_spending(of: guest, at: stay['total_cents'], currency: 'usd')
 
-    expect(guest.pays_for(stay, currency: 'usd')).to be_refused(:spending_cap_exceeded)
+    expect(guest.pays_for(stay)).to be_refused(:spending_cap_exceeded)
     expect(Kiosk::Settlement.where(user_id: guest.principal.user_id).count).to eq(0)
   end
 end

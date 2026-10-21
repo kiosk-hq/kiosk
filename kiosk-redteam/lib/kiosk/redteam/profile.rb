@@ -8,17 +8,17 @@ module Kiosk
     #   pow_difficulty        >0 when /register is gated by a PoW toll; 0 skips RegistrationWithoutPow
     #   declared_roles        the roles the origin declares; DeviceGrantRoleSelfSelection needs a real one
     #   requires_kyc          whether the gated action needs a KYC attestation
-    #   currency              the ISO 4217 code the origin prices in, lower case (WrongCurrencyCart)
+    #   currency              the ISO 4217 code the origin prices in, lower case (WrongCurrencyPayment)
     #   per_user_query        query returning the caller's own rows (CrossTenantRead)
     #   row_id_key            key of a row's id in query results
     #   result_id_key         key of the new resource's id in forge_action's result
-    #   create_owned          (client, principal) -> Hash with at least :id
+    #   create_owned          (client, principal) -> Hash with at least :id, and :checkout_jwt where it is paid for
     #   forge_action          action whose caller-supplied user_id the server must ignore
     #   forge_args            (client, principal_a, principal_b) -> Hash, without user_id
     #   gated_action          action gated behind payment (and KYC when requires_kyc)
     #   gated_action_consumes false when calling gated_action twice is correct (skips SpentResourceReuse)
     #   gated_args            (owned_ref) -> Hash
-    #   pay_for               (client, principal, owned_ref) -> { intent:, cart: }
+    #   pay_for               (client, principal, owned_ref) -> the checkout_jwt that pays for owned_ref
     #   kyc_valid             (user_id) -> a valid attestation JWS
     #   kyc_expired           (user_id) -> an expired attestation JWS
     #   kyc_forged            (user_id) -> an attestation with a wrong issuer or signature

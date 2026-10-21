@@ -7,4 +7,4 @@ json.currency 'eur'
 json.slot_at @order.slot_at.in_time_zone(@order.zone).iso8601
 json.slot_label DeliverySlots.label(@order.slot_at, @order.zone)
 json.timezone @order.timezone
-json.cart @order.cart(@order.order_items.map { { sku: it.product.sku, qty: it.qty, price_cents: it.price_cents } })
+json.checkout_jwt @order.checkout(@order.order_items.map { { sku: it.product.sku, qty: it.qty, price_cents: it.price_cents } })

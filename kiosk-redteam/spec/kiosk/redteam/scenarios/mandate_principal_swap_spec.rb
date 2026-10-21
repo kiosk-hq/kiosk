@@ -22,10 +22,10 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
   describe '#call — non-vacuity' do
     include_context 'with a paying profile whose mandate is swapped'
 
-    context 'when the server accepts a cross-principal mandate (broken — BREACH)' do
+    context 'when the server accepts a checkout signed for another account (broken — BREACH)' do
       it 'returns blocked: false' do
         stub_registers('a', 'b')
-        stub_pay(status: 200) # server accepts the swapped mandate
+        stub_pay(status: 200) # server accepts the swapped checkout
 
         verdict = scenario.call(client, profile)
 
@@ -34,7 +34,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
       end
     end
 
-    context 'when the server rejects the cross-principal mandate (correct — BLOCKED)' do
+    context 'when the server rejects the checkout signed for another account (correct — BLOCKED)' do
       it 'returns blocked: true' do
         stub_registers('a', 'b')
         stub_pay(status: 403, code: 'forbidden') # rejects on principal mismatch
@@ -49,10 +49,10 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
 
   # ── K-728 ────────────────────────────────────────────────────────────────
   #
-  # Mandate verification is authorization: the claimed principal is not the
-  # signer. A 402 means the instrument was declined before the mandates were
-  # verified at all — the swap unexamined — and a 401 means B's own token was
-  # rejected. Both used to score BLOCKED.
+  # Checkout verification is authorization: the operator signed the checkout
+  # for A, not for B. A 402 means the instrument was declined before the
+  # mandates were verified at all — the swap unexamined — and a 401 means B's
+  # own token was rejected. Both used to score BLOCKED.
   describe '#call — only a 403 forbidden/rls_denied proves the binding was checked (K-728)' do
     include_context 'with a paying profile whose mandate is swapped'
 

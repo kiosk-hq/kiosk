@@ -27,7 +27,8 @@ class ShopStory < StoryTest
 
     assert_predicate shopper.pays_for(order), :ok?
 
-    assert shopper.pays_for(order).refused?(:forbidden)
+    # New mandates for a settled checkout: the engine answers 409 before the cashier.
+    assert shopper.pays_for(order).refused?(:conflict)
     assert_equal 1, Kiosk::Settlement.where(user_id: shopper.principal.user_id).count
   end
 

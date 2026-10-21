@@ -11,9 +11,9 @@ class BlockingPsp
   def release! = @gate << :go
   def setup_required?(*) = false
 
-  def capture(cart_mandate, **)
+  def capture(checkout_mandate, **)
     @gate.pop
-    { psp_reference: 'pi_blocking', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
+    { psp_reference: 'pi_blocking', settled_amount_cents: checkout_mandate.total_amount_cents, settled_at: Time.now.utc }
   end
 end
 
@@ -24,10 +24,10 @@ class CountingPsp
   def initialize = @captures = Concurrent::AtomicFixnum.new
   def setup_required?(*) = false
 
-  def capture(cart_mandate, **)
+  def capture(checkout_mandate, **)
     @captures.increment
     sleep 0.05
-    { psp_reference: 'pi_counting', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
+    { psp_reference: 'pi_counting', settled_amount_cents: checkout_mandate.total_amount_cents, settled_at: Time.now.utc }
   end
 end
 
@@ -52,17 +52,17 @@ RSpec.shared_context 'with a guest who has a room to pay for' do
 end
 
 RSpec.shared_context 'with a capture in a second thread' do
-  def settled?(id) = Kiosk::Settlement.uncached { Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(booking_id: id)).exists? }
+  def settled?(id) = Kiosk::Settlement.uncached { Kiosk::Settlement.joins(:checkout_mandate).merge(Kiosk::CheckoutMandate.referencing(booking_id: id)).exists? }
 
   def capture(psp, booking_id)
-    ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(cart_for(booking_id)) }
+    ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(checkout_for(booking_id)) }
   end
 
-  def cart_for(booking_id)
-    Kiosk::Mandate::CartMandate.new(
-      id: SecureRandom.uuid, intent_mandate_id: SecureRandom.uuid, user_id: guest.id, agent_id: identity.agent_id,
+  def checkout_for(booking_id)
+    Kiosk::Mandate::CheckoutMandate.new(
+      reference: SecureRandom.uuid, checkout_hash: SecureRandom.uuid, user_id: guest.id, agent_id: identity.agent_id,
       issuer: Kiosk.configuration.issuer, line_items: [{ 'qty' => 1, 'price_cents' => room.nightly_price_cents, 'booking_id' => booking_id }],
-      total_amount_cents: room.nightly_price_cents, currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'cart'
+      total_amount_cents: room.nightly_price_cents, currency: 'eur', expires_at: nil, sd_jwt: 'checkout'
     )
   end
 

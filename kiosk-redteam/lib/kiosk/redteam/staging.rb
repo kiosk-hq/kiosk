@@ -20,8 +20,21 @@ module Kiosk
 
       # Pays for +owned_ref+ as +payer+ and answers the pay response.
       def pay_for_owned(client, payer, profile, owned_ref)
-        mandates = profile.pay_for.call(client, payer, owned_ref)
-        client.pay(payer, intent: mandates[:intent], cart: mandates[:cart])
+        client.pay(payer, profile.pay_for.call(client, payer, owned_ref))
+      end
+
+      # The claims of +checkout_jwt+ with +changes+, signed again by a key the operator never held.
+      def tampered_checkout(checkout_jwt, **changes)
+        claims, header = JWT.decode(checkout_jwt, nil, false)
+        JWT.encode(claims.merge(changes.transform_keys(&:to_s)), OpenSSL::PKey::RSA.generate(2048), 'PS256',
+                   header.slice('kid', 'typ'))
+      end
+
+      # The two mandates for +checkout_jwt+, with the payment mandate's fields changed and signed again.
+      def mandates_with_payment(principal, checkout_jwt, **changes)
+        mandates = Kiosk::TestHelpers::Mandate.pay(principal.rsa_key, checkout_jwt)
+        payment = Kiosk::TestHelpers::Mandate.content(mandates[:payment]).merge(changes.transform_keys(&:to_s))
+        mandates.merge(payment: Kiosk::TestHelpers::Mandate.sign(principal.rsa_key, payment))
       end
 
       # Pays for +owned_ref+ before a gated action. Answers a setup-failure verdict or nil.

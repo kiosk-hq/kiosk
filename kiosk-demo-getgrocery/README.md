@@ -8,7 +8,7 @@ Single implicit store (getgrocery IS the store): `catalog` / `delivery_slots` /
 `create_order`; `request_kyc` starts the 18+ anonymized check the alcohol gate
 needs, and the `kyc_verification` event carries its signed outcome), real Stripe SetupIntent
 card-on-file payments (stripe-mock in the tests) behind a cashier check
-(the cart must be EUR, mirror the order at the prices it was ordered at, and sum correctly),
+(the signed checkout must still mirror the order at the prices it was ordered at, with the shelf still holding it),
 and the claim-rebind half of the account-binding ceremony.
 
 ### Prerequisites
@@ -173,7 +173,7 @@ event), and `Rails.error` gets the error. Nothing spends the credit.
 
 ## Age-restricted purchases (anonymized KYC)
 
-One catalog item is age-restricted (a coined wine — no real brand). A cart
+One catalog item is age-restricted (a coined wine — no real brand). An order
 containing it can only be ordered (`create_order`) by an agent that has
 completed an 18+ anonymized-KYC check via the shared **KYC broker** (kyc.demo.kiosk.tech)
 (`POST /kiosk/request_kyc` → human approves a broker link → the broker signs

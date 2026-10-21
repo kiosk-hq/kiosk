@@ -33,7 +33,7 @@ RFC 9457 problem document.
   its room is free for other guests
 - `POST /kiosk/payment_setup` — check whether the customer has a saved payment method
   (served by kiosk-server)
-- `POST /kiosk/pay` — settle the AP2 mandate chain (intent → cart → payment)
+- `POST /kiosk/pay` — pay the checkout with the closed AP2 checkout and payment mandates
   through Stripe
 - `GET /kiosk/schema` — self-discovery
 - `GET /kiosk/openapi.json` — the DERIVED OpenAPI description of the above, for

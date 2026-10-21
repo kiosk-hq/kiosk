@@ -612,7 +612,7 @@ COPIES = {
   'app/services/price_checker.rb' => {
     rule: :per_demo,
     ships: %w[getgrocery hoteling skooti],
-    why: "Each operator's `c.cart_price_checker`, reading its own catalog."
+    why: "Each operator's `c.checkout_price_checker`, reading its own catalog."
   },
   'app/controllers/application_controller.rb' => {
     rule: :code,
@@ -679,6 +679,9 @@ COPIES = {
   },
   'db/migrate/20261020100018_add_spending_cap_currency_to_kiosk_agents.rb' => {
     rule: :identical, why: "Gives agents.spending_cap_cents its currency, as kiosk:install's agents table has it."
+  },
+  'db/migrate/20261021100020_reshape_kiosk_mandates_for_ap2_v02.rb' => {
+    rule: :identical, why: "Moves the mandate trail to AP2 v0.2's checkout and payment mandates, as kiosk:install's has it."
   },
   'db/migrate/20261018100012_create_solid_cable_messages.rb' => {
     rule: :identical, why: "Action Cable's pubsub queue, on the primary database."

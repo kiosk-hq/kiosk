@@ -13,9 +13,9 @@ class PaymentWindowTest < ActiveSupport::TestCase
     def release! = @gate << :go
     def setup_required?(*) = false
 
-    def capture(cart_mandate, **)
+    def capture(checkout_mandate, **)
       @gate.pop
-      { psp_reference: 'pi_blocking', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
+      { psp_reference: 'pi_blocking', settled_amount_cents: checkout_mandate.total_amount_cents, settled_at: Time.now.utc }
     end
   end
 
@@ -25,10 +25,10 @@ class PaymentWindowTest < ActiveSupport::TestCase
     def initialize = @captures = Concurrent::AtomicFixnum.new
     def setup_required?(*) = false
 
-    def capture(cart_mandate, **)
+    def capture(checkout_mandate, **)
       @captures.increment
       sleep 0.05
-      { psp_reference: 'pi_counting', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
+      { psp_reference: 'pi_counting', settled_amount_cents: checkout_mandate.total_amount_cents, settled_at: Time.now.utc }
     end
   end
 
@@ -47,12 +47,12 @@ class PaymentWindowTest < ActiveSupport::TestCase
   def payment_status(id) = Reservation.uncached { Reservation.find(id).payment_status }
 
   def capture(psp, reservation_id)
-    cart = Kiosk::Mandate::CartMandate.new(
-      id: SecureRandom.uuid, intent_mandate_id: SecureRandom.uuid, user_id: @rider.id, agent_id: @identity.agent_id,
+    checkout = Kiosk::Mandate::CheckoutMandate.new(
+      reference: SecureRandom.uuid, checkout_hash: SecureRandom.uuid, user_id: @rider.id, agent_id: @identity.agent_id,
       issuer: Kiosk.configuration.issuer, line_items: [{ 'qty' => 1, 'price_cents' => @scooter.price_per_min_cents, 'reservation_id' => reservation_id }],
-      total_amount_cents: @scooter.price_per_min_cents, currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'cart'
+      total_amount_cents: @scooter.price_per_min_cents, currency: 'eur', expires_at: nil, sd_jwt: 'checkout'
     )
-    ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(cart) }
+    ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(checkout) }
   end
 
   def eventually?

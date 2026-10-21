@@ -43,7 +43,7 @@ class OrderTest < ActiveSupport::TestCase
     end
   end
 
-  test 'a cart names catalogue skus, in bounded quantities' do
+  test 'an order names catalogue skus, in bounded quantities' do
     travel_to SHOP.local(2026, 9, 7, 12) do
       assert_equal ['sku "caviar" is not in the catalogue'], errors(order(items: [['caviar', 1]]))
       assert_equal ["qty must be in 1..#{OrderItem::MAX_QTY}"],

@@ -17,7 +17,7 @@ class Rider < Kiosk::TestHelpers::Customer
   def rides(reservation) = does(:start_rental, reservation_id: reservation['reservation_id'])
   def rides_motorcycle(reservation) = does(:rent_motorcycle, reservation_id: reservation['reservation_id'])
 
-  def pays_for(reservation) = pays_cart(reservation['cart'], scope: 'mobility')
+  def pays_for(reservation) = pays(reservation['checkout_jwt'])
 end
 
 class StoryTest < Kiosk::StoryTest

@@ -8,14 +8,14 @@ no PSP adapter, no `payment_setup_required` gate, and `pay` absent from
 
 The AP2 mandate and settlement TABLES are present and empty, and that is the
 canonical install rather than an oversight: every demo runs the same unmodified
-`rails g kiosk:install`, so philslist carries the four
+`rails g kiosk:install`, so philslist carries the three
 mandate/settlement tables and the KYC tables alongside the identity ones.
 `db/migrate/` is that install's output plus the users and classifieds tables,
 each created in its final shape.
 Nothing writes them here: `POST /kiosk/pay` is drawn like everywhere else —
 the mount draws the whole protocol plane — but no `payment_provider` is
 configured, so the origin refuses before it reads a mandate and an empty
-`cart_mandates` on this host means what it says.
+`checkout_mandates` on this host means what it says.
 
 The same wire contract the commerce demos use for checkout carries a plain
 services/data use here.

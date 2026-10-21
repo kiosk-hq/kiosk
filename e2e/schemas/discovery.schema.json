@@ -26,7 +26,7 @@
         },
         "issuer": {
           "type": "string",
-          "description": "The AP2 mandate iss anchor and the token iss/aud. An absolute https URL."
+          "description": "The checkout iss and payee, and the token iss/aud. An absolute https URL."
         },
         "endpoint": {
           "type": "string",

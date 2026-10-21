@@ -26,7 +26,7 @@ module Kiosk
 
     kind :action
     description "Hold one vehicle for #{Reservation::HOLD.inspect} and get the price of its first minute, which is " \
-                'what you pay now. Pay with the `cart` it returns, then start the rental within the hold: a paid hold ' \
+                'what you pay now. Pay the `checkout_jwt` it returns, then start the rental within the hold: a paid hold ' \
                 'whose ride has not started by then is released and refunded. A vehicle another rider holds is refused ' \
                 'as a conflict.'
     input_schema type: 'object',
@@ -41,14 +41,13 @@ module Kiosk
                     reservation_id: { type: 'string', description: 'Pass it to `start_rental` or `rent_motorcycle` once paid.' },
                     price_per_min_cents: { type: 'integer', description: "The amount to pay now, in cents: one minute at this vehicle's rate." },
                     currency: { type: 'string', description: 'The currency to pay in.' },
-                    cart: Kiosk::Payable::CART_SCHEMA
+                    checkout_jwt: Kiosk::Payable::CHECKOUT_SCHEMA
                   },
-                  required: %w[reservation_id price_per_min_cents currency cart]
+                  required: %w[reservation_id price_per_min_cents currency checkout_jwt]
     example_params({ scooter_code: 'SK-001' })
     example_row({
                   reservation_id: 'a3f9c1e2-7b4d-4e8a-9c1f-2d6e5b0a3c7f', price_per_min_cents: 15, currency: 'eur',
-                  cart: { currency: 'eur', total_amount_cents: 15,
-                          line_items: [{ reservation_id: 'a3f9c1e2-7b4d-4e8a-9c1f-2d6e5b0a3c7f' }, { qty: 1, price_cents: 15 }] }
+                  checkout_jwt: 'eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXVCJ9.eyJjdXJyZW5jeSI6ImV1ciIsInRvdGFsX2Ftb3VudF9jZW50cyI6MTV9.c2lnbmF0dXJl'
                 })
     def reserve
       @reservation = Reservation.create!(user_id: kiosk_identity.user_id, scooter_code: params[:scooter_code])

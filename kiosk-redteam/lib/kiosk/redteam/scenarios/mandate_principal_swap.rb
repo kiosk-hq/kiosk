@@ -3,7 +3,7 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # B pays, under its own token and key, mandates claiming A's identity: must be refused.
+      # B pays, under its own token and key, the checkout the operator signed for A: must be refused.
       class MandatePrincipalSwap < Scenario
         def initialize
           super(name: 'MandatePrincipalSwap')
@@ -19,12 +19,11 @@ module Kiosk
         def attack(client, profile)
           a = client.register!
           b = client.register!
-          mandates = profile.pay_for.call(client, a, profile.create_owned.call(client, a))
-          resp = client.pay(b, intent: mandates[:intent], cart: mandates[:cart])
+          resp = client.pay(b, profile.pay_for.call(client, a, profile.create_owned.call(client, a)))
 
           # Only 403: a 402 or 401 means the swap was never examined.
           verdict_from(resp, expect: 403, expect_code: %w[forbidden rls_denied],
-                             detail: "principal-swap mandate accepted (HTTP #{resp.status})")
+                             detail: "B paid the checkout signed for A (HTTP #{resp.status})")
         end
       end
     end

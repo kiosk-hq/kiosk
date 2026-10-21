@@ -15,7 +15,7 @@ regression.
 **No Rails.** The harness speaks the wire and nothing else, so
 it can be pointed at any Kiosk origin — your own app in CI, or a third party's
 deployment. Everything provider-specific (which verbs exist, how to create an
-owned row, how to build a mandate) lives in a `Profile` you supply; no provider
+owned row, which checkout pays for it) lives in a `Profile` you supply; no provider
 name is hard-coded in the gem.
 
 **`http` or `https` is decided by the base URL you pass and by nothing else.**
@@ -143,10 +143,10 @@ scenarios share:
 | `PayForOtherUseSelf` | B paying for A's resource does not let B use it |
 | `TokenTampering` | a JWT with a flipped claim and the original signature is 401 |
 | `RegistrationWithoutPow` | a missing or bad proof is rejected when the origin charges a toll |
-| `MandatePrincipalSwap` | B signing a mandate that carries A's identity is rejected |
-| `MandateReplay` | A's signed mandate JWS re-submitted under B's token is rejected |
+| `MandatePrincipalSwap` | B paying, with its own key, the checkout the operator signed for A is rejected |
+| `MandateReplay` | A's signed mandates re-submitted under B's token are rejected |
 | `UnpaidGatedAction` | the gated action without a prior settled payment is denied |
-| `WrongCurrencyCart` | a chain-consistent cart denominated in a currency the operator does not price in is refused at capture |
+| `WrongCurrencyPayment` | a payment mandate in a currency other than its checkout's is refused before any capture |
 | `MissingKyc` | the gated action after payment but without an attestation is denied |
 | `ExpiredKyc` | an attestation whose `exp` has passed is rejected |
 | `ForgedKyc` | an attestation with a wrong issuer or a bad signature is rejected |
@@ -155,7 +155,7 @@ Beside them the gem ships `Profile`, `Scenario`, `Verdict`, `Runner`,
 `Battery` and `LeakScan`, which decides whether a refusal leaked the runtime's
 own vocabulary, discounting needles the attack itself supplied. A scenario
 receives a `Kiosk::TestHelpers::Assistant` — register, query, run, pay with
-signed mandates, kyc, and the device-authorization request — and its
+closed AP2 mandates, kyc, and the device-authorization request — and its
 `events(principal)` is the assistant's side of `<endpoint>/events`.
 
 ## Your own beats, in the same battery

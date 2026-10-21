@@ -21,7 +21,7 @@ module Rental
       refuse "this reservation's payment is in progress — re-read my_reservations and start the " \
              'rental once it reads `paid`; do not pay again'
     end
-    refuse 'this reservation is not paid — pay for it first (call `pay` with the `cart` that ' \
+    refuse 'this reservation is not paid — pay for it first (call `pay` for the `checkout_jwt` that ' \
            'reserve returned), then call this again'
   end
 

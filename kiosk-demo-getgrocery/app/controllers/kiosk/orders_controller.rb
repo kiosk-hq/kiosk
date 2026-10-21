@@ -41,7 +41,7 @@ module Kiosk
 
     kind :action
     description 'Place an order for delivery in a window at an address. The answer carries the ' \
-                'quote to pay. Alcohol needs a completed 18+ check (`request_kyc`); a cart is at ' \
+                'checkout to pay. Alcohol needs a completed 18+ check (`request_kyc`); an order is at ' \
                 "most #{Order::MAX_ITEMS} lines of at most #{OrderItem::MAX_QTY} each."
     input_schema type: 'object',
                  additionalProperties: false,
@@ -73,9 +73,9 @@ module Kiosk
                     slot_at: { type: 'string', description: "The delivery window's start." },
                     slot_label: { type: 'string', description: 'The window as a human reads it.' },
                     timezone: { type: 'string', description: "The delivery address's IANA zone." },
-                    cart: Kiosk::Payable::CART_SCHEMA
+                    checkout_jwt: Kiosk::Payable::CHECKOUT_SCHEMA
                   },
-                  required: %w[order_id total_cents total_eur currency slot_at slot_label timezone cart]
+                  required: %w[order_id total_cents total_eur currency slot_at slot_label timezone checkout_jwt]
     example_params({
                      items: [{ sku: 'sourdough-bread', qty: 2 }, { sku: 'greek-yogurt', qty: 1 }],
                      slot_at: -> { DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2].iso8601 },
@@ -86,9 +86,7 @@ module Kiosk
                   slot_at: -> { DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2].iso8601 },
                   slot_label: "12:00–14:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
                   timezone: DeliverySlots::DEFAULT_ZONE_NAME,
-                  cart: { currency: 'eur', total_amount_cents: 1287,
-                          line_items: [{ order_id: ORDER_ID }, { sku: 'sourdough-bread', qty: 2, price_cents: 449 },
-                                       { sku: 'greek-yogurt', qty: 1, price_cents: 389 }] }
+                  checkout_jwt: 'eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXVCJ9.eyJjdXJyZW5jeSI6ImV1ciIsInRvdGFsX2Ftb3VudF9jZW50cyI6MTI4N30.c2lnbmF0dXJl'
                 })
     def create_order
       @order = CreateOrderOperation.call(

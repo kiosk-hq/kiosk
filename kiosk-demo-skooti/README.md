@@ -35,7 +35,7 @@ is decided before any credential is read.
 | `POST /kiosk/request_kyc` | `request_kyc` | Hand back the broker link the human completes; the `kyc_verification` event then carries the signed attestation |
 
 Plus the two reserved endpoints every origin serves: `POST /kiosk/pay` —
-settle the AP2 mandate chain (intent → cart → payment) through Stripe — and
+pay the checkout with the closed AP2 checkout and payment mandates through Stripe — and
 `GET /kiosk/schema`, the public catalog of everything above (no token, no
 toll), with `GET /kiosk/openapi.json` rendering the same registry as OpenAPI.
 

@@ -43,7 +43,7 @@ module Kiosk
                         from_price_cents: { type: %w[integer null],
                                             description: 'Cheapest nightly rate, in cents; null when the hotel lists no rooms.' },
                         room_type_count: { type: 'integer' },
-                        currency: { type: 'string', description: 'Sign the cart in this currency.' }
+                        currency: { type: 'string', description: 'The currency of the checkout this hotel signs.' }
                       },
                       required: %w[property_id name neighbourhood stars from_price_cents
                                    room_type_count currency]

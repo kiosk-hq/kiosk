@@ -28,7 +28,7 @@ module Kiosk
                       room_type_id: { type: 'integer', description: 'Pass to reserve_room.' },
                       name: { type: 'string' },
                       nightly_price_cents: { type: 'integer', description: 'Price per night, in cents.' },
-                      currency: { type: 'string', description: 'Sign the cart in this currency.' }
+                      currency: { type: 'string', description: 'The currency of the checkout this hotel signs.' }
                     },
                     required: %w[room_type_id name nightly_price_cents currency]
                   }

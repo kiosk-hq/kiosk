@@ -62,7 +62,7 @@ module Kiosk
 
     kind :action
     description "Hold a room type for a stay for #{Booking::PAY_WINDOW.inspect}. Nothing is charged: pay with the " \
-                '`cart` it returns; the hotel answers on `booking_confirmation`, and ' \
+                '`checkout_jwt` it returns; the hotel answers on `booking_confirmation`, and ' \
                 '`my_bookings` shows the answer and its confirmation code. A hold left unpaid ' \
                 'past that time is cancelled, `booking_confirmation` says so, and its room is free for other guests.'
     input_schema type: 'object',
@@ -84,9 +84,9 @@ module Kiosk
                     currency: { type: 'string' },
                     nights: { type: 'integer' },
                     nightly_price_cents: { type: 'integer', description: 'Price per night, in cents.' },
-                    cart: Kiosk::Payable::CART_SCHEMA
+                    checkout_jwt: Kiosk::Payable::CHECKOUT_SCHEMA
                   },
-                  required: %w[booking_id total_cents currency nights nightly_price_cents cart]
+                  required: %w[booking_id total_cents currency nights nightly_price_cents checkout_jwt]
     def reserve_room
       @booking = ReserveRoomOperation.call(
         customer_id: kiosk_identity.user_id,

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# What `c.cart_price_checker` answers: the order's total, once the cart's item
+# What `c.checkout_price_checker` answers: the order's total, once the checkout's item
 # lines mirror that order exactly — same skus, same quantities, the prices it
 # was ordered at — and the shelf still holds it. Kiosk::Server::PaymentClaim checks the rest.
 module PriceChecker
@@ -9,7 +9,7 @@ module PriceChecker
     return 'each item line needs sku, qty, and price_cents (the price it was ordered at)' unless presented.all? { well_formed?(*it) }
 
     order = Order.includes(order_items: :product).find(order_id)
-    return 'cart items do not mirror the order at the prices it was ordered at — sign the cart create_order returned' \
+    return 'checkout items do not mirror the order at the prices it was ordered at — pay the checkout_jwt create_order returned' \
       unless presented.sort == ordered(order)
 
     short = order.shortfall

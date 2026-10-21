@@ -329,7 +329,7 @@ else
                                           'catalog — the §8.3 loop above asserted almost nothing'
 end
 
-# ── 5. the AP2 mandate chain and the settlement it answered ──────────────────
+# ── 5. the checkout, the two AP2 mandates and the settlement they answered ──
 #
 # Read from the file e2e/run.sh had pay_flow.rb write: these are the REQUEST
 # this origin accepted and the RESPONSE it produced, not a reconstruction.
@@ -339,16 +339,22 @@ if pay_capture && File.exist?(pay_capture)
 
   conforms('the pay REQUEST body', "#{B}/mandates.schema.json", cap.fetch('request'),
            pointer: '#/$defs/payRequest') do |body|
-    body.delete('cart_mandate_jws') # all three are required — the chain is the point
+    body.delete('checkout_mandate') # both are required — the pair is the point
     body
   end
 
-  %w[intent cart payment].each do |defn|
-    conforms("the #{defn} mandate's claims", "#{B}/mandates.schema.json",
-             cap.fetch('claims').fetch(defn), pointer: "#/$defs/#{defn}") do |claims|
-      # `exp` is REQUIRED on every mandate by `baseClaims` — "a missing or
-      # passed exp is rejected" — and it reaches this `$def` through an
-      # `allOf`, so the control also proves the composition is being applied.
+  conforms('the checkout the mandates bind', "#{B}/mandates.schema.json",
+           cap.fetch('claims').fetch('checkout'), pointer: '#/$defs/checkout') do |checkout|
+    checkout['line_items'] = [] # a checkout itemises what it charges
+    checkout
+  end
+
+  { 'checkout_mandate' => 'checkoutMandate', 'payment_mandate' => 'paymentMandate' }.each do |part, defn|
+    conforms("the #{part}'s claims", "#{B}/mandates.schema.json",
+             cap.fetch('claims').fetch(part), pointer: "#/$defs/#{defn}") do |claims|
+      # `exp` is REQUIRED on both mandates by `lifetime`, and it reaches this
+      # `$def` through an `allOf`, so the control also proves the composition
+      # is being applied.
       claims.delete('exp')
       claims
     end
@@ -360,7 +366,7 @@ if pay_capture && File.exist?(pay_capture)
     settled
   end
 else
-  absent 'the AP2 mandate chain was validated',
+  absent 'the checkout and its AP2 mandates were validated',
          "PAY_CAPTURE (#{pay_capture.inspect}) is missing — pay_flow.rb did not write the " \
          'captured request/claims/response, so five mandate schemas checked nothing',
          "settling a payment means charging somebody's deployment"

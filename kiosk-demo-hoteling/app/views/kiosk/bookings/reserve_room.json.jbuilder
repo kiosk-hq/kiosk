@@ -6,4 +6,4 @@ json.total_cents @booking.total_cents
 json.currency 'eur'
 json.nights @booking.nights
 json.nightly_price_cents nightly_price_cents
-json.cart @booking.cart([{ qty: @booking.nights, price_cents: nightly_price_cents }])
+json.checkout_jwt @booking.checkout([{ qty: @booking.nights, price_cents: nightly_price_cents }])

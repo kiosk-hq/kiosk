@@ -105,37 +105,15 @@ def minimal_profile(**overrides)
   )
 end
 
-def now_ish
-  Time.now.to_i
-end
+# The key a test operator signs its checkouts with.
+OPERATOR_KEY = OpenSSL::PKey::RSA.generate(2048)
 
+# The checkout a test operator signs for +principal+ to pay +owned_ref+.
 def pay_for_callable
   lambda do |_client, principal, owned_ref|
-    { intent: intent_mandate(principal), cart: cart_mandate(principal, owned_ref) }
+    JWT.encode({ iss: BASE_URL, sub: principal.user_id, iat: Time.now.to_i,
+                 merchant: { id: BASE_URL, name: 'Test', website: BASE_URL }, currency: 'eur', total_amount_cents: 100,
+                 line_items: [{ reservation_id: owned_ref[:id] || 'res-1' }, { qty: 1, price_cents: 100 }] },
+               OPERATOR_KEY, 'PS256')
   end
-end
-
-def mandate_fields(principal, prefix)
-  t = now_ish
-  {
-    'id' => "#{prefix}-#{SecureRandom.uuid}",
-    'user_id' => principal.user_id,
-    'agent_id' => principal.agent_id,
-    'iss' => 'http://test.example',
-    'currency' => 'eur',
-    'exp' => t + 600,
-    'iat' => t
-  }
-end
-
-def intent_mandate(principal)
-  mandate_fields(principal, 'intent').merge('scope' => 'test', 'cap_amount_cents' => 1000)
-end
-
-def cart_mandate(principal, owned_ref)
-  mandate_fields(principal, 'cart').merge(
-    'intent_mandate_id' => 'intent-x',
-    'line_items' => [{ 'sku' => owned_ref[:id] || 'res-1', 'qty' => 1 }],
-    'total_amount_cents' => 100
-  )
 end

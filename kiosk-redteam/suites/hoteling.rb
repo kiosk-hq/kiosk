@@ -12,7 +12,6 @@ require 'uri'
 require 'date'
 
 BASE_URL = ENV.fetch('SERVER_URL')
-ISSUER   = BASE_URL
 
 # Clear of today's inventory; every run starts from db:reset.
 CHECK_IN  = (Date.today + 30).to_s.freeze
@@ -38,25 +37,13 @@ FIND_AVAILABLE = lambda { |client, principal|
         "(#{all_props.size} properties checked)"
 }
 
-# The intent and cart mandates for a scope=lodging payment.
-def lodging_mandates(principal, cap_amount_cents:, line_items:, total_amount_cents:)
-  now       = Time.now.to_i
-  intent_id = SecureRandom.uuid
-  intent = { id: intent_id, user_id: principal.user_id, agent_id: principal.agent_id, iss: ISSUER,
-             scope: 'lodging', cap_amount_cents:, currency: 'eur', exp: now + 600, iat: now }
-  cart = { id: SecureRandom.uuid, intent_mandate_id: intent_id, user_id: principal.user_id,
-           agent_id: principal.agent_id, iss: ISSUER, line_items:, total_amount_cents:,
-           currency: 'eur', exp: now + 600, iat: now }
-  { intent:, cart: }
-end
-
 profile = Kiosk::Redteam::Profile.new(
   # Register PoW is on, so RegistrationWithoutPow runs; only > 0 matters.
   pow_difficulty: 1,
   requires_kyc: false, # no KYC gate
 
   # declared_roles mirrors config/initializers/kiosk.rb: DeviceGrantRoleSelfSelection must name a real role.
-  # WrongCurrencyCart probes with a currency other than this one.
+  # WrongCurrencyPayment probes with a currency other than this one.
   currency: 'eur',
   declared_roles: %w[customer],
 
@@ -84,7 +71,8 @@ profile = Kiosk::Redteam::Profile.new(
       code: room['name'],
       total_cents: total_cents,
       nights: NIGHTS,
-      nightly_price: nightly_price
+      nightly_price: nightly_price,
+      checkout_jwt: rsv_resp.body['checkout_jwt']
     }
   },
 
@@ -100,17 +88,8 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # scope=lodging, the cart reserve_room returns: a line naming the booking, then the nights.
-  pay_for: lambda { |_client, principal, owned_ref|
-    total_cents   = owned_ref[:total_cents].to_i
-    nights        = owned_ref[:nights].to_i.nonzero? || NIGHTS
-    nightly_price = owned_ref[:nightly_price].to_i.nonzero? || (total_cents / nights)
-
-    lodging_mandates(principal,
-                     cap_amount_cents: total_cents + 100,
-                     line_items: [{ booking_id: owned_ref[:id] }, { qty: nights, price_cents: nightly_price }],
-                     total_amount_cents: total_cents)
-  },
+  # The checkout reserve_room returns: a line naming the booking, then the nights.
+  pay_for: ->(_client, _principal, owned_ref) { owned_ref[:checkout_jwt] },
 
   # No KYC — hoteling does not require identity verification
   kyc_valid: nil,
@@ -120,86 +99,74 @@ profile = Kiosk::Redteam::Profile.new(
 
 # hoteling's own attacks, beside the shared ones in Kiosk::Redteam::Scenarios.
 module HotelingScenarios
-  # A cart whose total is below the operator's quoted booking price must be rejected at capture.
-  class TamperedPriceCart < Kiosk::Redteam::Scenario
+  # The operator signs what lands on the counter: a checkout changed after it signed it is refused.
+
+  # A checkout whose total is below the operator's quoted booking price must be refused before capture.
+  class TamperedPriceCheckout < Kiosk::Redteam::Scenario
     def initialize
-      super(name: 'TamperedPriceCart')
+      super(name: 'TamperedPriceCheckout')
     end
 
     def call(client, profile)
       a = client.register!
       owned = profile.create_owned.call(client, a)
-      m = profile.pay_for.call(client, a, owned)
-      resp = client.pay(a, intent: m[:intent], cart: lowered(m[:cart], owned))
-      # 403 by name: a 401 would mean the cashier never priced this cart.
-      verdict_from(resp, expect: 403, detail: "below-quote total settled (HTTP #{resp.status})")
+      resp = client.pay(a, lowered(profile.pay_for.call(client, a, owned), owned))
+      # 403 by name: a 401 would mean the checkout was never verified.
+      verdict_from(resp, expect: 403, expect_code: %w[forbidden], detail: "below-quote checkout settled (HTTP #{resp.status})")
     end
 
     private
 
-    # Lower the line price too, so only the quoted-total check can reject it.
-    def lowered(cart, owned)
+    # Lower the line price too, so the lines still sum to the total.
+    def lowered(checkout_jwt, owned)
       nights        = owned[:nights].to_i.nonzero? || NIGHTS
       lowered_total = owned[:total_cents].to_i - 100
-      cart.merge(
-        line_items: [{ qty: nights, price_cents: (lowered_total / nights), booking_id: owned[:id] }],
-        total_amount_cents: lowered_total
-      )
+      tampered_checkout(checkout_jwt, line_items: [{ booking_id: owned[:id] }, { qty: nights, price_cents: (lowered_total / nights) }],
+                                      total_amount_cents: lowered_total)
     end
   end
 
-  # A cart whose total exceeds the sum of its line items must be rejected at capture.
-  class InflatedTotalCart < Kiosk::Redteam::Scenario
+  # A checkout whose total exceeds the sum of its line items must be refused before capture.
+  class InflatedTotalCheckout < Kiosk::Redteam::Scenario
     def initialize
-      super(name: 'InflatedTotalCart')
+      super(name: 'InflatedTotalCheckout')
     end
 
     def call(client, profile)
       a = client.register!
       owned = profile.create_owned.call(client, a)
-      m = profile.pay_for.call(client, a, owned)
-      # pay_for's line items sum to total_cents; inflate the total only.
-      m[:cart] = m[:cart].merge(total_amount_cents: owned[:total_cents].to_i + 50)
-      resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-      # 403 by name — see TamperedPriceCart above.
-      verdict_from(resp, expect: 403, detail: "total above the line-item sum settled (HTTP #{resp.status})")
+      forged = tampered_checkout(profile.pay_for.call(client, a, owned), total_amount_cents: owned[:total_cents].to_i + 50)
+      resp = client.pay(a, forged)
+      # 403 by name — see TamperedPriceCheckout above.
+      verdict_from(resp, expect: 403, expect_code: %w[forbidden], detail: "total above the line-item sum settled (HTTP #{resp.status})")
     end
   end
 
-  # The signed-cart ref reaches Kiosk::UuidCheck at capture.
-  class MalformedUuidArg < Kiosk::Redteam::Scenario
-    MALFORMED     = ['not-a-uuid', '1; DROP TABLE bookings', ''].freeze
+  # A checkout naming a junk booking_id, signed by a key the hotel never held, is a 403 that leaks no SQL.
+  class ForgedCheckoutRef < Kiosk::Redteam::Scenario
+    MALFORMED     = ['not-a-uuid', '1; DROP TABLE bookings', '', '00000000-0000-4000-8000-000000000000'].freeze
     SQL_INTERNALS = ['::uuid', 'PG::', '22P02', 'invalid input syntax'].freeze
 
     def initialize
-      super(name: 'MalformedUuidArg')
+      super(name: 'ForgedCheckoutRef')
     end
 
     def call(client, _profile)
-      @client    = client
-      @principal = client.register!
+      principal    = client.register!
       @failures    = []
       @unevaluated = []
       @statuses    = []
-      MALFORMED.each { |junk| probe(junk) }
-      control
-      probes_verdict(@statuses.find { |s| s != 400 } || 400, @failures, @unevaluated)
+      MALFORMED.each { |junk| check("pay checkout booking_id=#{junk.inspect}", client.pay(principal, forged(principal, junk)), supplied: junk) }
+      probes_verdict(@statuses.find { |s| s != 403 } || 403, @failures, @unevaluated)
     end
 
     private
 
-    def probe(junk)
-      check("pay cart booking_id=#{junk.inspect}", pay_with_ref(junk), supplied: junk)
-    end
-
-    # CONTROL: a well-formed unknown booking_id gets the cashier's 403, so the 400s above reached it.
-    def control
-      resp = pay_with_ref('00000000-0000-4000-8000-000000000000')
-      return if resp.status == 403
-      return @unevaluated << "CONTROL → HTTP #{resp.status} code=#{error_code(resp).inspect}" if Kiosk::Redteam.unevaluated?(resp)
-
-      @failures << "CONTROL well-formed-but-unknown booking_id → HTTP #{resp.status} " \
-                   "(want the cashier's 403; a 400 here means the malformed-uuid probes never reached the cashier)"
+    # Reserves nothing: the signature check runs before the cashier looks the booking up.
+    def forged(principal, junk)
+      claims = { iss: BASE_URL, sub: principal.user_id, iat: Time.now.to_i, merchant: { id: BASE_URL, name: 'hoteling' },
+                 currency: 'eur', total_amount_cents: 100, line_items: [{ booking_id: junk }, { qty: 1, price_cents: 100 }] }
+      JWT.encode(claims, OpenSSL::PKey::RSA.generate(2048), 'PS256')
     end
 
     # `supplied:` discounts the probe's own echoed bytes from the leak scan.
@@ -209,20 +176,12 @@ module HotelingScenarios
       return @unevaluated << answer if Kiosk::Redteam.unevaluated?(resp)
 
       scan = Kiosk::Redteam::LeakScan.scan(resp.body, SQL_INTERNALS, supplied: supplied)
-      return if resp.status == 400 && error_code(resp) == 'bad_request' && !scan.leak?
+      return if resp.status == 403 && error_code(resp) == 'forbidden' && !scan.leak?
 
       @failures << "#{answer}#{leaks(scan)}"
     end
 
     def leaks(scan) = "#{" LEAKS #{scan.leak.inspect}" if scan.leak}#{scan.note}"
-
-    # Reserves nothing: the shape check runs before the cashier looks the booking up.
-    def pay_with_ref(junk)
-      mandates = lodging_mandates(@principal, cap_amount_cents: 200,
-                                              line_items: [{ qty: 1, price_cents: 100, booking_id: junk }],
-                                              total_amount_cents: 100)
-      @client.pay(@principal, **mandates)
-    end
   end
 
   # Probes: same nights (B), overlapping nights (A), abutting nights (control), dated hotel_detail.
@@ -693,10 +652,10 @@ scenarios = [
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   # The claim ceremony's door: the unauthenticated device_authorization request.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-  Kiosk::Redteam::Scenarios::WrongCurrencyCart.new, # cashier check — currency
-  HotelingScenarios::TamperedPriceCart.new,                 # cashier check — below quote
-  HotelingScenarios::InflatedTotalCart.new,                 # cashier check — total ≠ line sum
-  HotelingScenarios::MalformedUuidArg.new,                  # junk uuid → typed 400, no 500
+  Kiosk::Redteam::Scenarios::WrongCurrencyPayment.new,      # payment currency ≠ checkout currency
+  HotelingScenarios::TamperedPriceCheckout.new,             # forged checkout — below quote
+  HotelingScenarios::InflatedTotalCheckout.new,             # forged checkout — total ≠ line sum
+  HotelingScenarios::ForgedCheckoutRef.new,                 # forged checkout naming junk → 403, no SQL
   HotelingScenarios::HostileArgShapes.new,                  # boolean/array/object/date shapes → typed 400
   HotelingScenarios::DoubleBookedRoom.new,                  # one room-night, one booking
   HotelingScenarios::UnregisteredVerbIsOrdinaryRefusal.new, # a path naming no verb → 404, not a shim

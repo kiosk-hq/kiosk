@@ -531,8 +531,9 @@ jobs:
   # real run needs a shell on a box this repository does not deploy, so what CI
   # holds is the decision, against a fake root: a box missing a value somebody
   # else holds writes nothing and exits non-zero; a box that has those values
-  # converges in one run, stays converged on the next, pairs the KYC secret
-  # across the two files that name it differently, and prints no secret.
+  # converges in one run, stays converged on the next, replaces an RSA broker
+  # key with an Ed25519 one whose public half the operators pin, pairs the KYC
+  # secret across the two files that name it differently, and prints no secret.
   deploy-rollout:
     name: the declarative env rollout works (deploy/rollout.sh)
     runs-on: ubuntu-latest
@@ -552,10 +553,11 @@ jobs:
           for u in getgrocery hoteling skooti; do echo 'STRIPE_SECRET_KEY=sk_test_ci' >>"$KIOSK_ENV_DIR/$u.env"; done
           printf 'KIOSK_UNLOCK_SIGNING_KEY_PEM="%s"\n' "$(openssl genpkey -algorithm ed25519)" >>"$KIOSK_ENV_DIR/skooti.env"
           printf 'PROVE_KEY_PEM="%s"\n' "$(openssl genrsa 2048 2>/dev/null)" >>"$KIOSK_ENV_DIR/prove.env"
-          ! ./deploy/rollout.sh --on-box 2>&1 | grep -q '^MISSING prove PROVE_KEY_PEM'
-          sed -i '/^PROVE_KEY_PEM=/,/END/d' "$KIOSK_ENV_DIR/prove.env"
-          printf 'PROVE_KEY_PEM="%s"\n' "$(openssl genpkey -algorithm ed25519)" >>"$KIOSK_ENV_DIR/prove.env"
           ./deploy/rollout.sh --on-box
+          broker=$(sed -n '/^PROVE_KEY_PEM=/,/END/p' "$KIOSK_ENV_DIR/prove.env" | sed 's/^PROVE_KEY_PEM=//; s/"//g')
+          printf '%s\n' "$broker" | openssl pkey -noout -text | grep -q '^ED25519 Private-Key'
+          pin=$(sed -n '/^KIOSK_PROVE_PUBLIC_KEY_PEM=/,/END/p' "$KIOSK_ENV_DIR/getgrocery.env" | sed 's/^KIOSK_PROVE_PUBLIC_KEY_PEM=//; s/"//g')
+          [ "$pin" = "$(printf '%s\n' "$broker" | openssl pkey -pubout)" ]
           sed -n 's/^KIOSK_SIGNING_KEY_B64=//p' "$KIOSK_ENV_DIR/tudu.env" | openssl base64 -d -A | openssl pkey -noout -text | grep -q '^ED25519'
           ! ./deploy/rollout.sh --on-box | grep -q '^wrote'
           ! ./deploy/rollout.sh --on-box | grep -q 'pw-tudu'

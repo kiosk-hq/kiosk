@@ -57,7 +57,7 @@ match head».
 **Where a secret comes from.** The script carries none and prints none. A slot
 is kept when the box's own file already has it and minted when it does not,
 which is right for the values nothing off this box holds the other half of and
-wrong for the four that someone else holds. Those four are NAMED instead, and
+wrong for the three that someone else holds. Those three are NAMED instead, and
 that unit is skipped:
 
 | value | who holds the other half |
@@ -65,7 +65,6 @@ that unit is skipped:
 | `KIOSK_<APP>_DB_PASSWORD` | Postgres, from `postgres-init.sql` |
 | `STRIPE_SECRET_KEY` | Stripe, test mode |
 | `KIOSK_UNLOCK_SIGNING_KEY_PEM` | its public half is flashed into the locks |
-| `PROVE_KEY_PEM` | a new broker identity invalidates every attestation issued |
 
 So a wiped box prints `MISSING <unit> <KEY>`, writes nothing for that unit and
 exits non-zero. Put those values into their own `/etc/kiosk-demo/<unit>.env` by
@@ -80,11 +79,10 @@ half-set: the broker's copy of an operator's intake secret
 
 **Key types.** Kiosk signs with Ed25519 keys only. A `KIOSK_SIGNING_KEY_B64`
 that is not an Ed25519 key is minted again, as if the slot were empty: the
-tokens and unpaid checkouts the old key signed stop verifying. A
-`PROVE_KEY_PEM` that is not an Ed25519 key counts as missing, so the script
-names it and leaves the broker and both KYC operators alone. Put a new one into
-`/etc/kiosk-demo/prove.env` by hand (`openssl genpkey -algorithm ed25519`) and
-re-run. An assistant registered with an RSA key no longer authenticates: it
+tokens and unpaid checkouts the old key signed stop verifying. The broker's
+`PROVE_KEY_PEM` follows the same rule, and the KYC operators pin the public
+half of the new key in the same run: the attestations the old key signed stop
+verifying. An assistant registered with an RSA key no longer authenticates: it
 makes an Ed25519 key and registers again.
 
 **Who reads an env file.** systemd hands each one to its unit through

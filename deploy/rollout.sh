@@ -9,10 +9,10 @@
 #
 # The template is the declaration: names, order, comments and every value this
 # repository decides. Only a REPLACE_* value is a slot — kept if the box already
-# has it, minted if not. The four somebody else holds (the DB passwords, Stripe,
-# the locks' signing key, the broker's identity) are NAMED instead and that unit
-# is left alone: a blank secret boots an app that fails closed and silently. Put
-# one in its own file by hand and re-run.
+# has it, minted if not. The three somebody else holds (the DB passwords, Stripe,
+# the locks' signing key) are NAMED instead and that unit is left alone: a blank
+# secret boots an app that fails closed and silently. Put one in its own file by
+# hand and re-run.
 #
 # It touches no service, no database and no Caddy: restart what it reports.
 # Run it BEFORE pushing prod-demo a tree that adds an env name: the push migrates
@@ -49,13 +49,11 @@ render() {  # render <unit> — stdout is the file that unit should have
     case $1/$key in
       prove/KIOSK_PROVE_*_SECRET)   # one secret, two names: the operator's own copy is the source
         o=${key#KIOSK_PROVE_}; o=${o%_SECRET}; val=$(value "$DIR/${o,,}.env" KIOSK_PROVE_INTAKE_SECRET) ;;
-      */KIOSK_PROVE_PUBLIC_KEY_PEM) # the public half of the broker's own key, when it is an Ed25519 key
-        o=$(value "$DIR/prove.env" PROVE_KEY_PEM | tr -d '"')
-        val=; ! printf '%s\n' "$o" | ed25519 || val=\"$(printf '%s\n' "$o" | openssl pkey -pubout)\" ;;
+      prove/PROVE_KEY_PEM)          val=\"$broker\" ;;
+      */KIOSK_PROVE_PUBLIC_KEY_PEM) val=\"$(printf '%s\n' "$broker" | openssl pkey -pubout)\" ;;
       *) val=$(value "$live" "$key")
          case $key in   # a key that is not an Ed25519 key is a slot to fill again
            KIOSK_SIGNING_KEY_B64) printf '%s' "$val" | openssl base64 -d -A 2>/dev/null | ed25519 || val= ;;
-           PROVE_KEY_PEM)         printf '%s\n' "$val" | tr -d '"' | ed25519 || val= ;;
          esac
          [ -n "$val" ] || case $key in   # nothing off this box holds the other half of these
            SECRET_KEY_BASE)                            val=$(openssl rand -hex 64) ;;
@@ -69,6 +67,11 @@ render() {  # render <unit> — stdout is the file that unit should have
 }
 
 [ $# -eq 0 ] || { echo "rollout.sh --on-box takes no other argument" >&2; exit 2; }
+
+# The broker's key: the one prove.env holds, or a new one when it holds none or
+# one that is not an Ed25519 key. The operators pin its public half from it.
+broker=$(value "$DIR/prove.env" PROVE_KEY_PEM | tr -d '"')
+printf '%s\n' "$broker" | ed25519 || broker=$(openssl genpkey -algorithm ed25519)
 
 new=$(mktemp); trap 'rm -f "$new"' EXIT; fail=0
 for u in "${UNITS[@]}"; do

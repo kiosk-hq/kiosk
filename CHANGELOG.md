@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: `deploy/rollout.sh` mints the KYC broker's Ed25519 `PROVE_KEY_PEM` when the box has none or an RSA one, and pins its public half in the KYC operators.
+
 - 2026-10-21: A DPoP proof or client assertion whose `alg` is not the algorithm of its key is refused with a message that names that algorithm.
 - 2026-10-21: `deploy/deploy.sh` runs `rollout.sh` before the push, so an incomplete env file stops the deploy before the new code boots.
 

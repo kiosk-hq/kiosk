@@ -69,7 +69,7 @@ What each unit must carry. For EACH of the 7 apps:
 ### 4b. KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
 - [ ] `SECRET_KEY_BASE`, `KIOSK_PROVE_DB` / `KIOSK_PROVE_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.
 - [ ] **Issuer + public URL:** `KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech`, `PROVE_PUBLIC_URL=https://kyc.demo.kiosk.tech`.
-- [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh Ed25519 private PEM>` (`openssl genpkey -algorithm ed25519`) — REQUIRED, enforced at boot: the
+- [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh Ed25519 private PEM>`; `deploy/rollout.sh` mints it when the box has none — REQUIRED, enforced at boot: the
       broker refuses to start in production without it (and rejects a PEM that is not an Ed25519 private key), because
       the baked-in dev key's private half is world-readable in the public repo — silently signing with it would let anyone
       forge attestations, and the pin flows below would faithfully pin its forgeable public half.

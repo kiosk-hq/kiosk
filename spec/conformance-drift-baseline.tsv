@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-22 at d08f38ff -- release 0.6.4: scope default, resource_metadata, CORS
+# recorded: 2026-10-22 at 68de4db8
 # 2068 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	d8208b47	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	d8208b47	        if: matrix.demo != 'kiosk-demo-prove'
@@ -325,7 +325,7 @@ kiosk-core/lib/kiosk/configuration.rb	f93913e953f166ea	d8208b47	    # to the iss
 kiosk-core/lib/kiosk/configuration.rb	3509e124dce01fd7	d8208b47	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	eb55ac83bee281d4	d8208b47	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	0b9b9bb8049ae29f	d8208b47	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	77c062d12e950b31	0412a8ab	API_VERSION = '0.6.2'
+kiosk-core/lib/kiosk/protocol.rb	b9763081ae0a8358	68de4db8	API_VERSION = '0.6.5'
 kiosk-core/spec/spec_helper.rb	c89ca3f73742cd52	d8208b47	require 'kiosk'
 kiosk-demo-atablefor/README.md	9c41ef23a955233a	d8208b47	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	90d2d7b9f9107588	d8208b47	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -433,7 +433,8 @@ kiosk-demo-getgrocery/test/stories/claim_test.rb	93521848095d5562	d8208b47	asser
 kiosk-demo-getgrocery/test/stories/claim_test.rb	5676dbae72dd7ac6	d8208b47	assert_equal HANA, hanas.account
 kiosk-demo-getgrocery/test/stories/claim_test.rb	b0887b2debe85815	d8208b47	assert_equal [[HANA, standalone.principal.agent_id]], Kiosk::Settlement.pluck(:user_id, :agent_id)
 kiosk-demo-getgrocery/test/stories/claim_test.rb	d129a507fb66af3e	d8208b47	assert_equal standalone.principal.user_id, Order.find(left_behind['order_id']).user_id
-kiosk-demo-getgrocery/test/stories/discovery_test.rb	f83301492620e77e	d8208b47	an assistant that knows nothing finds out, without an account, what the shop offers and how to buy
+kiosk-demo-getgrocery/test/stories/discovery_test.rb	f83301492620e77e	68de4db8	an assistant that knows nothing finds out, without an account, what the shop offers and how to buy
+kiosk-demo-getgrocery/test/stories/discovery_test.rb	6ac461609f02bd8d	68de4db8	assert_equal %w[kyc_verification order_delivery payment payment_setup], schema['events'].pluck('name').sort
 kiosk-demo-getgrocery/test/stories/privacy_test.rb	4f3de8f9dbaecb55	d8208b47	one shopper can neither move nor see another's delivery
 kiosk-demo-getgrocery/test/stories/shelf_test.rb	7482caab5501fc22	d8208b47	a price change after ordering does not change what the shopper pays
 kiosk-demo-getgrocery/test/stories/shop_test.rb	018702eb45429d0d	d8208b47	a paid order is not charged again
@@ -647,8 +648,8 @@ kiosk-demo-stylish/config/routes.rb	9bf0728493684b31	d8208b47	kiosk do
 kiosk-demo-stylish/config/routes.rb	16adeb2bb4d34c0d	d8208b47	queries :my_appointments, :salon_calendar, :salons, :service_menu
 kiosk-demo-stylish/test/book_appointment_test.rb	7ac62782885c3c4c	d8208b47	a slot without an offset names no instant and is refused
 kiosk-demo-stylish/test/book_appointment_test.rb	91215efe9c4a3e9d	d8208b47	one instant in any spelling is one booking, answered on the salon's clock
-kiosk-demo-stylish/test/stories/discovery_test.rb	876c5760e9019d12	d8208b47	an assistant that knows nothing finds out, without an account, what the salon offers and how to book
-kiosk-demo-stylish/test/stories/discovery_test.rb	7ad2caa22ed147b0	d8208b47	class DiscoveryStory < StoryTest
+kiosk-demo-stylish/test/stories/discovery_test.rb	876c5760e9019d12	68de4db8	an assistant that knows nothing finds out, without an account, what the salon offers and how to book
+kiosk-demo-stylish/test/stories/discovery_test.rb	bd27299dbd2bfe76	68de4db8	class DiscoveryStory < StoryTest
 kiosk-demo-stylish/test/stories/linking_test.rb	8b58f903b3d6038b	d8208b47	  test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
 kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	d8208b47	  test 'Alice approves the code her assistant shows her, and it books in her name' do
 kiosk-demo-stylish/test/stories/linking_test.rb	50235a0ebeda307b	d8208b47	'spending_cap_cents' => '12345')
@@ -1000,11 +1001,11 @@ kiosk-rls/lib/kiosk/rls/railtie.rb	649840f787643893	d8208b47	          ActiveRec
 kiosk-server/CHANGELOG.md	66bde369aafcac8a	d8208b47	- `rake kiosk:doctor` — follow-up.
 kiosk-server/CHANGELOG.md	98de4ad5f7877b14	d8208b47	`Kiosk::OperationResult` and `render_kiosk_result` are removed
 kiosk-server/LICENSE.txt	d328a3b7eb22e8d7	d8208b47	Version 2.0, January 2004
-kiosk-server/README.md	4c85cab5e0e50749	d8208b47	## What's in this release
-kiosk-server/README.md	b2eb8c9f5b5f752c	d8208b47	- **Account binding** — the claim/link ceremonies bind a registered client to an existing assistant-account holder
-kiosk-server/README.md	31f66197dff96819	d8208b47	A block-less `kiosk` only mounts.
-kiosk-server/README.md	1ffb51c6835073f3	d8208b47	The full host-side surface is shipped and covered by the gem's own suite
-kiosk-server/README.md	fe179f99c73c7446	d8208b47	in this directory runs it and prints how many examples that is
+kiosk-server/README.md	4c85cab5e0e50749	68de4db8	## What's in this release
+kiosk-server/README.md	aa81e8c9aebdd575	68de4db8	- **Account binding** — the claim/link ceremonies bind a registered client to an existing assistant-account holder
+kiosk-server/README.md	31f66197dff96819	68de4db8	A block-less `kiosk` only mounts.
+kiosk-server/README.md	1ffb51c6835073f3	68de4db8	The full host-side surface is shipped and covered by the gem's own suite
+kiosk-server/README.md	fe179f99c73c7446	68de4db8	in this directory runs it and prints how many examples that is
 kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	fe627a20cdd981d2	d8208b47	class AssistantsController < ApplicationController
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	0a1244f50f31a73e	d8208b47	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	07cb305eb3126bb0	d8208b47	def link
@@ -1074,12 +1075,11 @@ kiosk-server/lib/kiosk/server/client_assertion.rb	7b38dcb6424b5f76	d8208b47	issu
 kiosk-server/lib/kiosk/server/client_registration.rb	93acfb9b02cf3a3a	d8208b47	# RFC 7591 open registration of an AI assistant's public key, with no human:
 kiosk-server/lib/kiosk/server/client_registration.rb	08037059c8fd4ec7	d8208b47	AuthToll.gate(verb: 'oauth/register', body: { key: AssistantKey.thumbprint(key) }, pow: pow, config: config)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	280c4c3ed68c9655	d8208b47	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	dc752207ac292d49	d8208b47	        @skill_url ||= 'https://kiosk.tech/skill-v
-kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	d8208b47	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
-kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	d8208b47	      attr_accessor :spending_cap_window_days
-kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	d8208b47	      def computed_capabilities
-kiosk-server/lib/kiosk/server/configuration_extension.rb	2fe4bb03b7d5660a	d8208b47	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
-kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	d8208b47	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	24c7fd12619e0187	68de4db8	        @skill_url ||= 'https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	68de4db8	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
+kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	68de4db8	      attr_accessor :spending_cap_window_days
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	68de4db8	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	68de4db8	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
 kiosk-server/lib/kiosk/server/device_code_grant.rb	0127c4b9e1aef66b	0412a8ab	# The claim ceremony on the RFC 8628 device-grant endpoints: binds a registered
 kiosk-server/lib/kiosk/server/device_code_grant.rb	8077327e193a9d87	0412a8ab	da = authorization_of(client, store.lookup_by_device_code_hash(hash))
 kiosk-server/lib/kiosk/server/engine.rb	9a04fe52f1e0a44f	d8208b47	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
@@ -1266,14 +1266,14 @@ kiosk-server/spec/kiosk/server/assistant_key_spec.rb	38c7c6bb538952d8	d8208b47	l
 kiosk-server/spec/kiosk/server/assistant_key_spec.rb	a5f8b682a4881200	d8208b47	refuses a JWK with a private member
 kiosk-server/spec/kiosk/server/assistant_key_spec.rb	54c9d0acd0ef8f7f	d8208b47	refuses a P-256 key at an operator that does not accept ES256, and says what it accepts
 kiosk-server/spec/kiosk/server/assistant_key_spec.rb	6ade32be6ffb9fe6	d8208b47	refuses an RSA key, a key on another curve, and what is not a JWK
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	2d537dbb66a52db3	d8208b47	answers a rebind to the same account as a rebind from another account, and stamps the watermark again
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	998bbc63cabd7aae	d8208b47	captures the human's user_idp role onto the link row (roles-from-IdP)
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	fb44d5b47f13963b	d8208b47	deactivates one of the holder's own bindings and answers 204 with no body
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	27c515fc45e43db0	d8208b47	delegates to LinkCode.redeem and answers 204 with no body
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	f339b18a9609d7e5	d8208b47	maps a refused client assertion to the 401 problem document, with the hint
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	9c13674b6e63d958	d8208b47	mints a single-use link code for the signed-in account holder (201)
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	148b42ef1d1666fe	d8208b47	refuses a link posted as a form
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	c5f530b120531abe	d8208b47	refuses an unlink posted as a form, and unlinks nothing
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	2d537dbb66a52db3	68de4db8	answers a rebind to the same account as a rebind from another account, and stamps the watermark again
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	998bbc63cabd7aae	68de4db8	captures the human's user_idp role onto the link row (roles-from-IdP)
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	fb44d5b47f13963b	68de4db8	deactivates one of the holder's own bindings and answers 204 with no body
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	27c515fc45e43db0	68de4db8	delegates to LinkCode.redeem and answers 204 with no body
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	845fef6757fd4dfd	68de4db8	maps a refused client assertion to the 401 problem document, with the hint
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	9c13674b6e63d958	68de4db8	mints a single-use link code for the signed-in account holder (201)
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	148b42ef1d1666fe	68de4db8	refuses a link posted as a form
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	c5f530b120531abe	68de4db8	refuses an unlink posted as a form, and unlinks nothing
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	07b88c8195927fc2	d8208b47	answers 400 bad_request for an empty body, invalid JSON and a body that is not an object
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	3b9fcd7680f01a29	d8208b47	answers 400 bad_request naming each member that is absent
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	fd6d898cd368b640	d8208b47	answers 400 for a jwks that holds no usable key
@@ -1778,20 +1778,20 @@ kiosk-server/spec/kiosk/server/payment_claim_spec.rb	b747e5572ee10867	d8208b47	r
 kiosk-server/spec/kiosk/server/payment_claim_spec.rb	25c05f41ae4377b3	d8208b47	reads unpaid, pending while the capture runs, paid after it, and refunded
 kiosk-server/spec/kiosk/server/payment_claim_spec.rb	3a516d428e1bf629	d8208b47	releases the claim when the checkout total is not the operator's price, and charges nothing
 kiosk-server/spec/kiosk/server/payment_claim_spec.rb	f53ad9b5fbc869af	d8208b47	signs the checkout a PaymentClaim accepts, for the row's owner: a line naming the row, then the priced lines
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	793b43c8ca138a25	d8208b47	answers POST payment_setup with 501 module_not_served
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	ea22be635cc12eea	d8208b47	answers ready when the provider needs no setup
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	f796cfb154377db6	d8208b47	answers setup_required with the provider's url, returning the human to the engine's page
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	9bd3016a5ac34140	d8208b47	answers the return page with 501 module_not_served
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	036d99b9039d34bd	d8208b47	claims nothing on the return page when the provider cannot say who came back
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	c77e575e62b47b50	d8208b47	declares no payment_setup topic when the provider cannot say who came back
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	0cd3b12b535a3070	d8208b47	declares the payment_setup topic
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	47dd8c33d15e0a75	d8208b47	publishes a descriptor with a backing-off poll cadence and a give-up horizon
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	a3ac457acf2e0dfc	d8208b47	publishes no payment_setup action
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	4d7898032dcfc42a	d8208b47	pushes data that satisfies the payload_schema the origin serves for the topic
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	158b3e23921686cf	d8208b47	pushes nothing and claims nothing while the provider still says setup is required
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	ba3221b35759ab42	d8208b47	pushes nothing when the request names nobody
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	f6cb48b0e0c514ad	d8208b47	pushes payment_setup ready to the principal once the provider confirms readiness
-kiosk-server/spec/kiosk/server/payment_setup_spec.rb	3ea226ad1a331aa7	d8208b47	still renders the page when the provider raises
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	793b43c8ca138a25	68de4db8	answers POST payment_setup with 501 module_not_served
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	ea22be635cc12eea	68de4db8	answers ready when the provider needs no setup
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	f796cfb154377db6	68de4db8	answers setup_required with the provider's url, returning the human to the engine's page
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	9bd3016a5ac34140	68de4db8	answers the return page with 501 module_not_served
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	036d99b9039d34bd	68de4db8	claims nothing on the return page when the provider cannot say who came back
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	c77e575e62b47b50	68de4db8	declares no payment_setup topic when the provider cannot say who came back
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	0cd3b12b535a3070	68de4db8	declares the payment_setup topic
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	47dd8c33d15e0a75	68de4db8	publishes a descriptor with a backing-off poll cadence and a give-up horizon
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	a3ac457acf2e0dfc	68de4db8	publishes no payment_setup action
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	4d7898032dcfc42a	68de4db8	pushes data that satisfies the payload_schema the origin serves for the topic
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	158b3e23921686cf	68de4db8	pushes nothing and claims nothing while the provider still says setup is required
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	ba3221b35759ab42	68de4db8	pushes nothing when the request names nobody
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	1ea504f661b71e11	68de4db8	pushes payment_setup ready to the principal once the provider confirms readiness
+kiosk-server/spec/kiosk/server/payment_setup_spec.rb	3ea226ad1a331aa7	68de4db8	still renders the page when the provider raises
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	e56da722a7d1daa0	d8208b47	issues `count` equihash challenges on an unproven request (the 402 shape)
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	b0929e3003bd4bee	d8208b47	proceeds only when ALL three verify; a short set re-challenges
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	f9b790631698eb1b	d8208b47	proceeds when the real equihash verifier accepts the submitted proof (N=1)

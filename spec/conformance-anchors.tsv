@@ -1070,8 +1070,8 @@ kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	Generate the Kiosk initializer and its canonical base migrations.
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	def draw_wire_routes
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	desc 'Generate the Kiosk initializer and its canonical base migrations. '
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template 'create_kiosk_refunds.rb.tt',
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template 'create_kiosk_schema.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template 'create_kiosk_visits.rb.tt',
 kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_kyc_attributes.rb.tt	<%= ddl(:kyc_attributes, user_id_type: user_id_type, user_table: options[:user_table]) %>
 kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_visits.rb.tt	<%= ddl(:visits, user_id_type: user_id_type) %>
 kiosk-server/lib/kiosk/owned.rb	scope :own, -> { owned_by(Kiosk.current_user_id) }

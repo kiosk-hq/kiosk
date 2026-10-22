@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-22 at 3382bdb8 (working tree: 9 cited file(s) modified) -- release 0.6.4: scope default, resource_metadata, CORS
+# recorded: 2026-10-22 at d08f38ff -- release 0.6.4: scope default, resource_metadata, CORS
 # 2068 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	d8208b47	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	d8208b47	        if: matrix.demo != 'kiosk-demo-prove'
@@ -73,184 +73,184 @@ e2e/README.md	051214e824541696	0412a8ab	The principal flows into handlers: the `
 e2e/README.md	8545cc024eea8ca9	0412a8ab	The protocol carries no SQL: there is no arbitrary-SQL surface.
 e2e/README.md	90f78e4898e2c41d	0412a8ab	`.github/workflows/ci.yml` invokes the same script (the `e2e` job) after standard Ruby + Postgres setup.
 e2e/README.md	dac0c5771ed86142	0412a8ab	└── fixtures/                               # files copied into the generated app
-e2e/assistant.sh	7e10b403edbedbeb	dirty	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	32ea9a773eca7bad	dirty	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	f9dc523d4a428d91	dirty	$public_doc is really being read (control token)
-e2e/assistant.sh	cd4eddd677e611ab	dirty	$public_doc names no verb ($verb_name) — pointer, not copy
-e2e/assistant.sh	d41cd84579bfa314	dirty	=== the event stream (pinned listener) ===
-e2e/assistant.sh	52a16a65def7b005	dirty	?v=<digest> is immutable for a year
-e2e/assistant.sh	de71535d9f908166	dirty	GET /kiosk/schema is unenveloped
-e2e/assistant.sh	be84dc69a52f0de8	dirty	GET at an action's path → 404
-e2e/assistant.sh	0e42a2b846f5fe80	dirty	If-None-Match on the digest → 304
-e2e/assistant.sh	fc5ed1c45af6f66d	dirty	KYC at an origin that serves no KYC → 501
-e2e/assistant.sh	2cb1d4a638ff83d5	dirty	Kiosk-API-Version is MAJOR.MINOR.PATCH
-e2e/assistant.sh	0c6e61a6e86b5b4a	dirty	Kiosk-API-Version present
-e2e/assistant.sh	bc7d2b93abf90689	dirty	Kiosk-Min-Client is a version, and it is advertised
-e2e/assistant.sh	a6b6c17e5d494b55	dirty	Kiosk-Min-Client present
-e2e/assistant.sh	87deaf53b2cad295	dirty	Kiosk-Server-Version present
-e2e/assistant.sh	cb17459ec2775ab4	dirty	POST /kiosk/$undrawn unauthenticated → 404 too
-e2e/assistant.sh	a34c9ec317cae464	dirty	POST /kiosk/$undrawn → 404
-e2e/assistant.sh	4bb3da33897158f5	dirty	POST at a query's path → 404
-e2e/assistant.sh	6cf148d0f731b35e	dirty	There is no name-dispatch endpoint: a verb
-e2e/assistant.sh	c59f5eadf745850a	dirty	Vary names all three request headers
-e2e/assistant.sh	df0d94a1b986f270	dirty	X-Total-Count is not dressed up as a standard
-e2e/assistant.sh	4cd879b78cb0c183	dirty	a COMPLETE answer carries X-Total-Count
-e2e/assistant.sh	ef224c9cb44cbb95	dirty	a handler MAY relax its own 200 (§3.7.4) — the public catalogue does
-e2e/assistant.sh	b76eae5f3c62353f	dirty	a query's 200 declares Link and X-Total-Count as HEADERS
-e2e/assistant.sh	3f173be1e2e5e6d4	dirty	a routing 404 UNDER the mount is a 404
-e2e/assistant.sh	1153e4e62d193b74	dirty	agents.json has no root extension
-e2e/assistant.sh	a4869ee1251f12dd	dirty	agents.json → 200
-e2e/assistant.sh	4302286ec0f51acd	dirty	agents.txt claims no payment protocol
-e2e/assistant.sh	71aea049653fa43d	dirty	agents.txt names oauth2
-e2e/assistant.sh	4865e3df051b115e	dirty	agents.txt → 200
-e2e/assistant.sh	27623ecc0e894ec5	dirty	alice: 1 appointment exists
-e2e/assistant.sh	e78676291551400a	dirty	alice: does NOT see bob's row
-e2e/assistant.sh	02b6ca6cf2c18c64	dirty	alice: sees her own row
-e2e/assistant.sh	8828ef7892c3b853	dirty	all three version headers on all 19 mount routes
-e2e/assistant.sh	cde0ddb3a718eb34	dirty	an action declares no pagination headers
-e2e/assistant.sh	e7f6ac53881df8f6	dirty	an ancient client is SERVED, not refused — the floor is advisory
-e2e/assistant.sh	495ef79de3304b32	dirty	an unhandled 500 UNDER the mount is a 500
-e2e/assistant.sh	f341aefffc443aea	dirty	api-catalog advertises it as a service-desc
-e2e/assistant.sh	0a416c3fbc34fac4	dirty	api-catalog hyperlinks $verb_name, unauthenticated
-e2e/assistant.sh	925c895ed1752035	dirty	api-catalog → 200
-e2e/assistant.sh	e11c6988d2261b05	dirty	appointment_id returned
-e2e/assistant.sh	7721465eb758443d	dirty	assert "kiosk.auth.claim_url"
-e2e/assistant.sh	1a3b3b66274ce81c	dirty	assert "kiosk.auth.registration_url"
-e2e/assistant.sh	b17085dbb497a597	dirty	assert "kiosk.auth.rotate_url"
-e2e/assistant.sh	4f2bb50b57e6740c	dirty	assert "kiosk.auth.token_url"
-e2e/assistant.sh	92d4c091191b4943	dirty	assert "no Authorization header → 200"  "$oa_anon" "200"
-e2e/assistant.sh	0e49e161b51f30b4	dirty	assert "no Authorization header → 200"  "$sch_status" "200"
-e2e/assistant.sh	8162f19f3c75904b	dirty	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
-e2e/assistant.sh	63296b35e0f9aa9f	dirty	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" then has("ok") else false end')" "false"
-e2e/assistant.sh	f5e466c5fafd1254	dirty	assert "…and NO Vary at all"            "$(echo "$sch_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	6d1f2f3ec664cf33	dirty	assert "…and NO Vary at all"        "$(echo "$oa_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	3c03c2f4e3a8fac4	dirty	assert "…served public, one minute"     "$(echo "$sch_headers"
-e2e/assistant.sh	3c03c2f4e3a8fac4	dirty	assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
-e2e/assistant.sh	8260833a5969c6bb	dirty	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
-e2e/assistant.sh	5ec9c5643e59e568	dirty	auth.md opens with the auth.md heading
-e2e/assistant.sh	0d0f836bd68acf3d	dirty	binding: /auth.md served
-e2e/assistant.sh	f5087606d276208b	dirty	binding: claim and token poll each paid one toll
-e2e/assistant.sh	399767f2dd5cc88d	dirty	binding: claim of an unknown code → 404
-e2e/assistant.sh	107d8a6c71642ab9	dirty	binding: client_credentials refresh
-e2e/assistant.sh	2bbd0fc251be7c9b	dirty	binding: device_authorization fields
-e2e/assistant.sh	ccb93f1a98523323	dirty	binding: fast poll → slow_down
-e2e/assistant.sh	70635320f2eb5a70	dirty	binding: held token dies at unlink
-e2e/assistant.sh	72f676ec402b4865	dirty	binding: human approve → 200
-e2e/assistant.sh	a068223c610f6da1	dirty	binding: link-code mint (session)
-e2e/assistant.sh	6e893aa87445408b	dirty	binding: link-code redeem → human
-e2e/assistant.sh	54ad1edd79a08dfa	dirty	binding: pending before approval
-e2e/assistant.sh	331bdc8120102cc0	dirty	binding: poll without proof denied
-e2e/assistant.sh	7bc46d58008d7620	dirty	binding: role refused on the opening request
-e2e/assistant.sh	d5b18fb08d192dac	dirty	binding: same-second token dies too
-e2e/assistant.sh	d52066dd8a06c571	dirty	binding: the client keeps its client_id
-e2e/assistant.sh	2a1b3270ce906612	dirty	binding: token bound to the human
-e2e/assistant.sh	a92959d2a629be82	dirty	binding: token request after unlink → invalid_client
-e2e/assistant.sh	5f5e9e3953bd6731	dirty	binding: token role is the approver's
-e2e/assistant.sh	f3a3396abdde3394	dirty	binding: unlink → 204 (no body)
-e2e/assistant.sh	b85b32b2136cb0b8	dirty	binding: verb as bound account
-e2e/assistant.sh	35b499b046497416	dirty	binding: …and the code is not_found
-e2e/assistant.sh	692925c46ed7d205	dirty	binding: …type names it
-e2e/assistant.sh	dc02931f1a65a16a	dirty	bob: 1 appointment exists
-e2e/assistant.sh	35dbfa8f87dfa9b2	dirty	bob: does NOT see alice's row
-e2e/assistant.sh	6887079eaeb3d749	dirty	db: 1 checkout_mandate
-e2e/assistant.sh	b594bfbf72a637c6	dirty	db: 1 payment_mandate
-e2e/assistant.sh	1116b1c3811604ff	dirty	db: settlement amount 1599
-e2e/assistant.sh	ed6b1367f15e3dc1	dirty	declares OpenAPI 3.1
-e2e/assistant.sh	d41454e28b1e7886	dirty	es256: the token with its ES256 proof → 200
-e2e/assistant.sh	35f292ac2372b6d2	dirty	every parameter writes style and explode
-e2e/assistant.sh	efe9e4d4b1d7260a	dirty	exactly 1 salon
-e2e/assistant.sh	656b0c791b2e4775	dirty	garbage token → 401
-e2e/assistant.sh	d99743899d17776f	dirty	jwks: alg=EdDSA
-e2e/assistant.sh	9aeb0747055be8c8	dirty	jwks: keys[] present
-e2e/assistant.sh	a730a05d2e6d3873	dirty	jwks: kty=OKP
-e2e/assistant.sh	b2ee3e99d7568864	dirty	jwks: no private d field
-e2e/assistant.sh	532fa3d4713fe001	dirty	jwks: use=sig
-e2e/assistant.sh	6201a16fa0a921bb	dirty	kiosk.auth has no kind
-e2e/assistant.sh	1a3b3b66274ce81c	dirty	kiosk.auth.registration_url"
-e2e/assistant.sh	6e3bcf018a1f61b9	dirty	kiosk.capabilities[]
-e2e/assistant.sh	f9112efaabed8a59	dirty	kiosk.endpoint correct
-e2e/assistant.sh	8eab52eaf2363e28	dirty	kiosk.schema_url is digest-versioned
-e2e/assistant.sh	d579e23ce8062bcd	dirty	kiosk.version present
-e2e/assistant.sh	e84d99154b561b20	dirty	limit and cursor are injected into a query
-e2e/assistant.sh	038644421408493c	dirty	my_appointments declares salon_id as a query parameter
-e2e/assistant.sh	44fb3eeebeb7d35e	dirty	no auth → 401
-e2e/assistant.sh	d6335de3c6bfc03f	dirty	oauth metadata names private_key_jwt
-e2e/assistant.sh	e6a9b52cc45247f5	dirty	oauth metadata names the device endpoint
-e2e/assistant.sh	e9e8ff3cd069d686	dirty	oauth metadata names the issuer
-e2e/assistant.sh	003f29d06a53e67a	dirty	oauth metadata names the registration endpoint
-e2e/assistant.sh	fbcc8cc09baa8c03	dirty	one path per verb the canonical catalog publishes
-e2e/assistant.sh	1e9077ac4f7c7830	dirty	pay: a Stripe PaymentIntent
-e2e/assistant.sh	10ffb9d3b874f3a5	dirty	pay: checkout receipt names the checkout mandate
-e2e/assistant.sh	748f2225b621319d	dirty	pay: http 200
-e2e/assistant.sh	01769e799aaae284	dirty	pay: payment receipt names the payment mandate
-e2e/assistant.sh	886ad4c00be64e15	dirty	pay: payment receipt names the settlement
-e2e/assistant.sh	bcb08892f428d28f	dirty	pay: settled 1599
-e2e/assistant.sh	a857334f9cd8098d	dirty	pay: settlement_id
-e2e/assistant.sh	852f48828eddcdd9	dirty	pay: unenveloped
-e2e/assistant.sh	f5ffa128d497b6ec	dirty	payment_setup: once the card is saved → ready
-e2e/assistant.sh	85a0cd7c49a0afa4	dirty	payment_setup: served by the engine → setup_required
-e2e/assistant.sh	ff614cf8e3579a06	dirty	register-pow: 1 challenge issued
-e2e/assistant.sh	296cc8a8da7d3020	dirty	register-pow: code pow_required
-e2e/assistant.sh	b9889725bd4bdd32	dirty	register-pow: minted token on a verb → 200
-e2e/assistant.sh	83cb3cf0d792a0b7	dirty	register-pow: no-proof → 402
-e2e/assistant.sh	eb77fdb8c475fee3	dirty	register-pow: role pinned customer
-e2e/assistant.sh	6396f70927fa5f0d	dirty	register-pow: served (n,k) IS the gem default
-e2e/assistant.sh	d6440cc5cecd3f3a	dirty	register-pow: solve+proof → registered
-e2e/assistant.sh	f8d02d7f9e1e20bb	dirty	register-pow: the expected (n,k) was READ from the gem
-e2e/assistant.sh	c41814da9f90e244	dirty	request_kyc at an origin that serves no KYC → 501
-e2e/assistant.sh	5227abc963e74bf4	dirty	reserved limit/cursor accepted → 200
-e2e/assistant.sh	5c2f93ff97e0b1c6	dirty	rotate: a token from before the rotation → 401
-e2e/assistant.sh	4e69033d1f339af9	dirty	rotate: both keys signed → 200
-e2e/assistant.sh	5a1ea60c1b86767f	dirty	rotate: the old key gets no token → 401
-e2e/assistant.sh	d1ed6d02e950eee9	dirty	rotate: the same agent_id
-e2e/assistant.sh	450dedb70035e84c	dirty	rsa: registration of an RSA key → 400
-e2e/assistant.sh	a8664229f3a352f9	dirty	salon name is Combette
-e2e/assistant.sh	51e1c6d825c87950	dirty	schema publishes {queries, actions, events} and nothing else
-e2e/assistant.sh	4dd6e4bdab26ea40	dirty	status restates the HTTP status
-e2e/assistant.sh	5faf8b659059c918	dirty	the OPERATOR's own 200 outside the mount carries none
-e2e/assistant.sh	bd4514200645ffd1	dirty	the body is a bare array
-e2e/assistant.sh	62baa4b1702a1abb	dirty	the body is the action's object
-e2e/assistant.sh	ca77b6e308979ec0	dirty	the descriptor's description travels verbatim
-e2e/assistant.sh	0682d7fb66bc44a9	dirty	the reserved parameters are form/explode:true
-e2e/assistant.sh	1e9405441576fe3b	dirty	the two 'it is not here' answers are two DIFFERENT codes
-e2e/assistant.sh	a44e3a4f72bd6a57	dirty	title is the code's, not the incident's
-e2e/assistant.sh	c6a9404addc1896a	dirty	two origins: first's token on second → 401
-e2e/assistant.sh	e12539c452ad6da0	dirty	two origins: issuer is the first origin
-e2e/assistant.sh	ec1172912739901f	dirty	two origins: issuer is the second origin
-e2e/assistant.sh	70f5c7d56295ad58	dirty	two origins: same key, second account
-e2e/assistant.sh	bdea24d4d4b02d2b	dirty	type names the code
-e2e/assistant.sh	d5f2babc5f8abb49	dirty	unknown query → 404
-e2e/assistant.sh	44966e689e87b8e5	dirty	…a query is advertised GET
-e2e/assistant.sh	ba604e7462629406	dirty	…a stale ?v= still answers the CURRENT catalogue, short-lived
-e2e/assistant.sh	2260fca65574498f	dirty	…an action is advertised POST
-e2e/assistant.sh	89ed2eaaaec56fa7	dirty	…and NO Link header, because there is no next page
-e2e/assistant.sh	ff53dce362c1da79	dirty	…and NOT forbidden
-e2e/assistant.sh	279cfb70b77f7522	dirty	…and is itself an RFC 9457 document
-e2e/assistant.sh	1aec2e6ba0769424	dirty	…and kiosk.json itself expires quickly
-e2e/assistant.sh	7365c8fc057fc73b	dirty	…and links the catalog at its versioned url
-e2e/assistant.sh	efb81ff034c053fb	dirty	…and neither does the operator's own 500 — same exception path
-e2e/assistant.sh	69e443dba65ee078	dirty	…and never a 402: the toll went with the gate
-e2e/assistant.sh	09918c8c250f4cf0	dirty	…and the body is no envelope
-e2e/assistant.sh	22d22b6da7976dbb	dirty	…and the boot digest IS the ETag
-e2e/assistant.sh	d81b8d1896d34fed	dirty	…and the module set lives in kiosk.json alone
-e2e/assistant.sh	651f65938444bd59	dirty	…and the route loop actually ran
-e2e/assistant.sh	4d1c6faa12f88aa5	dirty	…and the write never ran
-e2e/assistant.sh	99e541f202237a2c	dirty	…and with --token-command it mints a fresh one and carries on
-e2e/assistant.sh	6bca2bfea6562cb2	dirty	…by \$ref into components.headers
-e2e/assistant.sh	992754f67571b9b3	dirty	…code is module_not_served
-e2e/assistant.sh	abe144a08e285d82	dirty	…detail names the module
-e2e/assistant.sh	6bada86079f88c7e	dirty	…into each of the two queries
-e2e/assistant.sh	52fa1c92a224dd15	dirty	…not a problem document
-e2e/assistant.sh	ddd8021a01baccbc	dirty	…public, one minute at the bare path
-e2e/assistant.sh	4dd6e4bdab26ea40	dirty	…status restates the HTTP status
-e2e/assistant.sh	5fe2e13e122c3fec	dirty	…the catalog is the body itself
-e2e/assistant.sh	17a6a3b925163d46	dirty	…the events array carries this origin's topic and payment_setup
-e2e/assistant.sh	a44e3a4f72bd6a57	dirty	…title is the code's, not the incident's
-e2e/assistant.sh	f616315f74fab8eb	dirty	…while a ROOT discovery surface carries none of them
-e2e/assistant.sh	b993275ea6622f13	dirty	…while an identity-scoped 200 keeps private, no-store
-e2e/assistant.sh	ad9e4f15916df873	dirty	…while the same request with a bad token is still 401
-e2e/assistant.sh	f1636056fbcf93c1	dirty	…with no Allow on it
-e2e/assistant.sh	18d2cd878d48540b	dirty	…with no code to branch on
+e2e/assistant.sh	7e10b403edbedbeb	d08f38ff	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	32ea9a773eca7bad	d08f38ff	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	f9dc523d4a428d91	d08f38ff	$public_doc is really being read (control token)
+e2e/assistant.sh	cd4eddd677e611ab	d08f38ff	$public_doc names no verb ($verb_name) — pointer, not copy
+e2e/assistant.sh	d41cd84579bfa314	d08f38ff	=== the event stream (pinned listener) ===
+e2e/assistant.sh	52a16a65def7b005	d08f38ff	?v=<digest> is immutable for a year
+e2e/assistant.sh	de71535d9f908166	d08f38ff	GET /kiosk/schema is unenveloped
+e2e/assistant.sh	be84dc69a52f0de8	d08f38ff	GET at an action's path → 404
+e2e/assistant.sh	0e42a2b846f5fe80	d08f38ff	If-None-Match on the digest → 304
+e2e/assistant.sh	fc5ed1c45af6f66d	d08f38ff	KYC at an origin that serves no KYC → 501
+e2e/assistant.sh	2cb1d4a638ff83d5	d08f38ff	Kiosk-API-Version is MAJOR.MINOR.PATCH
+e2e/assistant.sh	0c6e61a6e86b5b4a	d08f38ff	Kiosk-API-Version present
+e2e/assistant.sh	bc7d2b93abf90689	d08f38ff	Kiosk-Min-Client is a version, and it is advertised
+e2e/assistant.sh	a6b6c17e5d494b55	d08f38ff	Kiosk-Min-Client present
+e2e/assistant.sh	87deaf53b2cad295	d08f38ff	Kiosk-Server-Version present
+e2e/assistant.sh	cb17459ec2775ab4	d08f38ff	POST /kiosk/$undrawn unauthenticated → 404 too
+e2e/assistant.sh	a34c9ec317cae464	d08f38ff	POST /kiosk/$undrawn → 404
+e2e/assistant.sh	4bb3da33897158f5	d08f38ff	POST at a query's path → 404
+e2e/assistant.sh	6cf148d0f731b35e	d08f38ff	There is no name-dispatch endpoint: a verb
+e2e/assistant.sh	c59f5eadf745850a	d08f38ff	Vary names all three request headers
+e2e/assistant.sh	df0d94a1b986f270	d08f38ff	X-Total-Count is not dressed up as a standard
+e2e/assistant.sh	4cd879b78cb0c183	d08f38ff	a COMPLETE answer carries X-Total-Count
+e2e/assistant.sh	ef224c9cb44cbb95	d08f38ff	a handler MAY relax its own 200 (§3.7.4) — the public catalogue does
+e2e/assistant.sh	b76eae5f3c62353f	d08f38ff	a query's 200 declares Link and X-Total-Count as HEADERS
+e2e/assistant.sh	3f173be1e2e5e6d4	d08f38ff	a routing 404 UNDER the mount is a 404
+e2e/assistant.sh	1153e4e62d193b74	d08f38ff	agents.json has no root extension
+e2e/assistant.sh	a4869ee1251f12dd	d08f38ff	agents.json → 200
+e2e/assistant.sh	4302286ec0f51acd	d08f38ff	agents.txt claims no payment protocol
+e2e/assistant.sh	71aea049653fa43d	d08f38ff	agents.txt names oauth2
+e2e/assistant.sh	4865e3df051b115e	d08f38ff	agents.txt → 200
+e2e/assistant.sh	27623ecc0e894ec5	d08f38ff	alice: 1 appointment exists
+e2e/assistant.sh	e78676291551400a	d08f38ff	alice: does NOT see bob's row
+e2e/assistant.sh	02b6ca6cf2c18c64	d08f38ff	alice: sees her own row
+e2e/assistant.sh	8828ef7892c3b853	d08f38ff	all three version headers on all 19 mount routes
+e2e/assistant.sh	cde0ddb3a718eb34	d08f38ff	an action declares no pagination headers
+e2e/assistant.sh	e7f6ac53881df8f6	d08f38ff	an ancient client is SERVED, not refused — the floor is advisory
+e2e/assistant.sh	495ef79de3304b32	d08f38ff	an unhandled 500 UNDER the mount is a 500
+e2e/assistant.sh	f341aefffc443aea	d08f38ff	api-catalog advertises it as a service-desc
+e2e/assistant.sh	0a416c3fbc34fac4	d08f38ff	api-catalog hyperlinks $verb_name, unauthenticated
+e2e/assistant.sh	925c895ed1752035	d08f38ff	api-catalog → 200
+e2e/assistant.sh	e11c6988d2261b05	d08f38ff	appointment_id returned
+e2e/assistant.sh	7721465eb758443d	d08f38ff	assert "kiosk.auth.claim_url"
+e2e/assistant.sh	1a3b3b66274ce81c	d08f38ff	assert "kiosk.auth.registration_url"
+e2e/assistant.sh	b17085dbb497a597	d08f38ff	assert "kiosk.auth.rotate_url"
+e2e/assistant.sh	4f2bb50b57e6740c	d08f38ff	assert "kiosk.auth.token_url"
+e2e/assistant.sh	92d4c091191b4943	d08f38ff	assert "no Authorization header → 200"  "$oa_anon" "200"
+e2e/assistant.sh	0e49e161b51f30b4	d08f38ff	assert "no Authorization header → 200"  "$sch_status" "200"
+e2e/assistant.sh	8162f19f3c75904b	d08f38ff	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
+e2e/assistant.sh	63296b35e0f9aa9f	d08f38ff	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" then has("ok") else false end')" "false"
+e2e/assistant.sh	f5e466c5fafd1254	d08f38ff	assert "…and NO Vary at all"            "$(echo "$sch_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	6d1f2f3ec664cf33	d08f38ff	assert "…and NO Vary at all"        "$(echo "$oa_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	3c03c2f4e3a8fac4	d08f38ff	assert "…served public, one minute"     "$(echo "$sch_headers"
+e2e/assistant.sh	3c03c2f4e3a8fac4	d08f38ff	assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
+e2e/assistant.sh	8260833a5969c6bb	d08f38ff	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
+e2e/assistant.sh	5ec9c5643e59e568	d08f38ff	auth.md opens with the auth.md heading
+e2e/assistant.sh	0d0f836bd68acf3d	d08f38ff	binding: /auth.md served
+e2e/assistant.sh	f5087606d276208b	d08f38ff	binding: claim and token poll each paid one toll
+e2e/assistant.sh	399767f2dd5cc88d	d08f38ff	binding: claim of an unknown code → 404
+e2e/assistant.sh	107d8a6c71642ab9	d08f38ff	binding: client_credentials refresh
+e2e/assistant.sh	2bbd0fc251be7c9b	d08f38ff	binding: device_authorization fields
+e2e/assistant.sh	ccb93f1a98523323	d08f38ff	binding: fast poll → slow_down
+e2e/assistant.sh	70635320f2eb5a70	d08f38ff	binding: held token dies at unlink
+e2e/assistant.sh	72f676ec402b4865	d08f38ff	binding: human approve → 200
+e2e/assistant.sh	a068223c610f6da1	d08f38ff	binding: link-code mint (session)
+e2e/assistant.sh	6e893aa87445408b	d08f38ff	binding: link-code redeem → human
+e2e/assistant.sh	54ad1edd79a08dfa	d08f38ff	binding: pending before approval
+e2e/assistant.sh	331bdc8120102cc0	d08f38ff	binding: poll without proof denied
+e2e/assistant.sh	7bc46d58008d7620	d08f38ff	binding: role refused on the opening request
+e2e/assistant.sh	d5b18fb08d192dac	d08f38ff	binding: same-second token dies too
+e2e/assistant.sh	d52066dd8a06c571	d08f38ff	binding: the client keeps its client_id
+e2e/assistant.sh	2a1b3270ce906612	d08f38ff	binding: token bound to the human
+e2e/assistant.sh	a92959d2a629be82	d08f38ff	binding: token request after unlink → invalid_client
+e2e/assistant.sh	5f5e9e3953bd6731	d08f38ff	binding: token role is the approver's
+e2e/assistant.sh	f3a3396abdde3394	d08f38ff	binding: unlink → 204 (no body)
+e2e/assistant.sh	b85b32b2136cb0b8	d08f38ff	binding: verb as bound account
+e2e/assistant.sh	35b499b046497416	d08f38ff	binding: …and the code is not_found
+e2e/assistant.sh	692925c46ed7d205	d08f38ff	binding: …type names it
+e2e/assistant.sh	dc02931f1a65a16a	d08f38ff	bob: 1 appointment exists
+e2e/assistant.sh	35dbfa8f87dfa9b2	d08f38ff	bob: does NOT see alice's row
+e2e/assistant.sh	6887079eaeb3d749	d08f38ff	db: 1 checkout_mandate
+e2e/assistant.sh	b594bfbf72a637c6	d08f38ff	db: 1 payment_mandate
+e2e/assistant.sh	1116b1c3811604ff	d08f38ff	db: settlement amount 1599
+e2e/assistant.sh	ed6b1367f15e3dc1	d08f38ff	declares OpenAPI 3.1
+e2e/assistant.sh	d41454e28b1e7886	d08f38ff	es256: the token with its ES256 proof → 200
+e2e/assistant.sh	35f292ac2372b6d2	d08f38ff	every parameter writes style and explode
+e2e/assistant.sh	efe9e4d4b1d7260a	d08f38ff	exactly 1 salon
+e2e/assistant.sh	656b0c791b2e4775	d08f38ff	garbage token → 401
+e2e/assistant.sh	d99743899d17776f	d08f38ff	jwks: alg=EdDSA
+e2e/assistant.sh	9aeb0747055be8c8	d08f38ff	jwks: keys[] present
+e2e/assistant.sh	a730a05d2e6d3873	d08f38ff	jwks: kty=OKP
+e2e/assistant.sh	b2ee3e99d7568864	d08f38ff	jwks: no private d field
+e2e/assistant.sh	532fa3d4713fe001	d08f38ff	jwks: use=sig
+e2e/assistant.sh	6201a16fa0a921bb	d08f38ff	kiosk.auth has no kind
+e2e/assistant.sh	1a3b3b66274ce81c	d08f38ff	kiosk.auth.registration_url"
+e2e/assistant.sh	6e3bcf018a1f61b9	d08f38ff	kiosk.capabilities[]
+e2e/assistant.sh	f9112efaabed8a59	d08f38ff	kiosk.endpoint correct
+e2e/assistant.sh	8eab52eaf2363e28	d08f38ff	kiosk.schema_url is digest-versioned
+e2e/assistant.sh	d579e23ce8062bcd	d08f38ff	kiosk.version present
+e2e/assistant.sh	e84d99154b561b20	d08f38ff	limit and cursor are injected into a query
+e2e/assistant.sh	038644421408493c	d08f38ff	my_appointments declares salon_id as a query parameter
+e2e/assistant.sh	44fb3eeebeb7d35e	d08f38ff	no auth → 401
+e2e/assistant.sh	d6335de3c6bfc03f	d08f38ff	oauth metadata names private_key_jwt
+e2e/assistant.sh	e6a9b52cc45247f5	d08f38ff	oauth metadata names the device endpoint
+e2e/assistant.sh	e9e8ff3cd069d686	d08f38ff	oauth metadata names the issuer
+e2e/assistant.sh	003f29d06a53e67a	d08f38ff	oauth metadata names the registration endpoint
+e2e/assistant.sh	fbcc8cc09baa8c03	d08f38ff	one path per verb the canonical catalog publishes
+e2e/assistant.sh	1e9077ac4f7c7830	d08f38ff	pay: a Stripe PaymentIntent
+e2e/assistant.sh	10ffb9d3b874f3a5	d08f38ff	pay: checkout receipt names the checkout mandate
+e2e/assistant.sh	748f2225b621319d	d08f38ff	pay: http 200
+e2e/assistant.sh	01769e799aaae284	d08f38ff	pay: payment receipt names the payment mandate
+e2e/assistant.sh	886ad4c00be64e15	d08f38ff	pay: payment receipt names the settlement
+e2e/assistant.sh	bcb08892f428d28f	d08f38ff	pay: settled 1599
+e2e/assistant.sh	a857334f9cd8098d	d08f38ff	pay: settlement_id
+e2e/assistant.sh	852f48828eddcdd9	d08f38ff	pay: unenveloped
+e2e/assistant.sh	f5ffa128d497b6ec	d08f38ff	payment_setup: once the card is saved → ready
+e2e/assistant.sh	85a0cd7c49a0afa4	d08f38ff	payment_setup: served by the engine → setup_required
+e2e/assistant.sh	ff614cf8e3579a06	d08f38ff	register-pow: 1 challenge issued
+e2e/assistant.sh	296cc8a8da7d3020	d08f38ff	register-pow: code pow_required
+e2e/assistant.sh	b9889725bd4bdd32	d08f38ff	register-pow: minted token on a verb → 200
+e2e/assistant.sh	83cb3cf0d792a0b7	d08f38ff	register-pow: no-proof → 402
+e2e/assistant.sh	eb77fdb8c475fee3	d08f38ff	register-pow: role pinned customer
+e2e/assistant.sh	6396f70927fa5f0d	d08f38ff	register-pow: served (n,k) IS the gem default
+e2e/assistant.sh	d6440cc5cecd3f3a	d08f38ff	register-pow: solve+proof → registered
+e2e/assistant.sh	f8d02d7f9e1e20bb	d08f38ff	register-pow: the expected (n,k) was READ from the gem
+e2e/assistant.sh	c41814da9f90e244	d08f38ff	request_kyc at an origin that serves no KYC → 501
+e2e/assistant.sh	5227abc963e74bf4	d08f38ff	reserved limit/cursor accepted → 200
+e2e/assistant.sh	5c2f93ff97e0b1c6	d08f38ff	rotate: a token from before the rotation → 401
+e2e/assistant.sh	4e69033d1f339af9	d08f38ff	rotate: both keys signed → 200
+e2e/assistant.sh	5a1ea60c1b86767f	d08f38ff	rotate: the old key gets no token → 401
+e2e/assistant.sh	d1ed6d02e950eee9	d08f38ff	rotate: the same agent_id
+e2e/assistant.sh	450dedb70035e84c	d08f38ff	rsa: registration of an RSA key → 400
+e2e/assistant.sh	a8664229f3a352f9	d08f38ff	salon name is Combette
+e2e/assistant.sh	51e1c6d825c87950	d08f38ff	schema publishes {queries, actions, events} and nothing else
+e2e/assistant.sh	4dd6e4bdab26ea40	d08f38ff	status restates the HTTP status
+e2e/assistant.sh	5faf8b659059c918	d08f38ff	the OPERATOR's own 200 outside the mount carries none
+e2e/assistant.sh	bd4514200645ffd1	d08f38ff	the body is a bare array
+e2e/assistant.sh	62baa4b1702a1abb	d08f38ff	the body is the action's object
+e2e/assistant.sh	ca77b6e308979ec0	d08f38ff	the descriptor's description travels verbatim
+e2e/assistant.sh	0682d7fb66bc44a9	d08f38ff	the reserved parameters are form/explode:true
+e2e/assistant.sh	1e9405441576fe3b	d08f38ff	the two 'it is not here' answers are two DIFFERENT codes
+e2e/assistant.sh	a44e3a4f72bd6a57	d08f38ff	title is the code's, not the incident's
+e2e/assistant.sh	c6a9404addc1896a	d08f38ff	two origins: first's token on second → 401
+e2e/assistant.sh	e12539c452ad6da0	d08f38ff	two origins: issuer is the first origin
+e2e/assistant.sh	ec1172912739901f	d08f38ff	two origins: issuer is the second origin
+e2e/assistant.sh	70f5c7d56295ad58	d08f38ff	two origins: same key, second account
+e2e/assistant.sh	bdea24d4d4b02d2b	d08f38ff	type names the code
+e2e/assistant.sh	d5f2babc5f8abb49	d08f38ff	unknown query → 404
+e2e/assistant.sh	44966e689e87b8e5	d08f38ff	…a query is advertised GET
+e2e/assistant.sh	ba604e7462629406	d08f38ff	…a stale ?v= still answers the CURRENT catalogue, short-lived
+e2e/assistant.sh	2260fca65574498f	d08f38ff	…an action is advertised POST
+e2e/assistant.sh	89ed2eaaaec56fa7	d08f38ff	…and NO Link header, because there is no next page
+e2e/assistant.sh	ff53dce362c1da79	d08f38ff	…and NOT forbidden
+e2e/assistant.sh	279cfb70b77f7522	d08f38ff	…and is itself an RFC 9457 document
+e2e/assistant.sh	1aec2e6ba0769424	d08f38ff	…and kiosk.json itself expires quickly
+e2e/assistant.sh	7365c8fc057fc73b	d08f38ff	…and links the catalog at its versioned url
+e2e/assistant.sh	efb81ff034c053fb	d08f38ff	…and neither does the operator's own 500 — same exception path
+e2e/assistant.sh	69e443dba65ee078	d08f38ff	…and never a 402: the toll went with the gate
+e2e/assistant.sh	09918c8c250f4cf0	d08f38ff	…and the body is no envelope
+e2e/assistant.sh	22d22b6da7976dbb	d08f38ff	…and the boot digest IS the ETag
+e2e/assistant.sh	d81b8d1896d34fed	d08f38ff	…and the module set lives in kiosk.json alone
+e2e/assistant.sh	651f65938444bd59	d08f38ff	…and the route loop actually ran
+e2e/assistant.sh	4d1c6faa12f88aa5	d08f38ff	…and the write never ran
+e2e/assistant.sh	99e541f202237a2c	d08f38ff	…and with --token-command it mints a fresh one and carries on
+e2e/assistant.sh	6bca2bfea6562cb2	d08f38ff	…by \$ref into components.headers
+e2e/assistant.sh	992754f67571b9b3	d08f38ff	…code is module_not_served
+e2e/assistant.sh	abe144a08e285d82	d08f38ff	…detail names the module
+e2e/assistant.sh	6bada86079f88c7e	d08f38ff	…into each of the two queries
+e2e/assistant.sh	52fa1c92a224dd15	d08f38ff	…not a problem document
+e2e/assistant.sh	ddd8021a01baccbc	d08f38ff	…public, one minute at the bare path
+e2e/assistant.sh	4dd6e4bdab26ea40	d08f38ff	…status restates the HTTP status
+e2e/assistant.sh	5fe2e13e122c3fec	d08f38ff	…the catalog is the body itself
+e2e/assistant.sh	17a6a3b925163d46	d08f38ff	…the events array carries this origin's topic and payment_setup
+e2e/assistant.sh	a44e3a4f72bd6a57	d08f38ff	…title is the code's, not the incident's
+e2e/assistant.sh	f616315f74fab8eb	d08f38ff	…while a ROOT discovery surface carries none of them
+e2e/assistant.sh	b993275ea6622f13	d08f38ff	…while an identity-scoped 200 keeps private, no-store
+e2e/assistant.sh	ad9e4f15916df873	d08f38ff	…while the same request with a bad token is still 401
+e2e/assistant.sh	f1636056fbcf93c1	d08f38ff	…with no Allow on it
+e2e/assistant.sh	18d2cd878d48540b	d08f38ff	…with no code to branch on
 e2e/fixtures/bookings_controller.rb	30ed27acbc6cfcd6	d8208b47	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
 e2e/fixtures/bookings_controller.rb	55790f84c5e0843f	d8208b47	# controller may declare BOTH kinds: `my_appointments` is a query
 e2e/fixtures/bookings_controller.rb	e36d833ef9bfe902	d8208b47	Appointment.own.order(:id)
@@ -1010,14 +1010,14 @@ kiosk-server/app/controllers/kiosk/server/auth_controller.rb	0a1244f50f31a73e	d8
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	07cb305eb3126bb0	d8208b47	def link
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	c883ff6ae18af688	d8208b47	identity = Kiosk.configuration.user_idp&.verify(request)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	33ba4eb13eb2d508	d8208b47	pow    = PowGate.proofs_from_header(
-kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	528c528a45f3b2bf	dirty	# The public discovery documents at the host root, all rendered by
-kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	d64ed0e3812de6be	dirty	class DiscoveryController < ::ActionController::API
-kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	e6e66e56c553e70c	dirty	render json: WellKnown.agents_json(base_url: request.base_url)
-kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	efba52591ea89474	dirty	render json: WellKnown.api_catalog(base_url: request.base_url),
-kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	87fb370253870a33	dirty	render json: WellKnown.ard(base_url: request.base_url)
-kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	ed4dfd9e50c8980d	dirty	render json: WellKnown.oauth_authorization_server(base_url: request.base_url)
-kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	49b44db9c8ee9059	dirty	render plain: WellKnown.agents_txt(base_url: request.base_url),
-kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	80db7d7d31044ba9	dirty	render plain: WellKnown.auth_md(base_url: request.base_url),
+kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	528c528a45f3b2bf	d08f38ff	# The public discovery documents at the host root, all rendered by
+kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	d64ed0e3812de6be	d08f38ff	class DiscoveryController < ::ActionController::API
+kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	e6e66e56c553e70c	d08f38ff	render json: WellKnown.agents_json(base_url: request.base_url)
+kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	efba52591ea89474	d08f38ff	render json: WellKnown.api_catalog(base_url: request.base_url),
+kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	87fb370253870a33	d08f38ff	render json: WellKnown.ard(base_url: request.base_url)
+kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	ed4dfd9e50c8980d	d08f38ff	render json: WellKnown.oauth_authorization_server(base_url: request.base_url)
+kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	49b44db9c8ee9059	d08f38ff	render plain: WellKnown.agents_txt(base_url: request.base_url),
+kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	80db7d7d31044ba9	d08f38ff	render plain: WellKnown.auth_md(base_url: request.base_url),
 kiosk-server/app/controllers/kiosk/server/kyc_attestation_controller.rb	e872cfe940fe585e	d8208b47	class KycAttestationController < ::ActionController::API
 kiosk-server/app/controllers/kiosk/server/oauth_registration_controller.rb	f77f604f48e9d426	d8208b47	ClientRegistration.call(
 kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	1c59a591fb58ec7b	d8208b47	DeviceCodeGrant.pay_toll!(device_code, proofs)
@@ -1196,20 +1196,20 @@ kiosk-server/lib/kiosk/server/schemas/binding.schema.json	63d7b6213371465a	d8208
 kiosk-server/lib/kiosk/server/verb_registry.rb	d1dae4cdb2720c8e	d8208b47	          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
 kiosk-server/lib/kiosk/server/verb_wire.rb	8b05aaed37814ca4	d8208b47	PowGate.gate(
 kiosk-server/lib/kiosk/server/verb_wire.rb	6e1cbb37368dd1d6	d8208b47	pow = PowGate.proofs_from_header(
-kiosk-server/lib/kiosk/server/well_known.rb	31056551b65684dc	dirty	          - **Identity assertion (ID-JAG)** — not supported (planned).
-kiosk-server/lib/kiosk/server/well_known.rb	f6075ff9fe61fcd0	dirty	# The discovery documents — kiosk.json, agents.txt, agents.json, the OAuth
-kiosk-server/lib/kiosk/server/well_known.rb	f4d7bcf6f21972f9	dirty	# as pure functions of one configuration and the request's base URL, so they
-kiosk-server/lib/kiosk/server/well_known.rb	31056551b65684dc	dirty	**Identity assertion (ID-JAG)** — not supported (planned).
-kiosk-server/lib/kiosk/server/well_known.rb	11227a6154977658	dirty	AGENTS_STANDARD = 'https://agents-txt.com'
-kiosk-server/lib/kiosk/server/well_known.rb	1ac8622452388f86	dirty	AUTHORIZATION = { protocols: %w[oauth2], discovery: '/.well-known/oauth-authorization-server' }.freeze
-kiosk-server/lib/kiosk/server/well_known.rb	0dcb00599c8d87d4	dirty	def self.agent_skills_index(config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	8964a2e04c0a91ca	dirty	def self.agents_json(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	47e654c96b142590	dirty	def self.agents_txt(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	f4e7e1cc57b331ea	dirty	def self.api_catalog(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	9dc3b12cbd363791	dirty	def self.ard(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	52c9be74957c52b7	dirty	def self.auth_md(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	86b648818418e031	dirty	def self.build(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	3e9f92373e36a252	dirty	def self.oauth_authorization_server(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	31056551b65684dc	d08f38ff	          - **Identity assertion (ID-JAG)** — not supported (planned).
+kiosk-server/lib/kiosk/server/well_known.rb	f6075ff9fe61fcd0	d08f38ff	# The discovery documents — kiosk.json, agents.txt, agents.json, the OAuth
+kiosk-server/lib/kiosk/server/well_known.rb	f4d7bcf6f21972f9	d08f38ff	# as pure functions of one configuration and the request's base URL, so they
+kiosk-server/lib/kiosk/server/well_known.rb	31056551b65684dc	d08f38ff	**Identity assertion (ID-JAG)** — not supported (planned).
+kiosk-server/lib/kiosk/server/well_known.rb	11227a6154977658	d08f38ff	AGENTS_STANDARD = 'https://agents-txt.com'
+kiosk-server/lib/kiosk/server/well_known.rb	1ac8622452388f86	d08f38ff	AUTHORIZATION = { protocols: %w[oauth2], discovery: '/.well-known/oauth-authorization-server' }.freeze
+kiosk-server/lib/kiosk/server/well_known.rb	0dcb00599c8d87d4	d08f38ff	def self.agent_skills_index(config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	8964a2e04c0a91ca	d08f38ff	def self.agents_json(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	47e654c96b142590	d08f38ff	def self.agents_txt(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	f4e7e1cc57b331ea	d08f38ff	def self.api_catalog(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	9dc3b12cbd363791	d08f38ff	def self.ard(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	52c9be74957c52b7	d08f38ff	def self.auth_md(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	86b648818418e031	d08f38ff	def self.build(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	3e9f92373e36a252	d08f38ff	def self.oauth_authorization_server(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/wire_rendering.rb	eed1046165ec1aa7	d8208b47	def render_wire_error(error)
 kiosk-server/lib/kiosk/skill_link.rb	773b402b8865ec9c	d8208b47	module SkillLink
 kiosk-server/lib/kiosk/skill_link.rb	2f25bba9003f3313	d8208b47	response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk", #{API_CATALOG}))
@@ -1354,23 +1354,23 @@ kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	14018c87d069bc9a	
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	d90633719f61d4a9	d8208b47	offers no way to set min_client: kiosk-core states it
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	79819eb71996f5ff	d8208b47	reads the PEM of an Ed25519 key, and refuses an RSA key
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	854689657da2336f	d8208b47	refuses a list without EdDSA first, or with another algorithm
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	8a71574181ba8fd3	dirty	answers 304 to If-None-Match on the current digest
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	86203f39beae2a0a	dirty	does NOT fall back to user_idp — KYC is an agent-only surface
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	b1982a5d8eb08e61	dirty	emits no Vary even when the request negotiates content
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	41d31a5205ae45f4	dirty	it 'refuses a valid token sent as a Bearer token, naming the DPoP scheme' do
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	1272bb60affb70e2	dirty	passes a request with a scope on to client authentication: the scope is ignored
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	2e573604afce752c	dirty	records the named anonymized attributes an attestation carries
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	7a8d01469f198e87	dirty	rejects a role not among the configured roles with 400 invalid_request
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	b0b90a3c074f85c8	dirty	rejects a role the provider DOES declare — the escalation, not a typo
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	c143af563cf99785	dirty	returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	60384e6fb93cd73b	dirty	returns 400 BadRequest (not 500) for an EMPTY body on an authenticated request
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	d0f9bde3dfeb0b28	dirty	returns 400 BadRequest for a valid JSON object missing the kyc_jws field
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	d2fc40528f265e02	dirty	returns 400 bad_request (not 500) for INVALID JSON on a verb POST
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	42955505aab80e93	dirty	returns 400 bad_request (not 500) for a non-object JSON body on a verb POST
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	6bf28e67f3939e35	dirty	returns 401 for a foreign token under the zero-config default (the bundled idp)
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	9d58372214641ddd	dirty	serves ?v=<digest> immutable, and a stale ?v= short-lived
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	e1751ee83bfda1c4	dirty	serves GET /kiosk/schema with no credential whatsoever
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	52124501e2084fa3	dirty	…and a token it cannot verify changes nothing, because it is not read
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	8a71574181ba8fd3	d08f38ff	answers 304 to If-None-Match on the current digest
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	86203f39beae2a0a	d08f38ff	does NOT fall back to user_idp — KYC is an agent-only surface
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	b1982a5d8eb08e61	d08f38ff	emits no Vary even when the request negotiates content
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	41d31a5205ae45f4	d08f38ff	it 'refuses a valid token sent as a Bearer token, naming the DPoP scheme' do
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	1272bb60affb70e2	d08f38ff	passes a request with a scope on to client authentication: the scope is ignored
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	2e573604afce752c	d08f38ff	records the named anonymized attributes an attestation carries
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	7a8d01469f198e87	d08f38ff	rejects a role not among the configured roles with 400 invalid_request
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	b0b90a3c074f85c8	d08f38ff	rejects a role the provider DOES declare — the escalation, not a typo
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	c143af563cf99785	d08f38ff	returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	60384e6fb93cd73b	d08f38ff	returns 400 BadRequest (not 500) for an EMPTY body on an authenticated request
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	d0f9bde3dfeb0b28	d08f38ff	returns 400 BadRequest for a valid JSON object missing the kyc_jws field
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	d2fc40528f265e02	d08f38ff	returns 400 bad_request (not 500) for INVALID JSON on a verb POST
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	42955505aab80e93	d08f38ff	returns 400 bad_request (not 500) for a non-object JSON body on a verb POST
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	6bf28e67f3939e35	d08f38ff	returns 401 for a foreign token under the zero-config default (the bundled idp)
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	9d58372214641ddd	d08f38ff	serves ?v=<digest> immutable, and a stale ?v= short-lived
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	e1751ee83bfda1c4	d08f38ff	serves GET /kiosk/schema with no credential whatsoever
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	52124501e2084fa3	d08f38ff	…and a token it cannot verify changes nothing, because it is not read
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	efbec6a86f56d287	d8208b47	captures the public key the ceremony will bind
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	2ed018841ddafce5	d8208b47	computes expires_at as now + expires_in
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	4d2f00d3bd683d71	d8208b47	defaults expires_in to the canonical 900s (15 min)
@@ -1398,26 +1398,26 @@ kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	9419fabe7d5ff867
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	bdc84c060911329c	d8208b47	redirects an unauthenticated HTML request to the sign-in path (302) and stores return-to
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	b8ec98eb9bf86a9e	d8208b47	says so plainly when the provider gives the approver no role
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	3a8745f88edb4878	d8208b47	shows the consent panel with key fingerprint and requested-at for a live code
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	7b0fb47e7c466529	dirty	carries only registered directives with registered or x- identifiers
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	5fb7333d447e04d6	dirty	describe 'GET /agents.txt' do
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	4711ab125326b842	dirty	emits no Vary on any of them, negotiated or not
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	23e96ea6b3da7005	dirty	it 'returns 200 application/json byte-identical to WellKnown.build_json' do
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	5d1237fcc8d22df2	dirty	it 'serves the four pointer documents public, one minute' do
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	1f8a501e14a5df99	dirty	returns 200 application/json + CORS, valid against the agents.json v1.0 schema
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	23e96ea6b3da7005	dirty	returns 200 application/json byte-identical to WellKnown.build_json
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	7eabbfef9ae162ea	dirty	returns 200 application/linkset+json (RFC 9727), valid against RFC 9264, with its Link header
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	c454209146a1b1ff	dirty	returns 200 text/markdown with the auth.md body + CORS
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	b48469b5bebbceb3	dirty	returns the RFC 8414 metadata, its endpoints on this origin
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	fcfc05703c70daf2	dirty	returns the index, valid against Agent Skills Discovery v0.2.0
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	de71f3b91acfd5b8	dirty	returns the manifest, valid against the ARD v0.91 schema
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	5d1237fcc8d22df2	dirty	serves the four pointer documents public, one minute
-kiosk-server/spec/kiosk/server/dpop_spec.rb	6ab944abb5d6150c	dirty	accepts a proof of the registered key with no ath
-kiosk-server/spec/kiosk/server/dpop_spec.rb	bb0bac4763768d8c	dirty	accepts an ES256 proof of a P-256 key at an operator that accepts ES256
-kiosk-server/spec/kiosk/server/dpop_spec.rb	25f30d6bb4dea0be	dirty	refuses a proof that its Ed25519 key signed under alg RS256 or ES256
-kiosk-server/spec/kiosk/server/dpop_spec.rb	c72d725c8bcd25d7	dirty	refuses a proof that its P-256 key signed under alg EdDSA at an operator that accepts ES256
-kiosk-server/spec/kiosk/server/dpop_spec.rb	19f5a058bf61280f	dirty	refuses an ES256 proof of a P-256 key at an operator that accepts EdDSA alone
-kiosk-server/spec/kiosk/server/dpop_spec.rb	5db7dec286bd7899	dirty	refuses an RS256 proof of an RSA key
-kiosk-server/spec/kiosk/server/dpop_spec.rb	510c4c48ecdf1df6	dirty	refuses no proof, a proof of another key, and a proof for another method
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	7b0fb47e7c466529	d08f38ff	carries only registered directives with registered or x- identifiers
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	5fb7333d447e04d6	d08f38ff	describe 'GET /agents.txt' do
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	4711ab125326b842	d08f38ff	emits no Vary on any of them, negotiated or not
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	23e96ea6b3da7005	d08f38ff	it 'returns 200 application/json byte-identical to WellKnown.build_json' do
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	5d1237fcc8d22df2	d08f38ff	it 'serves the four pointer documents public, one minute' do
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	1f8a501e14a5df99	d08f38ff	returns 200 application/json + CORS, valid against the agents.json v1.0 schema
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	23e96ea6b3da7005	d08f38ff	returns 200 application/json byte-identical to WellKnown.build_json
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	7eabbfef9ae162ea	d08f38ff	returns 200 application/linkset+json (RFC 9727), valid against RFC 9264, with its Link header
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	c454209146a1b1ff	d08f38ff	returns 200 text/markdown with the auth.md body + CORS
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	b48469b5bebbceb3	d08f38ff	returns the RFC 8414 metadata, its endpoints on this origin
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	fcfc05703c70daf2	d08f38ff	returns the index, valid against Agent Skills Discovery v0.2.0
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	de71f3b91acfd5b8	d08f38ff	returns the manifest, valid against the ARD v0.91 schema
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	5d1237fcc8d22df2	d08f38ff	serves the four pointer documents public, one minute
+kiosk-server/spec/kiosk/server/dpop_spec.rb	6ab944abb5d6150c	d08f38ff	accepts a proof of the registered key with no ath
+kiosk-server/spec/kiosk/server/dpop_spec.rb	bb0bac4763768d8c	d08f38ff	accepts an ES256 proof of a P-256 key at an operator that accepts ES256
+kiosk-server/spec/kiosk/server/dpop_spec.rb	25f30d6bb4dea0be	d08f38ff	refuses a proof that its Ed25519 key signed under alg RS256 or ES256
+kiosk-server/spec/kiosk/server/dpop_spec.rb	c72d725c8bcd25d7	d08f38ff	refuses a proof that its P-256 key signed under alg EdDSA at an operator that accepts ES256
+kiosk-server/spec/kiosk/server/dpop_spec.rb	19f5a058bf61280f	d08f38ff	refuses an ES256 proof of a P-256 key at an operator that accepts EdDSA alone
+kiosk-server/spec/kiosk/server/dpop_spec.rb	5db7dec286bd7899	d08f38ff	refuses an RS256 proof of an RSA key
+kiosk-server/spec/kiosk/server/dpop_spec.rb	510c4c48ecdf1df6	d08f38ff	refuses no proof, a proof of another key, and a proof for another method
 kiosk-server/spec/kiosk/server/eddsa_spec.rb	25902eaa6a443b5e	d8208b47	gives the RFC 8037 A.3 thumbprint of the public key
 kiosk-server/spec/kiosk/server/eddsa_spec.rb	28a0dfdb8dacb176	d8208b47	signs the RFC 8037 A.4 JWS byte for byte
 kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	c9609e27f0b81176	d8208b47	boots with no role vocabulary and no default — nothing was made mandatory
@@ -1432,23 +1432,23 @@ kiosk-server/spec/kiosk/server/engine_default_role_configuration_spec.rb	456da10
 kiosk-server/spec/kiosk/server/engine_default_role_configuration_spec.rb	a49da5d0a961aa85	d8208b47	refuses a configuration that names no default role
 kiosk-server/spec/kiosk/server/engine_default_role_configuration_spec.rb	7ea71ff22570c2bf	d8208b47	refuses a default that is not one of the declared roles
 kiosk-server/spec/kiosk/server/engine_filtered_parameters_spec.rb	b694974c35d68c3a	d8208b47	'kyc_jws' => 'the KYC attestation (§12)'
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	1c7b93b30560a3fe	dirty	a declared query reaches the VERB endpoint
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	3933db819f899edd	dirty	a routing 404 UNDER the mount carries all three
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a0fc2ca1ac5ba8e5	dirty	accepts a token only on the origin that minted it
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a1c5e2479fcd58b5	dirty	an unhandled 500 UNDER the mount carries all three
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	cc4effb7a70747ab	dirty	answers #{line} with a 501 module_not_served problem document
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	e8826add31b4b302	dirty	answers a name nobody registered the same ordinary 404
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	349d14ccaf89231c	dirty	answers the OTHER method on that same verb an ordinary routing 404
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a0b9f280dece2bc6	dirty	answers the schema_url of kiosk.json with the same document as the bare GET schema
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	adc6fd728065d985	dirty	leaves the ROOT-served discovery documents bare — they are outside the mount
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a1d4b340d008f415	dirty	publishes all five auth URLs and no binding capability
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	1631b47160e49540	dirty	reports itself mounted
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	c4f2bb3366613476	dirty	routes the RESERVED `pay` into WireController (401 problem, not 404)
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	5e9c3838d1644ef6	dirty	serves JWKS under the mount, stamped by the auto-injected middleware
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	3e745ff0adda6b2c	dirty	stamps every path UNDER the mount — success and refusal alike
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	e5bf554a9f628172	dirty	the HOST's own route outside the mount carries none — on a 200
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	9eb9826ea008599b	dirty	…and none on a root-level routing 404
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	5c0fc4ba37fd1ad9	dirty	…and none on the host's own 500, which is the same exception path
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	1c7b93b30560a3fe	d08f38ff	a declared query reaches the VERB endpoint
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	3933db819f899edd	d08f38ff	a routing 404 UNDER the mount carries all three
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a0fc2ca1ac5ba8e5	d08f38ff	accepts a token only on the origin that minted it
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a1c5e2479fcd58b5	d08f38ff	an unhandled 500 UNDER the mount carries all three
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	cc4effb7a70747ab	d08f38ff	answers #{line} with a 501 module_not_served problem document
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	e8826add31b4b302	d08f38ff	answers a name nobody registered the same ordinary 404
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	349d14ccaf89231c	d08f38ff	answers the OTHER method on that same verb an ordinary routing 404
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a0b9f280dece2bc6	d08f38ff	answers the schema_url of kiosk.json with the same document as the bare GET schema
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	adc6fd728065d985	d08f38ff	leaves the ROOT-served discovery documents bare — they are outside the mount
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a1d4b340d008f415	d08f38ff	publishes all five auth URLs and no binding capability
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	1631b47160e49540	d08f38ff	reports itself mounted
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	c4f2bb3366613476	d08f38ff	routes the RESERVED `pay` into WireController (401 problem, not 404)
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	5e9c3838d1644ef6	d08f38ff	serves JWKS under the mount, stamped by the auto-injected middleware
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	3e745ff0adda6b2c	d08f38ff	stamps every path UNDER the mount — success and refusal alike
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	e5bf554a9f628172	d08f38ff	the HOST's own route outside the mount carries none — on a 200
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	9eb9826ea008599b	d08f38ff	…and none on a root-level routing 404
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	5c0fc4ba37fd1ad9	d08f38ff	…and none on the host's own 500, which is the same exception path
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	5d2dbf7d4f4e4d52	0412a8ab	draws JWKS under the mount
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	ceeee028a03c381d	0412a8ab	draws NO /query and NO /run: the 0.3 multiplexed pair is gone (T-074 = A)
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	cc1c8baafa7ffef4	0412a8ab	draws payment_setup and the page the human returns to from the provider's setup
@@ -1728,10 +1728,10 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	6dd5ddfc1c029a2a	d8208b4
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	31bf25fa40d75caf	d8208b47	refuses an open mandate, and a payment mandate in the checkout place
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a7262502d73ff2c2	d8208b47	takes the currency in lower case, the spelling the spending cap counts
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	af4a04a7dc1664db	d8208b47	verifies the mandates the key signs ES256
-kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	033262e682aeb8f5	dirty	answers 401 invalid_client for a missing or refused client assertion
-kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	5698432646fdfe8d	dirty	ignores a scope: the row carries no requested role
-kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	95cc5fa0939e0658	dirty	opens a claim ceremony for the client, with the client's key on the row
-kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	ce8fa339ad93b2ab	dirty	refuses a role, also an empty one: the assistant does not choose its role
+kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	033262e682aeb8f5	d08f38ff	answers 401 invalid_client for a missing or refused client assertion
+kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	5698432646fdfe8d	d08f38ff	ignores a scope: the row carries no requested role
+kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	95cc5fa0939e0658	d08f38ff	opens a claim ceremony for the client, with the client's key on the row
+kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	ce8fa339ad93b2ab	d08f38ff	refuses a role, also an empty one: the assistant does not choose its role
 kiosk-server/spec/kiosk/server/oauth_error_spec.rb	f5fc45fdfa6419e4	d8208b47	answers {error, error_description}, 401 for invalid_client and 400 for every other code
 kiosk-server/spec/kiosk/server/oauth_error_spec.rb	5347278198fd17c7	d8208b47	refuses a code outside the vocabulary
 kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	54d3d79aade905c1	d8208b47	answers 201 with the client information, which no cache keeps
@@ -1953,35 +1953,35 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	4ba3550ee50cf6f1	0412a8ab
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	6f3e9c39b9b74995	0412a8ab	…while GET <endpoint>/schema, which IS public, says so — the control
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	3ed4704b3d1aa755	d8208b47	is refused AT CONFIGURATION TIME, not at the first tolled write
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	87bc7884ae09fe9d	d8208b47	is that the gate vocabulary names the write kind :run, not :action
-kiosk-server/spec/kiosk/server/well_known_spec.rb	fe68afe719a2ca4a	dirty	advertises OAuth 2.0 with the RFC 8414 metadata as its discovery document
-kiosk-server/spec/kiosk/server/well_known_spec.rb	309556b42a73d6c9	dirty	advertises an empty capability set when nothing is registered
-kiosk-server/spec/kiosk/server/well_known_spec.rb	2891edbc2916e3db	dirty	advertises kiosk-core's MIN_CLIENT as min_client
-kiosk-server/spec/kiosk/server/well_known_spec.rb	248da5e884b4bb60	dirty	advertises the binding endpoints also where the origin serves no binding (they answer 501)
-kiosk-server/spec/kiosk/server/well_known_spec.rb	be7fa0423e8c3a3b	dirty	advertises the computed module names (schema/queries/actions/pay)
-kiosk-server/spec/kiosk/server/well_known_spec.rb	15bd4014b1a77a12	dirty	advertises the configured issuer
-kiosk-server/spec/kiosk/server/well_known_spec.rb	f54e36f61c16b586	dirty	advertises the configured owner
-kiosk-server/spec/kiosk/server/well_known_spec.rb	f179813b6ac49aa2	dirty	advertises the document schema version
-kiosk-server/spec/kiosk/server/well_known_spec.rb	c236cfda50841b11	dirty	advertises the five auth endpoints under the same origin, in this order
-kiosk-server/spec/kiosk/server/well_known_spec.rb	9b633674c3935d05	dirty	advertises the skill descriptor when skill_sha256 is set
-kiosk-server/spec/kiosk/server/well_known_spec.rb	11c2deb95b66531e	dirty	computes the endpoint as base_url + mount_path
-kiosk-server/spec/kiosk/server/well_known_spec.rb	ce579e044f26da72	dirty	declares no payment protocol, even where the operator serves pay
-kiosk-server/spec/kiosk/server/well_known_spec.rb	eca96189540cbb8b	dirty	declares no payments block, even where the operator serves pay
-kiosk-server/spec/kiosk/server/well_known_spec.rb	7b00d88604b60cce	dirty	documents the OAuth error vocabulary of the /oauth/* endpoints
-kiosk-server/spec/kiosk/server/well_known_spec.rb	05c083413812a236	dirty	follows the canonical auth.md section order
-kiosk-server/spec/kiosk/server/well_known_spec.rb	e3417805512eaf1d	dirty	hyperlinks EVERY registered verb, at its own endpoint, unauthenticated
-kiosk-server/spec/kiosk/server/well_known_spec.rb	77b7b8987b5e2636	dirty	links every registered verb, then pay, as an item with its method
-kiosk-server/spec/kiosk/server/well_known_spec.rb	a6428f8c7c1bcaac	dirty	links the catalog at its digest-versioned, immutable URL
-kiosk-server/spec/kiosk/server/well_known_spec.rb	ad688a452c758d27	dirty	links the two versioned descriptions from the endpoint
-kiosk-server/spec/kiosk/server/well_known_spec.rb	69529a4d3f292694	dirty	moves that link when the catalog moves — that is the whole mechanism
-kiosk-server/spec/kiosk/server/well_known_spec.rb	1799dc618962ee69	dirty	names OAuth 2.0 by the identifier agents.txt registers for it
-kiosk-server/spec/kiosk/server/well_known_spec.rb	1ac4682b439c29c6	dirty	names the issuer, registration, the token endpoint and the device-code grant
-kiosk-server/spec/kiosk/server/well_known_spec.rb	8bfd73028f009cb9	dirty	never names a registered verb in this companion — pointer, not copy
-kiosk-server/spec/kiosk/server/well_known_spec.rb	125251b46fb23fb6	dirty	never names a registered verb in this document — pointer, not copy
-kiosk-server/spec/kiosk/server/well_known_spec.rb	aeea346567035d9f	dirty	omits the skill block when skill_sha256 is not set
-kiosk-server/spec/kiosk/server/well_known_spec.rb	6d5b9abb64dc1179	dirty	opens with an H1 that names auth.md
-kiosk-server/spec/kiosk/server/well_known_spec.rb	f991665aa0202d36	dirty	respects an overridden skill_url
-kiosk-server/spec/kiosk/server/well_known_spec.rb	bc503c08c4579ddc	dirty	returns a parse-able JSON string
-kiosk-server/spec/kiosk/server/well_known_spec.rb	bd25dcbd8ca23455	dirty	wraps everything under a top-level `kiosk` key
+kiosk-server/spec/kiosk/server/well_known_spec.rb	fe68afe719a2ca4a	d08f38ff	advertises OAuth 2.0 with the RFC 8414 metadata as its discovery document
+kiosk-server/spec/kiosk/server/well_known_spec.rb	309556b42a73d6c9	d08f38ff	advertises an empty capability set when nothing is registered
+kiosk-server/spec/kiosk/server/well_known_spec.rb	2891edbc2916e3db	d08f38ff	advertises kiosk-core's MIN_CLIENT as min_client
+kiosk-server/spec/kiosk/server/well_known_spec.rb	248da5e884b4bb60	d08f38ff	advertises the binding endpoints also where the origin serves no binding (they answer 501)
+kiosk-server/spec/kiosk/server/well_known_spec.rb	be7fa0423e8c3a3b	d08f38ff	advertises the computed module names (schema/queries/actions/pay)
+kiosk-server/spec/kiosk/server/well_known_spec.rb	15bd4014b1a77a12	d08f38ff	advertises the configured issuer
+kiosk-server/spec/kiosk/server/well_known_spec.rb	f54e36f61c16b586	d08f38ff	advertises the configured owner
+kiosk-server/spec/kiosk/server/well_known_spec.rb	f179813b6ac49aa2	d08f38ff	advertises the document schema version
+kiosk-server/spec/kiosk/server/well_known_spec.rb	c236cfda50841b11	d08f38ff	advertises the five auth endpoints under the same origin, in this order
+kiosk-server/spec/kiosk/server/well_known_spec.rb	9b633674c3935d05	d08f38ff	advertises the skill descriptor when skill_sha256 is set
+kiosk-server/spec/kiosk/server/well_known_spec.rb	11c2deb95b66531e	d08f38ff	computes the endpoint as base_url + mount_path
+kiosk-server/spec/kiosk/server/well_known_spec.rb	ce579e044f26da72	d08f38ff	declares no payment protocol, even where the operator serves pay
+kiosk-server/spec/kiosk/server/well_known_spec.rb	eca96189540cbb8b	d08f38ff	declares no payments block, even where the operator serves pay
+kiosk-server/spec/kiosk/server/well_known_spec.rb	7b00d88604b60cce	d08f38ff	documents the OAuth error vocabulary of the /oauth/* endpoints
+kiosk-server/spec/kiosk/server/well_known_spec.rb	05c083413812a236	d08f38ff	follows the canonical auth.md section order
+kiosk-server/spec/kiosk/server/well_known_spec.rb	e3417805512eaf1d	d08f38ff	hyperlinks EVERY registered verb, at its own endpoint, unauthenticated
+kiosk-server/spec/kiosk/server/well_known_spec.rb	77b7b8987b5e2636	d08f38ff	links every registered verb, then pay, as an item with its method
+kiosk-server/spec/kiosk/server/well_known_spec.rb	a6428f8c7c1bcaac	d08f38ff	links the catalog at its digest-versioned, immutable URL
+kiosk-server/spec/kiosk/server/well_known_spec.rb	ad688a452c758d27	d08f38ff	links the two versioned descriptions from the endpoint
+kiosk-server/spec/kiosk/server/well_known_spec.rb	69529a4d3f292694	d08f38ff	moves that link when the catalog moves — that is the whole mechanism
+kiosk-server/spec/kiosk/server/well_known_spec.rb	1799dc618962ee69	d08f38ff	names OAuth 2.0 by the identifier agents.txt registers for it
+kiosk-server/spec/kiosk/server/well_known_spec.rb	1ac4682b439c29c6	d08f38ff	names the issuer, registration, the token endpoint and the device-code grant
+kiosk-server/spec/kiosk/server/well_known_spec.rb	8bfd73028f009cb9	d08f38ff	never names a registered verb in this companion — pointer, not copy
+kiosk-server/spec/kiosk/server/well_known_spec.rb	125251b46fb23fb6	d08f38ff	never names a registered verb in this document — pointer, not copy
+kiosk-server/spec/kiosk/server/well_known_spec.rb	aeea346567035d9f	d08f38ff	omits the skill block when skill_sha256 is not set
+kiosk-server/spec/kiosk/server/well_known_spec.rb	6d5b9abb64dc1179	d08f38ff	opens with an H1 that names auth.md
+kiosk-server/spec/kiosk/server/well_known_spec.rb	f991665aa0202d36	d08f38ff	respects an overridden skill_url
+kiosk-server/spec/kiosk/server/well_known_spec.rb	bc503c08c4579ddc	d08f38ff	returns a parse-able JSON string
+kiosk-server/spec/kiosk/server/well_known_spec.rb	bd25dcbd8ca23455	d08f38ff	wraps everything under a top-level `kiosk` key
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	c084bf520f582691	d8208b47	answers 402 to a CONDITIONAL request — the toll runs before freshness
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	1a75e70b28e0bdb6	d8208b47	answers a per-verb GET the same gate as a problem document, uncacheable
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	e34ef6c9c898ba81	d8208b47	carries WWW-Authenticate: Kiosk-Payment-Setup

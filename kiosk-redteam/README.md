@@ -58,11 +58,9 @@ default.
 
 ## Install
 
-> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
-
 ```ruby
 # Gemfile — a test/CI dependency, not a runtime one
-gem "kiosk-redteam", github: "kiosk-hq/kiosk", group: :development
+gem "kiosk-redteam", group: :development
 ```
 
 The registration toll is real Equihash: the assistant client solves the server's

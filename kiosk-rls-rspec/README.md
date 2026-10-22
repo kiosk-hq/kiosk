@@ -12,11 +12,9 @@ Connects the framework-agnostic journey-test DSL (`kiosk-test-support`) into RSp
 
 ## Install
 
-> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
-
 ```ruby
 group :test do
-  gem "kiosk-rls-rspec", github: "kiosk-hq/kiosk"
+  gem "kiosk-rls-rspec"
 end
 ```
 

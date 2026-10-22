@@ -290,12 +290,10 @@ paid proof sets the count back to zero.
 
 ## Installation
 
-> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
-
 ```ruby
-gem "kiosk-reputation",   github: "kiosk-hq/kiosk"
-gem "kiosk-pow-equihash", github: "kiosk-hq/kiosk"   # default backend
-# gem "kiosk-pow-argon2id", github: "kiosk-hq/kiosk" # legacy Argon2id backend, if you specifically want it
+gem "kiosk-reputation"
+gem "kiosk-pow-equihash"   # default backend
+# gem "kiosk-pow-argon2id" # legacy Argon2id backend, if you specifically want it
 ```
 
 In a Rails app `kiosk-pow-equihash` registers itself as the `equihash`

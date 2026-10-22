@@ -24,13 +24,11 @@ for small edgebits and reduced proofsize only — see Solver section below.
 
 ## Install
 
-> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
-
 This backend is shelved and opt-in (see the note at the top): nothing installs
 it for you.
 
 ```ruby
-gem "kiosk-pow-cuckoo", github: "kiosk-hq/kiosk"
+gem "kiosk-pow-cuckoo"
 ```
 
 The verifier is pure Ruby. Its one runtime dependency is `kiosk-pow`, the

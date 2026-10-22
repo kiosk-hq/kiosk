@@ -12,13 +12,11 @@ memory-bandwidth-bound). What it buys the provider is a few-KB, ~22 ms
 
 ## Install
 
-> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
-
 Default does not mean bundled: neither `kiosk-server` nor `kiosk-all` depends
 on a PoW backend, so an origin that gates on PoW adds this gem itself.
 
 ```ruby
-gem "kiosk-pow-equihash", github: "kiosk-hq/kiosk"
+gem "kiosk-pow-equihash"
 ```
 
 The verifier is pure Ruby. Its one runtime dependency is `kiosk-pow`, the

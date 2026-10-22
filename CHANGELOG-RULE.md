@@ -79,11 +79,10 @@ only thing a reader who installed the gem has, so a gem with no surface change
 carries the one entry that is true — the tree moved and this gem's surface did
 not. Before 1.0 no gem takes a version of its own.
 
-**Which is why 0.5.0 sweeps in everything.** Nothing in this repository has ever
-been tagged or pushed to RubyGems (`SECURITY.md` says so), so 0.5.0 is the FIRST
-release of every gem and everything sitting under `[Unreleased]` when it was cut
-is in it — «Initial skeleton» included, because there was no earlier release for
-it to be in. The root record's `## Before release sections` corpus is the one
+**Which is why 0.5.0 sweeps in everything.** 0.5.0 is the FIRST release of every
+gem, and everything sitting under `[Unreleased]` when it was cut is in it —
+«Initial skeleton» included, because there was no earlier release for it to be
+in. The root record's `## Before release sections` corpus is the one
 exception and stays where it is: those entries deliberately name no version.
 
 The two demo records take no section. A demo ships in no package and carries no version, so a release heading

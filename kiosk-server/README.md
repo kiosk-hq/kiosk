@@ -28,8 +28,6 @@ kiosk-server is a Rails gem: it depends on railties, actionpack, actioncable, ac
 
 ## Install
 
-> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
-
 ### Preconditions
 
 **Rails `~> 8.1`.** This gemspec pins `railties`, `actionpack`, `actioncable`,
@@ -48,13 +46,13 @@ backstop are Postgres; no other database is supported.
 ### The line
 
 ```ruby
-gem "kiosk-server", github: "kiosk-hq/kiosk"
+gem "kiosk-server"
 ```
 
 Or, via the meta-gem:
 
 ```ruby
-gem "kiosk-all", github: "kiosk-hq/kiosk"
+gem "kiosk-all"
 ```
 
 ## Configure

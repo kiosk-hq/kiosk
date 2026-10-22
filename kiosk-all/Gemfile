@@ -7,6 +7,6 @@ gemspec
 gem 'rake', '~> 13.2'
 gem 'rspec', '~> 3.13'
 
-# Local-development overrides — sibling gems haven't shipped to RubyGems yet.
+# The sibling gems come from this checkout, so a change across gems is tested together.
 gem 'kiosk-core',   path: '../kiosk-core'
 gem 'kiosk-server', path: '../kiosk-server'

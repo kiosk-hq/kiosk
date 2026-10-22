@@ -141,13 +141,11 @@ tell them the `nonce` encoding yourself.
 
 ## Installation
 
-> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
-
 A backend gem brings `kiosk-pow` with it. Add it yourself only when you write a
 backend in your own app:
 
 ```ruby
-gem "kiosk-pow", github: "kiosk-hq/kiosk"
+gem "kiosk-pow"
 ```
 
 ## License

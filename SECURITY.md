@@ -32,9 +32,9 @@ looks severe enough that you are not willing to publish it, open an issue that
 describes its shape without the exploit and we will work out where to take it.
 
 **This is the arrangement until 1.0.** Kiosk is pre-1.0, nothing is tagged,
-nothing is on RubyGems, and there is no fleet of installed operators for a
-disclosure race to endanger. That changes at 1.0, and this page changes with
-it — do not read the current channel as permanent.
+and there is no fleet of installed operators for a disclosure race to endanger.
+That changes at 1.0, and this page changes with it — do not read the current
+channel as permanent.
 
 A report is most useful when it carries:
 
@@ -50,10 +50,10 @@ We will credit you in the changelog entry for the fix unless you ask us not to.
 
 ## Which versions get fixes
 
-There is no release tag in this repository and nothing is on RubyGems yet; every
-gem sits on the same `0.6` protocol line and is installed from git. In practice
-that means **the fix lands on `main` and there is no back-port branch to ask
-for.** When releases start, this section says which lines are supported.
+There is no release tag in this repository. Every gem sits on the same `0.6`
+protocol line and is published to RubyGems. **The fix lands on `main` and in
+the next release, and there is no back-port branch to ask for.** From 1.0 this
+section says which lines are supported.
 
 ## What is in scope
 

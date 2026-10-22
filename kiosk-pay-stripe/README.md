@@ -5,14 +5,12 @@ Stripe PSP adapter for [Kiosk](https://kiosk.tech). Implements
 
 ## Install
 
-> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
-
 There is no default PSP — `Kiosk::Configuration#payment_provider` starts `nil`
 — and neither `kiosk-server` nor `kiosk-all` pulls an adapter in, so taking
 payments means adding this one yourself:
 
 ```ruby
-gem "kiosk-pay-stripe", github: "kiosk-hq/kiosk"
+gem "kiosk-pay-stripe"
 ```
 
 Bundler brings the three runtime dependencies with it: `activerecord`,

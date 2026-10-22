@@ -7,7 +7,7 @@ gemspec
 gem 'rake', '~> 13.2'
 gem 'rspec', '~> 3.13'
 
-# Local-development override — kiosk-core hasn't shipped to RubyGems yet.
+# kiosk-core comes from this checkout, so a change across gems is tested together.
 gem 'kiosk-core', path: '../kiosk-core'
 
 # TEST-ONLY Rails. The gem itself has NO Rails runtime dependency (see the

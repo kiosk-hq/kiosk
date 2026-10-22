@@ -4,26 +4,12 @@ Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open
 
 ## Install
 
-**No Kiosk gem is on RubyGems.** MEASURED 2026-09-06: every gem name in the
-tables below answers HTTP 404 from `https://rubygems.org/api/v1/gems/<name>.json`
-against a control of `rails` → HTTP 200; this repository carries no release tag,
-and no gemspec sets `allowed_push_host`. So a bare `gem "kiosk-all"`, and
-`bundle add` of any of these names, do **not** resolve today — **git is the only
-install that works.** This section is where publication status is stated
-**canonically** — the one place either published repository decides it — and
-every install snippet elsewhere points here instead of restating it.
-
-One sentence is copied rather than pointed at, deliberately: the onboarding
-guide on kiosk.tech carries the bolded claim above and a link back to this
-section, because a reader deciding whether to start an integration should not
-have to leave the page to find out the gems are not published. Rewording it
-here means rewording that page too.
-
-The canonical install is one line — the meta-gem, from git:
+Every gem in the tables below is on RubyGems. The canonical install is one
+line, the meta-gem:
 
 ```ruby
 # Gemfile
-gem "kiosk-all", github: "kiosk-hq/kiosk"
+gem "kiosk-all"
 ```
 
 <!-- runbook-foreign: these three lines are pasted into the READER's Rails app, not run here -->
@@ -35,9 +21,7 @@ bin/rails db:migrate
 
 `kiosk-all` is `kiosk-core` + `kiosk-server` — the data plane, and nothing else.
 The RLS backstop, the PoW backends and the IdP/PSP adapters are deliberately
-separate gems you add per stack, each from the same source; `kiosk-all/README.md`
-says which and why. When the gems are published this section is where the
-`github:` qualifier comes off, and the snippets that point here inherit it.
+separate gems you add per stack; `kiosk-all/README.md` says which and why.
 
 ### What an adopting app needs before that line
 
@@ -84,7 +68,7 @@ settled the `alpha` engine underneath it is.
 | `kiosk-core` | Value types, abstract bases, GUC constants, configuration. No Rails dep. | alpha |
 | `kiosk-rls` | Opt-in RLS DSL + migration helpers; declares policies in a migration and compiles them to PostgreSQL DDL | alpha |
 | `kiosk-server` | Rails engine, routes, OAuth client registration and DPoP token endpoint, executor | alpha |
-| `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs core + server — **once the gems are published**; today it is one `github:` line, see [Install](#install) | alpha |
+| `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs core + server | alpha |
 | `kiosk-test-support` | Conformance checks, the assistant-side protocol client and a KYC provider stand-in for tests | alpha |
 
 ### Plugins & adapters

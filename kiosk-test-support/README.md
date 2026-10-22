@@ -17,13 +17,11 @@ Carries the shared pieces of the Kiosk journey-test DSL: the `Journey` module mi
 
 The journey DSL comes with one of the harnesses:
 
-> **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
-
 ```ruby
 group :test do
-  gem "kiosk-rls-rspec", github: "kiosk-hq/kiosk"       # RSpec
+  gem "kiosk-rls-rspec"     # RSpec
   # or
-  gem "kiosk-rls-minitest", github: "kiosk-hq/kiosk"    # Minitest
+  gem "kiosk-rls-minitest"  # Minitest
 end
 ```
 

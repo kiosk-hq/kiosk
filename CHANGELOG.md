@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-22: Every gem README installs its gem from RubyGems.
+
 ## [0.6.5] — 2026-10-22
 
 - 2026-10-22: **Every gem and `API_VERSION` are 0.6.5, matching skill 0.6.5.** `MIN_CLIENT` stays 0.6.0: a 0.6.4 assistant reads no new header.

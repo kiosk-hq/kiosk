@@ -9,7 +9,7 @@ gem 'rake', '~> 13.2'
 gem 'rspec', '~> 3.13'
 gem 'sqlite3', '~> 2.9'
 
-# Local-development override — kiosk-core hasn't shipped to RubyGems yet.
+# kiosk-core comes from this checkout, so a change across gems is tested together.
 gem 'kiosk-core',            path: '../kiosk-core'
 
 # The specs start stripe-mock through kiosk-test-support's launcher; that gem

@@ -4,6 +4,9 @@ class Restaurant < ApplicationRecord
   # Evening seatings, on the hour, on this restaurant's own clock.
   SEATING_HOURS = [19, 20, 21].freeze
 
+  # The days that take bookings, today included.
+  BOOKING_DAYS = 14
+
   has_many :restaurant_tables, dependent: :restrict_with_exception
   has_many :bookings,          dependent: :restrict_with_exception
 
@@ -28,8 +31,8 @@ class Restaurant < ApplicationRecord
     "#{gap} Every date and time here is the restaurant's." if gap
   end
 
-  # The seatings not yet started: tonight's, then the following days'.
-  def upcoming_seatings(days: 2)
+  # The seatings not yet started: tonight's, then those of the following days.
+  def upcoming_seatings(days: BOOKING_DAYS)
     (zone.today...(zone.today + days)).flat_map { |date| SEATING_HOURS.map { seating(date, it) } }.select(&:future?)
   end
 end

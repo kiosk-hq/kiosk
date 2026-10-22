@@ -54,17 +54,16 @@ class Booking < ApplicationRecord
   def seating_upcoming
     return if restaurant.nil? || seating_at.nil?
 
-    upcoming = restaurant.upcoming_seatings
-    return if upcoming.include?(seating_at)
+    return if restaurant.upcoming_seatings.include?(seating_at)
 
-    errors.add(:seating_at, seating_refusal(upcoming))
+    errors.add(:seating_at, seating_refusal)
   end
 
-  def seating_refusal(upcoming)
+  def seating_refusal
     seating = wall_clock(local_seating)
     return "#{seating} has already started; pick an upcoming seating from availability" if seating_at.past?
 
-    "#{seating} is not an upcoming seating; currently #{upcoming.map { wall_clock(it) }.join(', ').presence || 'none'}"
+    "#{seating} is not an upcoming seating; pick one from availability"
   end
 
   def wall_clock(seating) = seating.strftime('%Y-%m-%d %H:%M')

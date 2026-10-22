@@ -20,9 +20,14 @@ class BookingTest < ActiveSupport::TestCase
       assert_empty errors(booking)
       assert_equal ['seating_at 2026-09-01 19:00 has already started; pick an upcoming seating from availability'],
                    errors(booking(seating_at: @restaurant.seating(Date.new(2026, 9, 1), 19)))
-      assert_equal ['seating_at 2026-09-05 20:00 is not an upcoming seating; currently 2026-09-01 20:00, ' \
-                    '2026-09-01 21:00, 2026-09-02 19:00, 2026-09-02 20:00, 2026-09-02 21:00'],
-                   errors(booking(seating_at: @restaurant.seating(Date.new(2026, 9, 5), 20)))
+    end
+  end
+
+  test 'a booking takes a seating of the next two weeks, and none later' do
+    travel_to @restaurant.seating(Date.new(2026, 9, 1), 12) do
+      assert_empty errors(booking(seating_at: @restaurant.seating(Date.new(2026, 9, 8), 20)))
+      assert_equal ['seating_at 2026-09-15 20:00 is not an upcoming seating; pick one from availability'],
+                   errors(booking(seating_at: @restaurant.seating(Date.new(2026, 9, 15), 20)))
     end
   end
 

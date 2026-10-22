@@ -2,6 +2,9 @@
 
 # The filters of an availability search. Blank filters nothing.
 class TableSearch
+  # The days a search with no date shows: today and tomorrow.
+  UNDATED_DAYS = 2
+
   include ActiveModel::Model
   include ActiveModel::Attributes
 
@@ -39,7 +42,7 @@ class TableSearch
 
   # The restaurant's upcoming seatings on the requested date and time.
   def seatings(restaurant)
-    restaurant.upcoming_seatings
+    restaurant.upcoming_seatings(days: date.blank? ? UNDATED_DAYS : Restaurant::BOOKING_DAYS)
               .select { |seating| date.blank? || seating.to_date.iso8601 == date }
               .select { |seating| time.blank? || seating.strftime('%H:%M') == time }
   end
@@ -57,7 +60,7 @@ class TableSearch
     dates = Restaurant.select(:timezone).distinct.flat_map(&:upcoming_seatings).map { it.to_date.iso8601 }.uniq.sort
     return if dates.include?(date)
 
-    errors.add(:date, "#{date.inspect} has no upcoming seatings; try one of #{listed(dates)}")
+    errors.add(:date, "#{date.inspect} has no upcoming seatings; pick a date from #{dates.first} to #{dates.last}")
   end
 
   def listed(values) = values.join(', ').presence || 'none'

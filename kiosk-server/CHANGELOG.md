@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.7] — 2026-10-22
+
+- 2026-10-22: Version 0.6.7, the tree cut that matches skill 0.6.7.
+
 ## [0.6.6] — 2026-10-22
 
 - 2026-10-22: The gate counts the tolled calls of each account in `tolled_calls`; the assistants of one account share the count. A binding adds the previous account's count.

@@ -12,7 +12,7 @@ no payment** (a reservation takes no money).
 
 Seatings are **rolling-current**: `availability` computes the upcoming evening
 seatings relative to *now* on **each restaurant's own clock** (`restaurants.timezone`;
-past ones filtered, rolling to tomorrow), so it is never stale — yet the tables are **finite** and a fully-booked
+past ones filtered), for today and the next 13 days, so it is never stale — yet the tables are **finite** and a fully-booked
 seating is honestly **sold out** (availability legitimately empty for it).
 
 The home page is **protocol-primary**: it tells a visitor (and an assistant
@@ -35,7 +35,8 @@ an action is a `POST` whose arguments are the JSON body, and a success body IS
 the result (no envelope).
 
 - `GET /kiosk/availability?party_size=2[&neighborhood=&time=&date=]` — open tables
-  **across all restaurants** for the upcoming seatings that seat the party; each
+  **across all restaurants** for the upcoming seatings that seat the party (`date`
+  takes today or one of the next 13 days; with no `date`, today and tomorrow); each
   row carries `restaurant_table_id`, `seating_at` (ISO 8601 with the restaurant's
   offset) and `seating_label` (`Sun 18 Oct, 20:00 (Europe/Lisbon)`, the line to
   read to a human). When the caller's `Kiosk-Timezone` is on another clock than

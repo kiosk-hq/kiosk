@@ -17,8 +17,8 @@ class RestaurantTest < ActiveSupport::TestCase
     # 22:30 on the 14th in Lisbon, 07:30 on the 15th in Sydney.
     travel_to Time.utc(2026, 6, 14, 21, 30) do
       assert_equal %w[2026-06-15T19:00:00+01:00 2026-06-15T20:00:00+01:00 2026-06-15T21:00:00+01:00],
-                   lisbon.upcoming_seatings.map(&:iso8601)
-      assert_equal 6, sydney.upcoming_seatings.size
+                   lisbon.upcoming_seatings.first(3).map(&:iso8601)
+      assert_equal([39, 42], [lisbon, sydney].map { it.upcoming_seatings.size })
     end
   end
 
@@ -26,7 +26,7 @@ class RestaurantTest < ActiveSupport::TestCase
     lisbon = Restaurant.new(timezone: 'Europe/Lisbon')
 
     travel_to lisbon.seating(Date.new(2026, 9, 1), 20) do
-      assert_equal(%w[21:00 19:00 20:00 21:00], lisbon.upcoming_seatings.map { it.strftime('%H:%M') })
+      assert_equal(%w[21:00 19:00 20:00 21:00], lisbon.upcoming_seatings(days: 2).map { it.strftime('%H:%M') })
     end
   end
 

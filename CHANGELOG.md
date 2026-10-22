@@ -11,6 +11,16 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.7] — 2026-10-22
+
+- 2026-10-22: **Every gem and `API_VERSION` are 0.6.7, matching skill 0.6.7.** `MIN_CLIENT` stays 0.6.0: the protocol is the protocol of 0.6.6.
+
+- 2026-10-22: **Every demo and the engine default pin `skill-v0.6.7.md`**, which says which answers count toward the toll and gives the proof time as a range.
+
+- 2026-10-22: atablefor takes bookings for today and the next 13 days. An availability search with no date shows today and tomorrow.
+
+- 2026-10-22: The getgrocery and atablefor pages describe the toll every demo asks: 9 to 20 s per proof on one Apple M3 laptop core, to register and on every 10th call.
+
 ## [0.6.6] — 2026-10-22
 
 - 2026-10-22: **Every gem and `API_VERSION` are 0.6.6, matching skill 0.6.6.** `MIN_CLIENT` stays 0.6.0: a 0.6.5 assistant answers a 402 on any call.

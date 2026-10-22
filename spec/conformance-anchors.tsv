@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2086 anchors.
+# 2088 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -345,7 +345,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.6'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.7'
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -354,7 +354,7 @@ kiosk-demo-atablefor/app/controllers/home_controller.rb	include Kiosk::SkillLink
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def book_table
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def cancel_booking
 kiosk-demo-atablefor/app/models/booking.rb	Kiosk::Visit.record!(user_id: booking.user_id, value_cents: booking.restaurant.average_spend_cents * booking.party_size)
-kiosk-demo-atablefor/app/models/restaurant.rb	def upcoming_seatings(days: 2)
+kiosk-demo-atablefor/app/models/restaurant.rb	def upcoming_seatings(days: BOOKING_DAYS)
 kiosk-demo-atablefor/app/models/table_search.rb	.where(restaurant_tables: { capacity: party_size.. })
 kiosk-demo-atablefor/app/views/home/index.html.erb	        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
 kiosk-demo-atablefor/app/views/home/index.html.erb	      <h1>Point your AI assistant here — it books the table.</h1>
@@ -1928,7 +1928,9 @@ kiosk-server/spec/kiosk/server/signing_key_spec.rb	refuses an RSA key and a P-25
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	adds the calls of the assistant's previous account to its new account at a binding
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	answers 402 on the 10th call of an account with no spend, and the paid proof lets that call through
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	answers 402 on the 20th call at half the cap of recent spend, and on none at the cap
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	counts a call that the operation itself refuses
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	counts a fresh unbound assistant alone, on the account it got at registration
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	counts no call refused before the toll: a refused token or arguments that do not match the schema
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	counts no spend older than the window
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	gives each of the calls made at the same time its own number, so no two of them skip the proof
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	keeps the count when the assistant gets a new access token

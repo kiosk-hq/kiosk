@@ -18,7 +18,8 @@ module Kiosk
                    time: { type: 'string', enum: Restaurant.seating_times,
                            description: "Seating time on the restaurant's clock." },
                    date: { type: 'string', format: 'date',
-                           description: "Seating date on the restaurant's clock." }
+                           description: "Seating date on the restaurant's clock, today or one of the next 13 days. " \
+                                        'With no date, the answer holds today and tomorrow.' }
                  },
                  required: ['party_size']
     output_schema type: 'array',

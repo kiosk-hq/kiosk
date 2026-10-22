@@ -17,13 +17,13 @@ class TableSearchTest < ActiveSupport::TestCase
                  errors(neighborhood: 'alfama')
   end
 
-  test 'a date filter names the upcoming days, once each' do
+  test 'a date filter takes a day of the next two weeks, and names that range' do
     lisbon = Time.find_zone!('Europe/Lisbon')
 
     travel_to lisbon.local(2026, 9, 1, 19, 30) do
-      assert_empty errors(date: '2026-09-02')
-      assert_equal ['date "2026-09-03" has no upcoming seatings; try one of 2026-09-01, 2026-09-02'],
-                   errors(date: '2026-09-03')
+      assert_empty errors(date: '2026-09-08')
+      assert_equal ['date "2026-09-15" has no upcoming seatings; pick a date from 2026-09-01 to 2026-09-14'],
+                   errors(date: '2026-09-15')
     end
   end
 
@@ -34,6 +34,8 @@ class TableSearchTest < ActiveSupport::TestCase
       seatings = TableSearch.new(date: '2026-09-02', time: '20:00').seatings(restaurant)
 
       assert_equal ['2026-09-02T20:00:00+01:00'], seatings.map(&:iso8601)
+      assert_equal ['2026-09-08T20:00:00+01:00'],
+                   TableSearch.new(date: '2026-09-08', time: '20:00').seatings(restaurant).map(&:iso8601)
       assert_equal 6, TableSearch.new.seatings(restaurant).size
     end
   end

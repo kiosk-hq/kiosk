@@ -158,4 +158,34 @@ RSpec.describe Kiosk::Server::TolledCalls do
 
     expect(threads.map(&:value).sort).to eq([1, 2, 3, 4])
   end
+
+  describe 'the answers that count' do
+    let(:access_token) { client_credentials(agent.id, key:)[2].fetch('access_token') }
+
+    before do
+      declare_query('menu', input_schema: { type: 'object', properties: { size: { type: 'integer' } } }) do
+        raise Kiosk::Server::Errors::NotFound, 'no such dish'
+      end
+    end
+
+    # The status of `GET /kiosk/menu<query>` with `token`.
+    def get_menu(query = '', token: access_token)
+      path = '/kiosk/menu'
+      url = "#{OauthClients::ISSUER}#{path}"
+      env = Rack::MockRequest.env_for("#{url}#{query}", **dpop_env(token, method: 'GET', url:, key:))
+      Kiosk::Server::Routing::VerbRoute.new(:query, 'menu').call(env).first
+    end
+
+    def count = conn.select_value(%(SELECT calls_since_proof FROM "#{OauthClients::SCHEMA}".tolled_calls WHERE user_id = '#{human}'))
+
+    it 'counts no call refused before the toll: a refused token or arguments that do not match the schema' do
+      expect([get_menu(token: 'not-a-token'), get_menu('?size=large')]).to eq([401, 400])
+      expect(count).to be_nil
+    end
+
+    it 'counts a call that the operation itself refuses' do
+      expect(get_menu).to eq(404)
+      expect(count).to eq(1)
+    end
+  end
 end

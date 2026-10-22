@@ -4,8 +4,10 @@ require 'securerandom'
 require 'kiosk/reputation'
 require_relative '../../support/postgres'
 
-# Writes one settled checkout for a customer, as the pay path records it.
+# The tables of the spec origin, and its accounts and assistants.
 module ReputationFactorsSpecHelpers
+  include SettlementRows
+
   def create_tables
     Kiosk.configure { |c| c.schema = schema }
     SpecPostgres.recreate_schema(schema)
@@ -22,25 +24,6 @@ module ReputationFactorsSpecHelpers
   # A new account, and a live assistant on it.
   def account = conn.select_value(%(INSERT INTO "#{users}" (id) VALUES (gen_random_uuid()) RETURNING id))
   def assistant(account) = conn.select_value(%(INSERT INTO "#{schema}".agents (user_id, issuer) VALUES ('#{account}', 'i') RETURNING id))
-
-  # The settlement's PSP reference.
-  def settle(cents, at:, account: user, agent: SecureRandom.uuid)
-    checkout = insert_checkout(account, agent, cents)
-    reference = "pi_#{SecureRandom.hex(4)}"
-    conn.execute(<<~SQL.squish)
-      INSERT INTO "#{schema}".settlements (checkout_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
-      VALUES ('#{checkout}', '#{account}', '#{agent}', 'i', '#{reference}', #{cents}, 'eur', '#{at.utc.iso8601}')
-    SQL
-    reference
-  end
-
-  def insert_checkout(account, agent, cents)
-    reference = SecureRandom.uuid
-    conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{schema}".checkout_mandates (reference, checkout_hash, user_id, agent_id, issuer, line_items, total_amount_cents, currency, expires_at, sd_jwt)
-      VALUES ('#{reference}', '#{reference}', '#{account}', '#{agent}', 'i', '[]', #{cents}, 'eur', now(), 'j') RETURNING id
-    SQL
-  end
 end
 
 # A PSP that refunds every request, as the Stripe adapter answers.
@@ -115,15 +98,6 @@ RSpec.describe Kiosk::Server::ReputationFactors do
     settle(40_00, at: Time.current - 3600, account: other, agent: assistant(other))
 
     expect(factors.settled_purchases_cents).to eq(0)
-  end
-
-  it 'counts what an assistant of the customer paid on its own account before a binding moved it here' do
-    own = account
-    agent = assistant(own)
-    settle(40_00, at: Time.current - 3600, account: own, agent:)
-    conn.execute(%(UPDATE "#{schema}".agents SET user_id = '#{user}' WHERE id = '#{agent}'))
-
-    expect([factors.settled_purchases_count, factors.settled_purchases_cents]).to eq([1, 40_00])
   end
 
   it 'leaves the factors empty for a policy with no window' do

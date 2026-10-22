@@ -38,8 +38,10 @@ module Kiosk
       end
 
       # 002: `agents` (`spending_cap_cents`: NULL unlimited, 0 disabled; a cap
-      # has its `spending_cap_currency`), `agent_tokens`, `agent_mappings`, and
-      # `tolled_calls`, each account's tolled calls since its last paid proof.
+      # has its `spending_cap_currency`), `agent_tokens`, `agent_mappings`,
+      # `tolled_calls`, each account's tolled calls since its last paid proof,
+      # and `assistant_accounts`, the accounts that registration opened and the
+      # account that each one merged into at its first binding.
       def identity_tables_sql(schema: nil, user_id_type: nil, user_table: 'users')
         schema ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -90,6 +92,14 @@ module Kiosk
             user_id            #{col_type} PRIMARY KEY REFERENCES "#{user_table}"(id) ON DELETE CASCADE,
             calls_since_proof  bigint NOT NULL DEFAULT 0
           );
+
+          CREATE TABLE IF NOT EXISTS "#{schema}".assistant_accounts (
+            user_id      #{col_type} PRIMARY KEY REFERENCES "#{user_table}"(id) ON DELETE CASCADE,
+            merged_into  #{col_type} REFERENCES "#{user_table}"(id) ON DELETE CASCADE,
+            merged_at    timestamptz
+          );
+          CREATE INDEX IF NOT EXISTS idx_assistant_accounts_merged_into
+            ON "#{schema}".assistant_accounts (merged_into) WHERE merged_into IS NOT NULL;
         DDL
       end
 

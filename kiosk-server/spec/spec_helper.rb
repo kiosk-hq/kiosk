@@ -43,6 +43,7 @@ require_relative 'support/memory_revocation_store'
 require_relative 'support/memory_event_store'
 require_relative 'support/verb_route_call'
 require_relative 'support/checkout_payment'
+require_relative 'support/settlement_rows'
 require_relative 'support/dpop_agent'
 require_relative 'support/postgres'
 

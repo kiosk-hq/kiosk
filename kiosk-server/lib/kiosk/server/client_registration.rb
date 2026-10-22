@@ -69,7 +69,11 @@ module Kiosk
       def register(config, key, role)
         pem = AssistantKey.to_pem(key)
         conn = ::ActiveRecord::Base.lease_connection
-        conn.transaction(requires_new: true) { insert_agent(conn, config, [create_assistant_account(config, pem), pem], role) }
+        conn.transaction(requires_new: true) do
+          account = create_assistant_account(config, pem)
+          AssistantAccounts.record!(account)
+          insert_agent(conn, config, [account, pem], role)
+        end
         Client.with_key(key)
       rescue ::ActiveRecord::RecordNotUnique
         Client.with_key(key)

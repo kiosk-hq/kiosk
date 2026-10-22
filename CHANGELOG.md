@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.8] — 2026-10-22
+
+- 2026-10-22: **Every gem and `API_VERSION` are 0.6.8, matching skill 0.6.8, and every demo and the engine default pin `skill-v0.6.8.md`.** `MIN_CLIENT` stays 0.6.0.
+
+- 2026-10-22: The first binding merges the assistant account into the human's account, so its settlements and visits count in the recent spend, also after an unlink. Demos migrate 20261022100025.
+
 ## [0.6.7] — 2026-10-22
 
 - 2026-10-22: **Every gem and `API_VERSION` are 0.6.7, matching skill 0.6.7.** `MIN_CLIENT` stays 0.6.0: the protocol is the protocol of 0.6.6.

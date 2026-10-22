@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.8] — 2026-10-22
+
+- 2026-10-22: The first binding merges the assistant account into the human's account: the recent spend counts its settlements and visits, also after an unlink. New table `assistant_accounts`.
+- 2026-10-22: Version 0.6.8, the tree cut that matches skill 0.6.8.
+
 ## [0.6.7] — 2026-10-22
 
 - 2026-10-22: Version 0.6.7, the tree cut that matches skill 0.6.7.

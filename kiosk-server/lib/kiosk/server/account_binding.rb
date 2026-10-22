@@ -3,7 +3,8 @@
 module Kiosk
   module Server
     # Binds a registered client to a human's account: the client keeps its
-    # agent_id and reputation and takes the role of its new holder.
+    # agent_id and reputation and takes the role of its new holder. The first
+    # binding merges the assistant account into the human's account.
     module AccountBinding
       module_function
 
@@ -61,12 +62,19 @@ module Kiosk
           transition = client.user_id.to_s != user_id.to_s
           conn.transaction do
             Rows.rebind(conn, config.schema, client.id, user_id, role)
-            TolledCalls.carry!(from: client.user_id, to: user_id) if transition
+            carry_reputation(client.user_id, user_id) if transition
             claimed(config, client.id, client.user_id, user_id) if transition && config.assistant_claimed
           end
           # The old holder's tokens die (§6.3). The IdP dates new mints at the
           # watermark, so a token minted after this survives it.
           revoke_tokens(config, client.id)
+        end
+
+        # The new account adds the previous account's count of tolled calls,
+        # and the first binding merges the assistant account into it.
+        def carry_reputation(from, to)
+          TolledCalls.carry!(from:, to:)
+          AssistantAccounts.merge!(from:, into: to)
         end
 
         # §6.3: the tokens of the previous holder stop.

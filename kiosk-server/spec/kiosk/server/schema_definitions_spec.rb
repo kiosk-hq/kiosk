@@ -80,6 +80,11 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(sql).to include('PRIMARY KEY (provider, external_id)')
     end
 
+    it 'creates `assistant_accounts`: each account that registration opened, and the account it merged into' do
+      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".assistant_accounts))
+      expect(sql).to include('merged_into  uuid REFERENCES "users"(id) ON DELETE CASCADE')
+    end
+
     it 'uses the configured user_table name' do
       out = described_class.identity_tables_sql(user_table: 'members')
       expect(out).to include(%(REFERENCES "members"(id)))

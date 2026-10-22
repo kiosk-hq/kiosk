@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_22_100024) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_22_100025) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -263,6 +263,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100024) do
     t.check_constraint "spending_cap_currency ~ '^[a-z]{3}$'::text", name: "agents_spending_cap_currency_check"
   end
 
+  create_table "kiosk.assistant_accounts", primary_key: "user_id", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "merged_into"
+    t.timestamptz "merged_at"
+    t.index ["merged_into"], name: "idx_assistant_accounts_merged_into", where: "(merged_into IS NOT NULL)"
+  end
+
   create_table "kiosk.checkout_mandates", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.text "reference", null: false
     t.uuid "user_id", null: false
@@ -391,6 +397,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100024) do
   add_foreign_key "kiosk.agent_mappings", "kiosk.agents", name: "agent_mappings_agent_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.agent_tokens", "kiosk.agents", name: "agent_tokens_agent_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.agents", "public.users", name: "agents_user_id_fkey", on_delete: :cascade
+  add_foreign_key "kiosk.assistant_accounts", "public.users", column: "merged_into", name: "assistant_accounts_merged_into_fkey", on_delete: :cascade
+  add_foreign_key "kiosk.assistant_accounts", "public.users", name: "assistant_accounts_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.kyc_attributes", "public.users", name: "kyc_attributes_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.kyc_requests", "public.users", name: "kyc_requests_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.payment_mandates", "kiosk.checkout_mandates", name: "payment_mandates_checkout_mandate_id_fkey", on_delete: :cascade

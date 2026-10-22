@@ -705,6 +705,9 @@ COPIES = {
   'db/migrate/20261022100024_move_kiosk_tolled_calls_to_accounts.rb' => {
     rule: :identical, why: "Moves the count of tolled calls from the assistant to its account, as kiosk:install's tolled_calls table has it."
   },
+  'db/migrate/20261022100025_create_kiosk_assistant_accounts.rb' => {
+    rule: :identical, why: "Records the assistant accounts and their merges, as kiosk:install's assistant_accounts table has it."
+  },
   'db/migrate/20261018100012_create_solid_cable_messages.rb' => {
     rule: :identical, why: "Action Cable's pubsub queue, on the primary database."
   },

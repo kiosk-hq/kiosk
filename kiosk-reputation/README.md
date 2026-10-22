@@ -264,9 +264,10 @@ end
 
 The engine supplies the factors. For a policy that answers `#within` (a window
 in seconds), it fills `settled_purchases_count` and `settled_purchases_cents`
-from the customer's settlements and recorded visits in that window. The
-settlements that an assistant made before a binding moved it to the account
-count too. It fills `calls_since_proof` with the account's tolled calls since
+from the customer's settlements and recorded visits in that window. The first
+binding of an assistant merges its assistant account into the customer's
+account, so the settlements and visits of the assistant account count too, also
+after an unlink. It fills `calls_since_proof` with the account's tolled calls since
 its last paid proof, this call included. For any other policy the factors are
 `Factors.empty`. A paid proof sets the count back to zero.
 

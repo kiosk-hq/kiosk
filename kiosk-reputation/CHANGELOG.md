@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.8] — 2026-10-22
+
+- 2026-10-22: The README says that the spend of an assistant account counts for the account it merged into at its first binding.
+- 2026-10-22: Version 0.6.8, the tree cut that matches skill 0.6.8.
+
 ## [0.6.7] — 2026-10-22
 
 - 2026-10-22: Version 0.6.7, the tree cut that matches skill 0.6.7.

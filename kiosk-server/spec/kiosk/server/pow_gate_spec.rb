@@ -964,80 +964,19 @@ RSpec.describe Kiosk::Server::PowGate do
     end
   end
 
-  # One paid toll buys every call made with that access token, until it expires.
-  describe 'the session toll' do
+  # The policy decides on each call: a paid proof pays for its own call only.
+  describe 'a paid proof' do
     include PowGateSpecHelpers
-
-    def token_identity(jti) = build_identity(claims: { jti: jti, exp: Time.now.to_i + 3600 })
-
-    def pay_once
-      challenge = issue_challenge_via_gate
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' },
-                           pow: [{ challenge: challenge, nonce: solve_nonce(challenge) }])
-    end
 
     before { configure_with_policy(always_challenge_policy) }
 
-    it 'lets every later call with the paid token through, without a proof' do
-      @identity = token_identity('t-1')
-      pay_once
-
-      expect(described_class.gate(identity: identity, command: 'run', body: { name: 'order' }, pow: nil)).to eq(:proceed)
-    end
-
-    it 'tolls a new token again' do
-      @identity = token_identity('t-1')
-      pay_once
-      @identity = token_identity('t-2')
+    it 'buys no later call made with the same access token' do
+      @identity = build_identity(claims: { jti: 't-1', exp: Time.now.to_i + 3600 })
+      challenge = issue_challenge_via_gate
+      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' },
+                           pow: [{ challenge: challenge, nonce: solve_nonce(challenge) }])
 
       expect(issue_challenge_via_gate).to include(:id, :sig)
-    end
-
-    it 'tolls every call of a caller with no token id' do
-      pay_once
-
-      expect(issue_challenge_via_gate).to include(:id, :sig)
-    end
-  end
-
-  # The recent-spend policy draws once per customer and token lifetime: every call
-  # made with one token, and every token minted again in that lifetime, meets the
-  # outcome of the first call.
-  describe 'the recent-spend draw' do
-    include PowGateSpecHelpers
-
-    let(:hour) { Time.now.to_i - (Time.now.to_i % 3600) }
-
-    def outcome(user, jti: "#{user}-token", iat: hour)
-      identity = build_identity(user_id: user, claims: { jti: jti, iat: iat, exp: iat + 3600 })
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
-    rescue Kiosk::Server::Errors::PowRequired
-      :owes
-    end
-
-    def customers = Array.new(100) { |i| "u-#{i}" }
-
-    before do
-      Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
-      configure_with_policy(Kiosk::Reputation::Policies::RecentSpend.new(within: 7 * 86_400, cap: 100))
-      spend = Kiosk::Reputation::Factors.empty.with(settled_purchases_cents: 25_00)
-      allow(Kiosk::Server::ReputationFactors).to receive(:for).and_return(spend)
-    end
-
-    it 'keeps the outcome of a token for every later call made with it' do
-      expect(customers.map { |user| Array.new(3) { outcome(user) }.uniq.size }.uniq).to eq([1])
-    end
-
-    it 'excuses a token and keeps it excused' do
-      excused = customers.find { outcome(it) == :proceed }
-
-      expect(Array.new(5) { outcome(excused) }).to all(eq(:proceed))
-    end
-
-    it 'asks the toll of every token minted again in the lifetime of an owed token' do
-      owed = customers.find { outcome(it) == :owes }
-
-      expect(Array.new(20) { |i| outcome(owed, jti: "remint-#{i}", iat: hour + i) }).to all(eq(:owes))
     end
   end
 end

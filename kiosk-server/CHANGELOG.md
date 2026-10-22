@@ -12,6 +12,12 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-10-22
+
+- 2026-10-22: Version 0.6.3, the tree cut that matches skill 0.6.3.
+- 2026-10-22: The gate counts each assistant's tolled calls in `agents.calls_since_proof`; a paid proof sets it to zero. A paid proof no longer buys the rest of the access token.
+- 2026-10-22: `kiosk:install` writes `agents.calls_since_proof`. An installed origin adds it with a migration of its own.
+
 ## [0.6.2] — 2026-10-22
 
 - 2026-10-22: Version 0.6.2, the tree cut that matches skill 0.6.2.

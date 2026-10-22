@@ -801,8 +801,8 @@ RSpec.describe Kiosk::Server::VerbController do
     end
   end
 
-  # The toll is paid once per access token: one proof, then every call with that token.
-  describe 'the session toll' do
+  # A paid proof pays for its own call; the policy decides on every later one.
+  describe 'the toll on a call' do
     before do
       Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
       Kiosk.configure do |c|
@@ -815,21 +815,11 @@ RSpec.describe Kiosk::Server::VerbController do
 
     after { Kiosk::Reputation::Backends.reset! }
 
-    it 'asks the first call for a proof and serves every later call of the token without one' do
-      status, body = call_verb(:get, 'salons')
-      expect(status).to eq(402)
+    it 'serves the call that pays and asks the next call of the same token again' do
+      _, body = call_verb(:get, 'salons')
 
       expect(call_verb(:get, 'salons', pow: proof_for(body[:challenges].first)).first).to eq(200)
-      expect(call_verb(:get, 'salons').first).to eq(200)
-      expect(call_verb(:post, 'book', body: '{}').first).to eq(200)
-    end
-
-    it 'asks a new token again' do
-      _, body = call_verb(:get, 'salons')
-      call_verb(:get, 'salons', pow: proof_for(body[:challenges].first))
-      @token = nil
-
-      expect(call_verb(:get, 'salons').first).to eq(402)
+      expect(call_verb(:post, 'book', body: '{}').first).to eq(402)
     end
   end
 end

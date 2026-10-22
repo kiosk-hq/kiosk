@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-22: A migration adds `kiosk.agents.calls_since_proof`; an assistant pays a proof on every 10th call with no recent spend.
 - 2026-10-21: A migration drops `kiosk.auth_challenges`; `agents.txt` names `Authorization: oauth2`.
 - 2026-10-20: `availability` rows carry `timezone_note` when the caller's declared `Kiosk-Timezone` is on another clock than the restaurant.
 

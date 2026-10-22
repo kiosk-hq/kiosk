@@ -46,9 +46,9 @@ nothing to withhold — this document is a POINTER and the catalog is the
 CONTRACT, and a second copy of the verb list would be a second source of truth
 for it. **Registration is
 always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
-new agent key pays one solve to register. After that, each access token (one
-hour) pays one more solve by chance: 1 with no recent spend, 0 from 100 euros
-paid here in the past week.
+new agent key pays one solve to register. After that, the assistant pays one
+more solve on every 10th call with no recent spend, on every 20th at 50 euros
+paid here in the past week, and on none from 100 euros.
 
 ## The human channel
 

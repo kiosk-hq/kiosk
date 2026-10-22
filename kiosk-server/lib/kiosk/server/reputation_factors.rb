@@ -3,16 +3,19 @@
 module Kiosk
   module Server
     # The reputation inputs the engine knows itself: what the customer paid
-    # here and kept paid, and the visits the operator recorded, within a policy's window.
+    # here and kept paid, and the visits the operator recorded, within a policy's
+    # window; and the assistant's tolled calls since its last paid proof.
     module ReputationFactors
       module_function
 
       # Empty factors unless the policy names a window (`#within`, in seconds).
+      # Reading the factors counts this call as one more tolled call.
       def for(identity:, policy:)
         return ::Kiosk::Reputation::Factors.empty unless policy.respond_to?(:within) && identity&.user_id
 
         count, cents = recent_spend(identity.user_id, Time.current - policy.within.to_i)
-        ::Kiosk::Reputation::Factors.empty.with(settled_purchases_count: count, settled_purchases_cents: cents)
+        ::Kiosk::Reputation::Factors.new(settled_purchases_count: count, settled_purchases_cents: cents,
+                                         calls_since_proof: TolledCalls.count!(identity.agent_id))
       end
 
       # Settlements and visits of this customer since `since`: their count and their cents.

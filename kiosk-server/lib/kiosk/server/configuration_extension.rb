@@ -35,7 +35,7 @@ module Kiosk
         attr_writer :skill_url
 
         def skill_url
-          @skill_url ||= 'https://kiosk.tech/skill-v0.6.2.md'
+          @skill_url ||= 'https://kiosk.tech/skill-v0.6.3.md'
         end
         attr_accessor :skill_sha256
 
@@ -310,7 +310,7 @@ module Kiosk
           LAZY_STORE_MUTEX.synchronize { @pow_spent_store ||= Kiosk::Server::PowSpentStores::ActiveRecord.new }
       end
 
-      # Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
+      # Seconds an access token lives. Default 3600.
       attr_writer :access_token_ttl
 
       def access_token_ttl

@@ -22,7 +22,7 @@ BEA   = Kiosk::TestHelpers::Person.new(SERVER, email: 'bea@example.com', passwor
 
 DIEGO_UUID = DIEGO.user_id
 
-# The assistants' calls; each pays the proof-of-work toll its access token owes.
+# The assistants' calls; each pays the proof-of-work toll the operator asks.
 WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
 # Each assistant's token with the key it is bound to: the protocol signs a DPoP proof per call.

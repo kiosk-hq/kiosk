@@ -46,8 +46,9 @@ nothing to withhold — this document is a POINTER and the catalog is the
 CONTRACT, and a second copy of the verb list would be a second source of truth
 for it. Registration is priced
 with one Equihash proof-of-work at the gem's default n=168 k=7 — the "I'm not a
-fly-by bot" cost. After that, each access token (one hour) pays one more proof
-by chance: 1 with no recent spend, 0 from 100 euros paid here in the past week.
+fly-by bot" cost. After that, the assistant pays one more proof on every 10th
+call with no recent spend, on every 20th at 50 euros paid here in the past
+week, and on none from 100 euros.
 Renting a motorcycle
 additionally demands a signed KYC attestation carrying the required boolean
 attributes; the operator records only the booleans, never the underlying

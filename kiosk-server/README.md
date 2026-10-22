@@ -181,10 +181,11 @@ in cents and a currency. The engine refuses a `pay` that passes the cap, or a
 
 ### Proof of work
 
-Set a policy and the engine tolls the first call of each access token; the
-token then calls freely until it expires (`access_token_ttl`, 3600 seconds by
-default). With the ready-made policy, the more the customer spent here, the
-smaller the chance that a session pays the toll:
+Set a policy and the engine asks it on each query, action and `pay`. The
+engine counts each assistant's tolled calls since its last paid proof, and a
+new access token keeps that count. With the ready-made policy, an assistant
+pays a proof on every 10th call, and the more its customer spent here, the
+more calls pass between two proofs:
 
 ```ruby
 Kiosk.configure do |c|

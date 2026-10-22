@@ -694,6 +694,9 @@ COPIES = {
   'db/migrate/20261021100022_drop_kiosk_auth_challenges.rb' => {
     rule: :identical, why: 'Drops kiosk.auth_challenges, which kiosk:install does not make, from a database that has it.'
   },
+  'db/migrate/20261022100023_add_calls_since_proof_to_kiosk_agents.rb' => {
+    rule: :identical, why: "Gives agents the count of tolled calls since the last proof, as kiosk:install's agents table has it."
+  },
   'db/migrate/20261018100012_create_solid_cable_messages.rb' => {
     rule: :identical, why: "Action Cable's pubsub queue, on the primary database."
   },

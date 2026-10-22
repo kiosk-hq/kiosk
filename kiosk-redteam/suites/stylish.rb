@@ -35,7 +35,7 @@ def owner_session
                                                                 .sign_in!(email: OWNER_EMAIL, password: DEMO_PASSWORD)
 end
 
-# The assistants' calls; each pays the proof-of-work toll its access token owes.
+# The assistants' calls; each pays the proof-of-work toll the operator asks.
 WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
 # The assistant side of the binding ceremonies: registration, client assertions, tokens.

@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-10-22
+
+- 2026-10-22: Version 0.6.3, the tree cut that matches skill 0.6.3.
+- 2026-10-22: `RecentSpend` tolls every Nth call, N = ceil(10 / share), share = max(0, (cap - spend) / cap). `Factors` carries `calls_since_proof`; the draw per token lifetime is gone.
+
 ## [0.6.2] — 2026-10-22
 
 - 2026-10-22: Version 0.6.2, the tree cut that matches skill 0.6.2.

@@ -6,10 +6,10 @@ require 'json'
 module Kiosk
   module Server
     # The proof-of-work toll, in front of every verb that reaches the executor.
-    # It is paid once per access token: after one paid toll, every call made
-    # with that token proceeds until the token expires. With no
-    # `reputation_policy` it returns `:proceed` and touches nothing;
-    # `kiosk-reputation` is required only when a policy is set.
+    # The policy decides on each call; a paid proof sets the assistant's count of
+    # tolled calls back to zero. With no `reputation_policy` it returns
+    # `:proceed` and touches nothing; `kiosk-reputation` is required only when a
+    # policy is set.
     module PowGate
       module_function
 
@@ -26,37 +26,16 @@ module Kiosk
       def gate(identity:, command:, body:, pow:, method: 'POST', verb: nil) # rubocop:disable Metrics/ParameterLists -- WireController and the specs pass these six by name
         config = Kiosk.configuration
         policy = config.reputation_policy
-        return :proceed if policy.nil? || session_paid?(config, identity)
+        return :proceed if policy.nil?
 
-        secret = pow_secret!(config)
-        spec   = toll_for(policy, identity, command.to_sym)
+        secret  = pow_secret!(config)
+        factors = ReputationFactors.for(identity:, policy:)
+        spec    = policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
         return :proceed if spec.nil?
 
         fp = request_fingerprint(method: method, verb: verb || command, body: body)
         PowToll.new(spec: spec, fingerprint: fp, secret: secret, config: config)
-               .collect!(pow).tap { paid(config, identity) }
-      end
-
-      def session_paid?(config, identity)
-        session = session_id(identity)
-        !session.nil? && config.pow_spent_store.spent?(session)
-      end
-
-      # Records the token's session as paid.
-      def paid(config, identity)
-        session = session_id(identity)
-        config.pow_spent_store.mark_spent(session, identity.claims[:exp]) if session
-      end
-
-      # The access token a toll pays for, by its `jti`, or nil for a caller without one.
-      def session_id(identity)
-        claims = identity&.claims || {}
-        "session:#{claims[:jti]}" if claims[:jti] && claims[:exp]
-      end
-
-      # The policy's toll for this caller and verb, or nil for none.
-      def toll_for(policy, identity, verb)
-        policy.challenge_for(identity: identity, verb: verb, factors: ReputationFactors.for(identity:, policy:))
+               .collect!(pow).tap { TolledCalls.reset!(identity.agent_id) if factors.calls_since_proof }
       end
 
       def pow_secret!(config)

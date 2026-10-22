@@ -119,8 +119,8 @@ The stories in `test/stories/` show it:
 - **Not only commerce** — the capabilities are `schema`, `queries` and `actions`
   only: no `pay`, no `events`; the catalogue is public, and its examples satisfy their own schemas.
 - **Registration toll** — registering without a proof is **402 `pow_required`**,
-  even on a board that sells nothing. A board records no spend, so each access
-  token (one hour) also pays one proof on its first call.
+  even on a board that sells nothing. A board records no spend, so an
+  assistant also pays one proof on every 10th call.
 - **Account binding** — the RFC 8628 device grant binds an assistant to the
   human who approves it; two assistants linked to one household share its
   listings, and unlinking one revokes its tokens — including one minted in the

@@ -226,21 +226,19 @@ end
 
 The base `Policy` class returns `nil` for every request (never challenge).
 
-### `Policies::RecentSpend` — one toll per session, by a chance that recent spend lowers
+### `Policies::RecentSpend` — a toll on every Nth call, and spend makes N larger
 
 ```ruby
 c.reputation_policy = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
 ```
 
-A session pays one proof at the Equihash gem's default params, with the chance
-`max(0, (cap - spend) / cap)`. `spend` is what the customer spent here within
-`within`, and `cap` is in whole currency units. So a customer with no spend
-pays in every session, and a customer who spent `cap` or more pays in none.
-The draw is made once for each customer in each token lifetime. Token
-lifetimes are consecutive spans of `exp - iat` seconds from the Unix epoch, and
-the token's `iat` selects its span. So every call made with one token, and every
-new token issued to the customer in the same span, meets the same outcome.
-An operator that takes no payment records each fulfilled visit with
+An assistant pays one proof at the Equihash gem's default params on every Nth
+tolled call: `N = ceil(10 / share)`, with `share = max(0, (cap - spend) / cap)`.
+`spend` is what the customer spent here within `within`, and `cap` is in whole
+currency units. So with no spend N is 10; at 25, 50 and 75 percent of the cap
+it is 14, 20 and 40; at `cap` or more no call pays. The engine counts the
+calls of each assistant since its last paid proof, and a new access token keeps
+the count. An operator that takes no payment records each fulfilled visit with
 `Kiosk::Visit.record!(user_id:, value_cents:)`, and the visit counts as spend.
 A refund through `Kiosk::Server::PaymentClaim#refund` is not spend.
 
@@ -265,12 +263,10 @@ end
 
 The engine supplies the factors. For a policy that answers `#within` (a window
 in seconds), it fills `settled_purchases_count` and `settled_purchases_cents`
-from the customer's own settlements and recorded visits in that window; for any
-other policy the factors are `Factors.empty`.
-
-The gate tolls once per access token: after one paid toll, every call made
-with that token proceeds until the token expires (`c.access_token_ttl`,
-default 3600 seconds).
+from the customer's own settlements and recorded visits in that window, and
+`calls_since_proof` with the assistant's tolled calls since its last paid proof,
+this call included; for any other policy the factors are `Factors.empty`. A
+paid proof sets the count back to zero.
 
 ## Honesty / guardrails
 

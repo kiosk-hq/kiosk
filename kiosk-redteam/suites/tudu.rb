@@ -15,7 +15,7 @@ PASSWORD = 'tudu-demo-password'
 
 require 'kiosk/user_identity_providers/devise_session'
 
-# WIRE carries an assistant's call and pays the proof-of-work toll its access token owes.
+# WIRE carries an assistant's call and pays the proof-of-work toll the operator asks.
 # SESSION is the human's browser, for the binding ceremony.
 WIRE    = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)

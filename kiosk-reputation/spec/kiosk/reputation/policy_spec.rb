@@ -9,7 +9,7 @@ RSpec.describe Kiosk::Reputation::Policy do
   describe Kiosk::Reputation::Factors do
     describe '.empty' do
       it 'returns a Factors instance with all-nil fields' do
-        expect(described_class.empty.to_h).to eq(settled_purchases_count: nil, settled_purchases_cents: nil)
+        expect(described_class.empty.to_h).to eq(settled_purchases_count: nil, settled_purchases_cents: nil, calls_since_proof: nil)
       end
     end
   end

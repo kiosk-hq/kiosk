@@ -61,7 +61,8 @@ RSpec.describe Kiosk::Server::ReputationFactors do
 
   after { SpecPostgres.drop_schema(schema) }
 
-  def factors = described_class.for(identity: build_identity(user_id: user), policy: policy)
+  # A caller with no assistant row: these examples count spend, not calls.
+  def factors = described_class.for(identity: build_identity(actor: 'human', user_id: user), policy: policy)
 
   it "sums the customer's settlements and recorded visits inside the window" do
     settle(40_00, at: Time.current - 3600)

@@ -11,6 +11,16 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-10-22
+
+- 2026-10-22: **Every gem and `API_VERSION` are 0.6.3, matching skill 0.6.3.** `MIN_CLIENT` stays 0.6.0: a 0.6.2 assistant handles a 402 on any call.
+
+- 2026-10-22: **Every demo and the engine default pin `skill-v0.6.3.md`**, which says that the operator counts the tolled calls and that a new token keeps the count.
+
+- 2026-10-22: The toll counts calls: `RecentSpend` asks a proof on every Nth tolled call of an assistant, N = ceil(10 / share). It replaces one proof per access token by chance.
+
+- 2026-10-22: The seven operator demos add `kiosk.agents.calls_since_proof`, each assistant's tolled calls since its last paid proof.
+
 ## [0.6.2] — 2026-10-22
 
 - 2026-10-22: **Every gem and `API_VERSION` are 0.6.2, matching skill 0.6.2.** `MIN_CLIENT` stays 0.6.0: the protocol does not change.

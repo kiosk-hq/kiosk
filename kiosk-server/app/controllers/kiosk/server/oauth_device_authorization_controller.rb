@@ -24,15 +24,16 @@ module Kiosk
 
       private
 
-      # Refused, not ignored: the role is the approving human's, and the
-      # assistant does not choose it.
+      # A `role` is refused: the role is the approving human's, and the
+      # assistant does not choose it. A `scope` is ignored (RFC 6749 Section
+      # 3.3): an assistant gets another role only when a human who holds that
+      # role binds it to their account, or through the identity provider.
       def role_problem
-        offending = %i[role scope].find { |name| params.key?(name) }
-        return unless offending
+        return unless params.key?(:role)
 
-        "#{offending} is not accepted here — an assistant does not choose its own role. " \
-          "The role of a bound assistant is the approving account holder's own role, " \
-          "read from this provider's identity system when they approve at the verify page."
+        'role is not accepted here: an assistant does not choose its own role. ' \
+          'The role of a bound assistant is the role of the account holder who approves, ' \
+          "and this provider's identity system gives it at the verify page."
       end
 
       def device_authorization(result)

@@ -436,7 +436,8 @@ RSpec.describe Kiosk::Server::WireController do
       declare_query('probe')
       status, body = route(:query, 'probe', probe_env('HTTP_AUTHORIZATION' => "Bearer #{agent_token}"))
       expect_problem(status, body, http: 401, code: 'unauthenticated')
-      expect(last_headers['WWW-Authenticate']).to eq('DPoP algs="EdDSA"')
+      expect(last_headers['WWW-Authenticate'])
+        .to eq('DPoP algs="EdDSA", resource_metadata="https://demo.example/.well-known/oauth-protected-resource"')
     end
 
     it 'answers 401 to a signed-in session with no access token: the protocol takes no cookie' do
@@ -550,10 +551,10 @@ RSpec.describe Kiosk::Server::WireController do
         expect(body[:error_description]).to include('role is not accepted here')
       end
 
-      it 'rejects an unknown role passed via the OAuth-standard scope param' do
+      it 'passes a request with a scope on to client authentication: the scope is ignored' do
         status, body = request_device_authorization('client_id' => 'kiosk-cli', 'scope' => 'bogus')
-        expect(status).to eq(400)
-        expect(body[:error]).to eq('invalid_request')
+        expect(status).to eq(401)
+        expect(body[:error]).to eq('invalid_client')
       end
 
       # THE ESCALATION ITSELF. A DECLARED role is the value that used to be

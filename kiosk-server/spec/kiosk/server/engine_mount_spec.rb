@@ -115,7 +115,8 @@ RSpec.describe Kiosk::Server::Engine do
       it 'routes the RESERVED `pay` into WireController (401 problem, not 404)' do
         res = probe('mounted', 'POST /kiosk/pay')
         expect(res['status']).to eq(401)
-        expect(res['headers']['www-authenticate']).to eq('DPoP algs="EdDSA"')
+        expect(res['headers']['www-authenticate'])
+          .to eq('DPoP algs="EdDSA", resource_metadata="http://localhost/.well-known/oauth-protected-resource"')
         expect(res['headers']['content-type']).to include('application/problem+json')
         expect(JSON.parse(res['body'])['code']).to eq('unauthenticated')
       end

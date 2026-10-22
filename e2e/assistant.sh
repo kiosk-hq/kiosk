@@ -186,6 +186,8 @@ for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/auth.
   body=$(curl -sf "$SERVER_URL$public_doc")
   assert "$public_doc is really being read (control token)" \
     "$(echo "$body" | grep -qF "$SERVER_URL" && echo present || echo MISSING)" "present"
+  assert "$public_doc answers CORS *" \
+    "$(curl -sS -o /dev/null -D - "$SERVER_URL$public_doc" | grep -ic '^Access-Control-Allow-Origin: \*')" "1"
   for verb_name in salons my_appointments book_appointment; do
     assert "$public_doc names no verb ($verb_name) — pointer, not copy" \
       "$(echo "$body" | grep -c "$verb_name" || true)" "0"
@@ -270,6 +272,8 @@ assert "oauth metadata names the registration endpoint" \
   "$(echo "$as_meta" | jq -r '.registration_endpoint')" "$SERVER_URL/kiosk/oauth/register"
 assert "oauth metadata serves client_credentials and the device code" \
   "$(echo "$as_meta" | jq -r '.grant_types_supported | join(",")')" "client_credentials,urn:ietf:params:oauth:grant-type:device_code"
+assert "oauth metadata names the one scope, default" \
+  "$(echo "$as_meta" | jq -c '.scopes_supported')" '["default"]'
 assert "oauth metadata names private_key_jwt" \
   "$(echo "$as_meta" | jq -r '.token_endpoint_auth_methods_supported | join(",")')" "private_key_jwt"
 assert "oauth metadata names the DPoP algorithms" \
@@ -903,7 +907,7 @@ bearer_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/salons" \
 assert "a valid token sent as Bearer → 401" \
   "$(echo "$bearer_headers" | head -1 | awk '{print $2}')" "401"
 assert "…naming the DPoP scheme in WWW-Authenticate" \
-  "$(echo "$bearer_headers" | grep -ic '^WWW-Authenticate: DPoP algs="EdDSA ES256"$')" "1"
+  "$(echo "$bearer_headers" | grep -ic '^WWW-Authenticate: DPoP algs="EdDSA ES256", resource_metadata="'"$KIOSK_ISSUER"'/.well-known/oauth-protected-resource"$')" "1"
 
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
   -H "Authorization: DPoP $ALICE_AGENT_TOKEN")
@@ -1055,9 +1059,9 @@ bind_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUE
 # would honour, while an undeclared one (`owner`) it would refuse anyway — so a
 # harness probing only the invented role would pass straight over the
 # escalation.
-assert "binding: role/scope refused on the opening request" \
+assert "binding: role refused on the opening request" \
   "$(echo "$bind_out" | jq -r '.role_refused | join(" ")')" \
-  "role=customer:400:invalid_request scope=customer:400:invalid_request role=owner:400:invalid_request json-role=customer:400:invalid_request"
+  "role=customer:400:invalid_request role=owner:400:invalid_request json-role=customer:400:invalid_request"
 assert "binding: device_authorization fields" "$(echo "$bind_out" | jq -r '.da_fields')"                            "true"
 assert "binding: pending before approval"     "$(echo "$bind_out" | jq -r '.pending | map(tostring) | join(":")')"  "400:authorization_pending"
 assert "binding: poll without proof denied"   "$(echo "$bind_out" | jq -r '.no_pop | map(tostring) | join(":")')"   "401:invalid_client"
@@ -1067,8 +1071,8 @@ assert "binding: fast poll → slow_down"       "$(echo "$bind_out" | jq -r '.sl
 assert "binding: token bound to the human"    "$(echo "$bind_out" | jq -r '.bound_user')"                           "true"
 assert "binding: the client keeps its client_id" "$(echo "$bind_out" | jq -r '.same_client')"                       "true"
 # The minted token carries the APPROVER's role — this origin's one declared
-# role, resolved by kiosk-user-idp-devise from Alice's session — and not a value
-# the unauthenticated opening request supplied.
+# role, resolved by kiosk-user-idp-devise from Alice's session — and not the
+# scope=owner that the opening request asked.
 assert "binding: token role is the approver's" "$(echo "$bind_out" | jq -r '.token_role')"                          "customer"
 assert "binding: verb as bound account"  "$(echo "$bind_out" | jq -r '.wire_as_bound | map(tostring) | join(":")')" "200:true"
 assert "binding: client_credentials refresh"  "$(echo "$bind_out" | jq -r '.token_bound | map(tostring) | join(":")')" "200:true"

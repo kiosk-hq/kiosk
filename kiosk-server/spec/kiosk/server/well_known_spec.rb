@@ -308,7 +308,7 @@ RSpec.describe Kiosk::Server::WellKnown do
         token_endpoint: 'https://api.acme.example/kiosk/oauth/token',
         device_authorization_endpoint: 'https://api.acme.example/kiosk/oauth/device_authorization',
         jwks_uri: 'https://api.acme.example/kiosk/.well-known/jwks.json',
-        response_types_supported: [], scopes_supported: [],
+        response_types_supported: [], scopes_supported: %w[default],
         grant_types_supported: ['client_credentials', 'urn:ietf:params:oauth:grant-type:device_code'],
         token_endpoint_auth_methods_supported: ['private_key_jwt'],
         token_endpoint_auth_signing_alg_values_supported: ['EdDSA'],

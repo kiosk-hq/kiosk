@@ -140,7 +140,7 @@ scenarios share:
 | `CrossTenantRead` | B's per-user query must not return rows owned by A |
 | `ForgedUserId` | a caller-supplied `user_id` never decides ownership |
 | `PrivilegeSelfSelection` | a role in the registration body does not reach the client's token — the role is server-pinned |
-| `DeviceGrantRoleSelfSelection` | the claim ceremony's opening request, signed by a registered client, refuses `role`/`scope`, at a DECLARED value as well as an invented one |
+| `DeviceGrantRoleSelfSelection` | the claim ceremony's opening request, signed by a registered client, refuses `role`, at a DECLARED value as well as an invented one |
 | `SpentResourceReuse` | a consumed resource cannot be re-activated |
 | `PayForOtherUseSelf` | B paying for A's resource does not let B use it |
 | `TokenTampering` | a JWT with a flipped claim and the original signature is 401 |

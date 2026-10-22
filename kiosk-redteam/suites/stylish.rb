@@ -206,8 +206,8 @@ end
 # The registered client opens a ceremony, `session`'s human approves it on the
 # verify page, the client polls once; the first poll of a code pays the toll.
 # Returns [authorization_http, poll_http, token_or_nil, verify_page_html].
-def claim_ceremony(session, principal)
-  opened = ASSISTANT.device_authorization(principal)
+def claim_ceremony(session, principal, **params)
+  opened = ASSISTANT.device_authorization(principal, **params)
   return [opened.status, nil, nil, nil] unless opened.status == 200
 
   page = approve_on_verify_page(session, opened.body.fetch('user_code'))
@@ -222,7 +222,6 @@ def token_role(token) = Kiosk::Redteam::TokenClaims.claims(token) || {}
 selfselect = ASSISTANT.register_client!
 self_selection = [
   ['role=owner (DECLARED here — the escalation itself)', { 'role' => 'owner' }],
-  ['scope=owner (the OAuth-standard spelling of the same)', { 'scope' => 'owner' }],
   ['role=customer (declared, no escalation — still not the client\'s to name)', { 'role' => 'customer' }],
   ['role=master (undeclared)', { 'role' => 'master' }]
 ].map do |label, params|
@@ -236,12 +235,13 @@ control_ok = rc_ctrl == 200 && da_ctrl['user_code'].to_s.match?(/\A[A-Z0-9]{4}-[
 BATTERY.record('DeviceGrantCannotSelfSelectRole',
                self_selection.all? { |ok, _| ok } && control_ok,
                "#{self_selection.map(&:last).join('; ')}; CONTROL role-less request → #{rc_ctrl} " \
-               "user_code=#{da_ctrl['user_code'].inspect} (want every role/scope 400/invalid_request, " \
+               "user_code=#{da_ctrl['user_code'].inspect} (want every role 400/invalid_request, " \
                'and the role-less ceremony still opening)')
 
 # A customer's ceremony lands at `customer`, an owner's at `owner`, over the same endpoints.
+# The customer's client asks for scope=owner: the operator ignores a scope.
 cust = ASSISTANT.register_client!
-_rc_a, rc_cust_poll, cust_token, cust_page = claim_ceremony(customer_session, cust)
+_rc_a, rc_cust_poll, cust_token, cust_page = claim_ceremony(customer_session, cust, scope: 'owner')
 cust_claim_role = token_role(cust_token)['role']
 rc_cust_cal, cust_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(cust_token, cust.key))
 cust_rows      = Array(cust_cal)
@@ -261,7 +261,7 @@ BATTERY.record('DeviceGrantRoleComesFromTheApprover',
                  rc_cust_cal == 200 && cust_sees_own && cust_own_only &&
                  rc_own_poll == 200 && own_claim_role == 'owner' &&
                  rc_own_cal == 200 && own_sees_others,
-               "customer-approved claim → poll #{rc_cust_poll}, token role #{cust_claim_role.inspect}, " \
+               "customer-approved claim that asked scope=owner → poll #{rc_cust_poll}, token role #{cust_claim_role.inspect}, " \
                "calendar #{rc_cust_cal} sees_own=#{cust_sees_own} own_only=#{cust_own_only}; " \
                "CONTROL owner-approved claim over the SAME endpoints → poll #{rc_own_poll}, token role " \
                "#{own_claim_role.inspect}, calendar #{rc_own_cal} whole_book=#{own_sees_others} " \

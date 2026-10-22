@@ -48,7 +48,10 @@ module Kiosk
         client
       end
 
-      # RFC 6749 Section 5.1. The scope is the role of the client.
+      # RFC 6749 Section 5.1. The scope is the role of the client. A requested
+      # `scope` is ignored (RFC 6749 Section 3.3): an assistant gets another
+      # role only when a human who holds that role binds it to their account,
+      # or through the identity provider.
       def render_token(client)
         token = AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: client.id, role: client.role)
         body = { access_token: token, token_type: Dpop::SCHEME, expires_in: Kiosk.configuration.access_token_ttl }

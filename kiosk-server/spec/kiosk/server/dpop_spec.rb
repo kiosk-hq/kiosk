@@ -34,7 +34,7 @@ RSpec.describe Kiosk::Server::Dpop do
   def expect_refused(message, **)
     expect { verify(**) }.to raise_error(Kiosk::Server::Errors::AccessTokenRefused, message) do |error|
       expect(error.http_status).to eq(401)
-      expect(error.response_headers).to eq('WWW-Authenticate' => 'DPoP algs="EdDSA"')
+      expect(error.response_headers).to eq('WWW-Authenticate' => described_class.challenge)
     end
   end
 
@@ -155,10 +155,12 @@ RSpec.describe Kiosk::Server::Dpop do
     end
   end
 
-  it 'names the algorithms of AssistantKey in its challenge' do
-    expect(described_class.challenge).to eq('DPoP algs="EdDSA"')
+  it 'names the algorithms of AssistantKey and the protected-resource metadata in its challenge' do
+    metadata = 'resource_metadata="https://demo.example/.well-known/oauth-protected-resource"'
+    challenge = -> { Kiosk.with_issuer('https://demo.example') { described_class.challenge } }
+    expect(challenge.call).to eq(%(DPoP algs="EdDSA", #{metadata}))
     Kiosk.configure { |c| c.assistant_algorithms = %w[EdDSA ES256] }
-    expect(described_class.challenge).to eq('DPoP algs="EdDSA ES256"')
+    expect(challenge.call).to eq(%(DPoP algs="EdDSA ES256", #{metadata}))
   end
 
   describe 'the algorithm of the proof' do

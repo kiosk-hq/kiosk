@@ -37,13 +37,18 @@ RSpec.describe Kiosk::Server::OauthDeviceAuthorizationController do
     end
   end
 
-  it 'refuses a role or a scope, also an empty one: the assistant does not choose its role' do
-    %w[role scope].each do |name|
-      status, _headers, body = start(assertion_params(client.id).merge(name => ''))
-      expect(status).to eq(400)
-      expect(body['error']).to eq('invalid_request')
-      expect(body['error_description']).to include("#{name} is not accepted here", 'does not choose its own role')
-    end
+  it 'refuses a role, also an empty one: the assistant does not choose its role' do
+    status, _headers, body = start(assertion_params(client.id).merge('role' => ''))
+    expect(status).to eq(400)
+    expect(body['error']).to eq('invalid_request')
+    expect(body['error_description']).to include('role is not accepted here', 'does not choose its own role')
+  end
+
+  it 'ignores a scope: the row carries no requested role' do
+    status, _headers, body = start(assertion_params(client.id).merge('scope' => 'owner'))
+    expect(status).to eq(200)
+    row = store.lookup_by_device_code_hash(Kiosk::Server::DeviceAuthorization.hash_device_code(body['device_code']))
+    expect(row.requested_role).to be_nil
   end
 
   it 'answers 501 module_not_served where the origin serves no binding' do

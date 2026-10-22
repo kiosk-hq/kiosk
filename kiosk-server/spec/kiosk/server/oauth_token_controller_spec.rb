@@ -36,6 +36,13 @@ RSpec.describe Kiosk::Server::OauthTokenController do
                                                          'role' => 'customer', 'cnf' => { 'jkt' => agent_jkt })
     end
 
+    it 'ignores a requested scope and grants the role of the client' do
+      params = { 'grant_type' => 'client_credentials', 'scope' => 'owner', **assertion_params(client.id) }
+      status, _headers, body = token_request(params)
+
+      expect([status, body['scope'], claims_of(body['access_token'])['role']]).to eq([200, 'customer', 'customer'])
+    end
+
     it 'leaves out scope for a client with no role' do
       Kiosk.configure do |c|
         c.roles = []

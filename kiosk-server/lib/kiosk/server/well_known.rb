@@ -33,6 +33,11 @@ module Kiosk
                           'browse, order, book, apply, pay -- and subscribe to the operator\'s event ' \
                           'stream for anything that you would otherwise wait for.'
 
+      # The one scope value. An AI assistant does not choose its role: the
+      # token request grants the role of its assistant account, whatever scope
+      # it names (RFC 6749 Section 3.3).
+      SCOPES = %w[default].freeze
+
       ARD_API = 'The Kiosk discovery document of this origin: the endpoint, the sign-in and the catalogue. ' \
                 'Read it with the Kiosk skill.'
 
@@ -84,20 +89,18 @@ module Kiosk
         doc = { issuer: Kiosk.current_issuer, registration_endpoint: "#{endpoint}/oauth/register",
                 token_endpoint: "#{endpoint}/oauth/token" }
         doc[:device_authorization_endpoint] = "#{endpoint}/oauth/device_authorization" if config.serve_account_binding
-        # No authorization endpoint, so no response type. An AI assistant
-        # requests no scope, so no scope value.
-        doc.merge(jwks_uri: "#{endpoint}/.well-known/jwks.json", response_types_supported: [], scopes_supported: [],
+        # No authorization endpoint, so no response type.
+        doc.merge(jwks_uri: "#{endpoint}/.well-known/jwks.json", response_types_supported: [], scopes_supported: SCOPES,
                   grant_types_supported: Client.grant_types(config), **Shared.client_authentication,
                   service_documentation: "#{base}/auth.md", dpop_signing_alg_values_supported: AssistantKey.algorithms)
       end
 
       # `/.well-known/oauth-protected-resource` (RFC 9728). RFC 9728 §3.3 binds a
-      # document at this path to the origin, so `resource` is the origin. An
-      # AI assistant requests no scope, so `scopes_supported` is empty.
+      # document at this path to the origin, so `resource` is the origin.
       def self.oauth_protected_resource(base_url:, config: Kiosk.configuration)
         Shared.validate_issuer!(config)
         base = base_url.to_s.chomp('/')
-        { resource: base, authorization_servers: [Kiosk.current_issuer], scopes_supported: [],
+        { resource: base, authorization_servers: [Kiosk.current_issuer], scopes_supported: SCOPES,
           bearer_methods_supported: ['header'],
           dpop_signing_alg_values_supported: AssistantKey.algorithms, dpop_bound_access_tokens_required: true,
           resource_documentation: "#{base}/auth.md" }

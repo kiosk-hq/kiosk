@@ -107,9 +107,8 @@ key, client_id = registered_client
 # THE OPENING REQUEST MAY NOT NAME A ROLE.
 #
 # The client authenticates, but anything it carries beyond that is the
-# assistant's own claim. The engine does not read `role` (or its OAuth spelling
-# `scope`) off it at all: the role comes from the approving human, and the
-# parameter is REFUSED rather than ignored.
+# assistant's own claim. The role comes from the approving human: a `role` is
+# REFUSED, and a `scope` is ignored (the ceremony below asks scope=owner).
 #
 # THE DECLARED VALUE IS THE ONE THAT MATTERS. An UNDECLARED role (`owner` here —
 # this origin declares only `customer`) is refused by anything that filters on
@@ -120,7 +119,7 @@ key, client_id = registered_client
 # are probed because the controller reads `params[:role]`, which Rails fills
 # from a form body and a JSON body alike — a guard on one would not be a guard.
 DEVICE_AUTHORIZATION = "#{SERVER}/kiosk/oauth/device_authorization".freeze
-role_probes = [%w[role customer], %w[scope customer], %w[role owner]].map do |param, value|
+role_probes = [%w[role customer], %w[role owner]].map do |param, value|
   code, body = post_form(DEVICE_AUTHORIZATION, assertion_params(client_id, key, ISSUER).merge(param => value))
   "#{param}=#{value}:#{code}:#{body['error']}"
 end
@@ -128,7 +127,7 @@ code, body = post_json(DEVICE_AUTHORIZATION, assertion_params(client_id, key, IS
 role_probes << "json-role=customer:#{code}:#{body['error']}"
 results[:role_refused] = role_probes
 
-rc, da = post_form(DEVICE_AUTHORIZATION, assertion_params(client_id, key, ISSUER))
+rc, da = post_form(DEVICE_AUTHORIZATION, assertion_params(client_id, key, ISSUER).merge('scope' => 'owner'))
 abort "device_authorization failed: #{rc} #{da}" unless rc == 200
 device_code = da.fetch('device_code')
 user_code   = da.fetch('user_code')

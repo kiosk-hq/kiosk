@@ -42,6 +42,13 @@ end
 RSpec.describe 'DiscoveryController' do
   include_context 'with the acme origin for discovery'
 
+  it 'answers Access-Control-Allow-Origin: * on every discovery document' do
+    actions = Kiosk::Server::DiscoveryController.action_methods.sort
+    origins = actions.map { |action| dispatch(action.to_sym, '/')[1]['Access-Control-Allow-Origin'] }
+    expect(actions.zip(origins)).to all(match([String, '*']))
+    expect(actions).to include('kiosk_json', 'oauth_authorization_server')
+  end
+
   describe 'GET /agents.txt' do
     it 'returns 200 text/plain with the directives + CORS' do
       status, headers, raw = dispatch(:agents_txt, '/agents.txt')
@@ -83,7 +90,8 @@ RSpec.describe 'DiscoveryController' do
       doc = JSON.parse(raw)
       # RFC 8414 §2: issuer and response_types_supported are REQUIRED, and a
       # server with no authorization endpoint names no response type.
-      expect(doc).to include('issuer' => 'https://api.acme.example', 'response_types_supported' => [])
+      expect(doc).to include('issuer' => 'https://api.acme.example', 'response_types_supported' => [],
+                             'scopes_supported' => ['default'])
       expect(doc.values_at('registration_endpoint', 'token_endpoint', 'device_authorization_endpoint', 'jwks_uri'))
         .to all(start_with('https://api.acme.example/kiosk/'))
     end
@@ -102,7 +110,7 @@ RSpec.describe 'DiscoveryController' do
       expect(headers['Content-Type']).to include('application/json')
       expect(JSON.parse(raw)).to eq(
         'resource' => 'https://api.acme.example', 'authorization_servers' => ['https://api.acme.example'],
-        'scopes_supported' => [], 'bearer_methods_supported' => ['header'], 'dpop_signing_alg_values_supported' => ['EdDSA'],
+        'scopes_supported' => ['default'], 'bearer_methods_supported' => ['header'], 'dpop_signing_alg_values_supported' => ['EdDSA'],
         'dpop_bound_access_tokens_required' => true, 'resource_documentation' => 'https://api.acme.example/auth.md'
       )
     end

@@ -6,10 +6,11 @@ module Kiosk
   module Redteam
     module Scenarios
       # The device_authorization request, which a registered client signs with
-      # its client assertion, must refuse a client-chosen role or scope. Probed
-      # with roles the origin actually declares, since a vulnerable origin
-      # refuses an undeclared one too; the role-less request must still open
-      # the ceremony.
+      # its client assertion, must refuse a client-chosen role. Probed with
+      # roles the origin actually declares, since a vulnerable origin refuses
+      # an undeclared one too; the role-less request must still open the
+      # ceremony. A `scope` is ignored, so only an approval shows what it
+      # grants: the stylish suite checks that.
       class DeviceGrantRoleSelfSelection < Scenario
         # Refused by a vulnerable origin too; probed only to show both filters in the detail.
         UNDECLARED_ROLE = 'master'
@@ -42,7 +43,7 @@ module Kiosk
                       detail: summary(probes, control_detail, declared, wire_role))
         end
 
-        # [refused?, detail] for each role or scope the request names.
+        # [refused?, detail] for each role the request names.
         def probe(client, principal, declared)
           probe_labels(declared).map do |label, param, value|
             resp = client.device_authorization(principal, param => value)
@@ -55,7 +56,7 @@ module Kiosk
           "#{probes.map(&:last).join('; ')}; #{control_detail} " \
             "[declared roles probed: #{declared.inspect} " \
             "(#{wire_role.inspect} read off this origin's own client_credentials token); " \
-            'want every role/scope refused 400 invalid_request AND the role-less ' \
+            'want every role refused 400 invalid_request AND the role-less ' \
             'ceremony still opening]'
         end
 
@@ -64,14 +65,9 @@ module Kiosk
         end
 
         def probe_labels(declared)
-          declared.flat_map do |role|
-            %i[role scope].map do |param|
-              ["#{param}=#{role} (DECLARED by this origin — the escalation itself)", param, role]
-            end
-          end + %i[role scope].map do |param|
-            ["#{param}=#{UNDECLARED_ROLE} (undeclared; refused by the vulnerable code too, " \
-             'so it proves nothing alone)', param, UNDECLARED_ROLE]
-          end
+          declared.map { |role| ["role=#{role} (DECLARED by this origin — the escalation itself)", :role, role] } +
+            [["role=#{UNDECLARED_ROLE} (undeclared; refused by the vulnerable code too, " \
+              'so it proves nothing alone)', :role, UNDECLARED_ROLE]]
         end
 
         def control(client, principal)

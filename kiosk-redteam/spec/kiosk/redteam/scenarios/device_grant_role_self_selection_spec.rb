@@ -40,8 +40,8 @@ module DeviceGrantStubs
                 'expires_in' => 900, 'interval' => 5)
   end
 
-  # The engine at head: any role/scope parameter is refused, the role-less
-  # request opens the ceremony.
+  # The engine at head: any role parameter is refused, the role-less request
+  # opens the ceremony.
   #
   # WebMock resolves the MOST RECENTLY DECLARED matching stub, so the general
   # answer is registered first and the narrower one last — the other order
@@ -50,7 +50,7 @@ module DeviceGrantStubs
   def stub_fixed_engine
     stub_request(:post, device_url).to_return(opened)
     stub_request(:post, device_url)
-      .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=/) }
+      .with { |req| req.body.to_s.match?(/(\A|&)role=/) }
       .to_return(oauth_error)
   end
 end
@@ -86,19 +86,16 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
     scenario.call(client, profile)
 
     expect(a_request(:post, device_url).with { |req| !URI.decode_www_form(req.body).to_h['client_assertion'].to_s.empty? })
-      .to have_been_made.times(7)
+      .to have_been_made.times(4)
   end
 
-  it 'probes each DECLARED role under both the role= and scope= spellings' do
+  it 'probes each DECLARED role' do
     stub_fixed_engine
 
     scenario.call(client, profile)
 
-    %w[role scope].each do |param|
-      %w[customer owner].each do |role|
-        expect(a_request(:post, device_url).with(body: hash_including(param => role)))
-          .to have_been_made.at_least_once
-      end
+    %w[customer owner].each do |role|
+      expect(a_request(:post, device_url).with(body: hash_including('role' => role))).to have_been_made.once
     end
   end
 
@@ -109,7 +106,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
     def stub_vulnerable_engine
       stub_request(:post, device_url).to_return(opened)
       stub_request(:post, device_url)
-        .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=master/) }
+        .with { |req| req.body.to_s.match?(/(\A|&)role=master/) }
         .to_return(oauth_error)
     end
 
@@ -121,22 +118,6 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
       expect(verdict.blocked).to be(false)
       expect(verdict.detail).to include('role=owner (DECLARED')
       expect(verdict.detail).to include('HTTP 200')
-    end
-  end
-
-  # `params[:role] || params[:scope]` was the vulnerable read, so a fix that
-  # guarded only one spelling must still fail here.
-  describe 'when only `role` is guarded and `scope` still passes' do
-    it 'returns blocked: false' do
-      stub_request(:post, device_url).to_return(opened)
-      stub_request(:post, device_url)
-        .with { |req| req.body.to_s.match?(/(\A|&)role=[^&]+/) }
-        .to_return(oauth_error)
-
-      verdict = scenario.call(client, profile)
-
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('scope=customer (DECLARED')
     end
   end
 
@@ -169,7 +150,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
     it 'is a BREACH when that request-derived role is honoured' do
       stub_request(:post, device_url).to_return(opened)
       stub_request(:post, device_url)
-        .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=master/) }
+        .with { |req| req.body.to_s.match?(/(\A|&)role=master/) }
         .to_return(oauth_error)
 
       verdict = scenario.call(client, profile)

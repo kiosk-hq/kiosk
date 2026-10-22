@@ -23,7 +23,12 @@ module Kiosk
       module_function
 
       # The `WWW-Authenticate` value of a 401 on a request that needs a token.
-      def challenge = %(#{SCHEME} algs="#{AssistantKey.algorithms.join(' ')}")
+      # `resource_metadata` names the protected-resource metadata (RFC 9728
+      # Section 5.1).
+      def challenge
+        %(#{SCHEME} algs="#{AssistantKey.algorithms.join(' ')}", ) +
+          %(resource_metadata="#{Kiosk.current_issuer}/.well-known/oauth-protected-resource")
+      end
 
       def hint
         'send `Authorization: DPoP <access_token>` and one `DPoP` header: a JWS with typ dpop+jwt, ' \

@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-22 at 68de4db8
+# recorded: 2026-10-22 at 8bc98a7b
 # 2068 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	d8208b47	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	d8208b47	        if: matrix.demo != 'kiosk-demo-prove'
@@ -17,19 +17,19 @@
 CHANGELOG.md	4570005aad48e6ba	d8208b47	Surfaced by a live hosted Hermes run. (K-437)
 CHANGELOG.md	ab88745a8a9ff044	d8208b47	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
 CLAUDE.md	dc0ce9e1fdb10ca8	d8208b47	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
-README.md	6bca48efdaf6a781	d8208b47	Apache-2.0 for every gem in this repo.
-README.md	a0eaba9076d2df53	d8208b47	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service, and its Ruby reference implementation
-README.md	0551acbe30207b0f	d8208b47	Customer reputation factors
-README.md	145bd05db2127030	d8208b47	Equihash (n=168, k=7)
-README.md	4dba863d213eea06	d8208b47	Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is the whole list
-README.md	f3cdca83c4e49e5f	d8208b47	Meta-gem; `bundle add kiosk-all` installs core + server
-README.md	47cbdd138358ee83	d8208b47	Opt-in RLS DSL + migration helpers
-README.md	007d886004e83fb9	d8208b47	PSP adapter — Stripe, AP2 mandate trail
-README.md	9bc89b240866fb1e	d8208b47	Rails engine, routes, OAuth client registration and DPoP token endpoint, executor
-README.md	6042f43c74867d5f	d8208b47	Red-team scenarios, adversarial test harness
-README.md	a0eaba9076d2df53	d8208b47	app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth
-README.md	a0eaba9076d2df53	d8208b47	multi-assistant identity per user
-README.md	007d886004e83fb9	d8208b47	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
+README.md	6bca48efdaf6a781	8bc98a7b	Apache-2.0 for every gem in this repo.
+README.md	a0eaba9076d2df53	8bc98a7b	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service, and its Ruby reference implementation
+README.md	0551acbe30207b0f	8bc98a7b	Customer reputation factors
+README.md	145bd05db2127030	8bc98a7b	Equihash (n=168, k=7)
+README.md	4dba863d213eea06	8bc98a7b	Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is the whole list
+README.md	9ca73fa7714d1994	8bc98a7b	Meta-gem; `bundle add kiosk-all` installs core + server
+README.md	47cbdd138358ee83	8bc98a7b	Opt-in RLS DSL + migration helpers
+README.md	007d886004e83fb9	8bc98a7b	PSP adapter — Stripe, AP2 mandate trail
+README.md	9bc89b240866fb1e	8bc98a7b	Rails engine, routes, OAuth client registration and DPoP token endpoint, executor
+README.md	6042f43c74867d5f	8bc98a7b	Red-team scenarios, adversarial test harness
+README.md	a0eaba9076d2df53	8bc98a7b	app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth
+README.md	a0eaba9076d2df53	8bc98a7b	multi-assistant identity per user
+README.md	007d886004e83fb9	8bc98a7b	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
 deploy/Caddyfile	10cb71c5bcdec3da	d8208b47	atablefor.demo.kiosk.tech {
 deploy/Caddyfile	aed3d85fef818329	d8208b47	getgrocery.demo.kiosk.tech {
 deploy/Caddyfile	daa67467d812c94b	d8208b47	hoteling.demo.kiosk.tech {

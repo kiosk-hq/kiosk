@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2080 anchors.
+# 2081 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -160,7 +160,7 @@ e2e/assistant.sh	binding: link-code mint (session)
 e2e/assistant.sh	binding: link-code redeem → human
 e2e/assistant.sh	binding: pending before approval
 e2e/assistant.sh	binding: poll without proof denied
-e2e/assistant.sh	binding: role/scope refused on the opening request
+e2e/assistant.sh	binding: role refused on the opening request
 e2e/assistant.sh	binding: same-second token dies too
 e2e/assistant.sh	binding: the client keeps its client_id
 e2e/assistant.sh	binding: token bound to the human
@@ -345,7 +345,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.3'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.4'
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -1386,10 +1386,10 @@ kiosk-server/spec/kiosk/server/controller_auth_spec.rb	answers 304 to If-None-Ma
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	does NOT fall back to user_idp — KYC is an agent-only surface
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	emits no Vary even when the request negotiates content
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	it 'refuses a valid token sent as a Bearer token, naming the DPoP scheme' do
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	passes a request with a scope on to client authentication: the scope is ignored
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	records the named anonymized attributes an attestation carries
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	rejects a role not among the configured roles with 400 invalid_request
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	rejects a role the provider DOES declare — the escalation, not a typo
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	rejects an unknown role passed via the OAuth-standard scope param
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 BadRequest (not 500) for an EMPTY body on an authenticated request
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 BadRequest for a valid JSON object missing the kyc_jws field
@@ -1757,8 +1757,9 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an open mandate,
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	takes the currency in lower case, the spelling the spending cap counts
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	verifies the mandates the key signs ES256
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	answers 401 invalid_client for a missing or refused client assertion
+kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	ignores a scope: the row carries no requested role
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	opens a claim ceremony for the client, with the client's key on the row
-kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	refuses a role or a scope, also an empty one: the assistant does not choose its role
+kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	refuses a role, also an empty one: the assistant does not choose its role
 kiosk-server/spec/kiosk/server/oauth_error_spec.rb	answers {error, error_description}, 401 for invalid_client and 400 for every other code
 kiosk-server/spec/kiosk/server/oauth_error_spec.rb	refuses a code outside the vocabulary
 kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	answers 201 with the client information, which no cache keeps

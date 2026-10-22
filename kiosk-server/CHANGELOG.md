@@ -12,6 +12,12 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-10-22
+
+- 2026-10-22: Version 0.6.4, the tree cut that matches skill 0.6.4.
+- 2026-10-22: The OAuth metadata lists the one scope `default`; a requested `scope` is ignored. A 401 names the protected-resource metadata, and every discovery document answers CORS.
+- 2026-10-22: The wrong-door hint names `auth.registration_url` and `auth.token_url` of kiosk.json.
+
 ## [0.6.3] — 2026-10-22
 
 - 2026-10-22: Version 0.6.3, the tree cut that matches skill 0.6.3.

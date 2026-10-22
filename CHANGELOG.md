@@ -11,6 +11,18 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-10-22
+
+- 2026-10-22: **Every gem and `API_VERSION` are 0.6.4, matching skill 0.6.4.** `MIN_CLIENT` stays 0.6.0: a 0.6.3 assistant sends no `scope` and reads no new header.
+
+- 2026-10-22: **Every demo and the engine default pin `skill-v0.6.4.md`**, which has the text of 0.6.3.
+
+- 2026-10-22: The OAuth metadata lists the one scope `default`. An operator ignores a requested `scope` and grants the role of the account; it still refuses a `role`.
+
+- 2026-10-22: A 401 for an access token names the protected-resource metadata (RFC 9728), and every discovery document answers `Access-Control-Allow-Origin: *`.
+
+- 2026-10-22: Refusal hints name `auth.registration_url` and `auth.token_url` of kiosk.json, the endpoints that exist.
+
 ## [0.6.3] — 2026-10-22
 
 - 2026-10-22: **Every gem and `API_VERSION` are 0.6.3, matching skill 0.6.3.** `MIN_CLIENT` stays 0.6.0: a 0.6.2 assistant handles a 402 on any call.

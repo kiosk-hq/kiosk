@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-10-22
+
+- 2026-10-22: Version 0.6.4, the tree cut that matches skill 0.6.4.
+- 2026-10-22: The sign-in and sign-out hints name `auth.registration_url` and `auth.token_url` of kiosk.json.
+
 ## [0.6.3] — 2026-10-22
 
 - 2026-10-22: Version 0.6.3, the tree cut that matches skill 0.6.3.

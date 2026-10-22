@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-10-22
+
+- 2026-10-22: Version 0.6.4, the tree cut that matches skill 0.6.4.
+- 2026-10-22: `DeviceGrantRoleSelfSelection` probes `role` only: an operator ignores a `scope`. The stylish suite opens a customer's ceremony with `scope=owner` and expects `customer`.
+
 ## [0.6.3] — 2026-10-22
 
 - 2026-10-22: Version 0.6.3, the tree cut that matches skill 0.6.3.

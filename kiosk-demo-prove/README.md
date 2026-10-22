@@ -18,7 +18,7 @@ deploy origin.
 
 The broker mounts **no** Kiosk HTTP API at all — neither of the two reserved
 endpoints (`GET <endpoint>/schema`, `POST <endpoint>/pay`) and not one
-per-verb endpoint, because it registers no verb. It has no PoW gate, and it
+per-verb endpoint, because it registers no verb. It has no toll, and it
 serves no `/.well-known/kiosk.json`. It is the mirror ISSUER
 side of the Kiosk trust primitives an operator's `Kiosk::Server::KycVerifier`
 already accepts: it signs anonymized attestations that the operator trusts via

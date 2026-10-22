@@ -74,11 +74,11 @@
 # the analysis beside it is what makes the next decision cheap.
 #
 # ── The exposure the limiter is for, and it has not gone away ────────────────
-# The PoW gate runs UNAUTHENTICATED, ahead of any lookup, on the three tolled
+# The toll check runs UNAUTHENTICATED, ahead of any lookup, on the three tolled
 # requests that come before a token: `POST /kiosk/oauth/register`,
 # `POST /kiosk/auth/claim` and the first device-code poll at
 # `POST /kiosk/oauth/token`. Anyone can take a free 402 challenge and resubmit
-# it with a valid HMAC sig but garbage indices. PoW prices the attacker's SOLVE; it never
+# it with a valid HMAC sig but garbage indices. The toll prices the attacker's SOLVE; it never
 # prices our VERIFY. And at the shipped WEB_CONCURRENCY=1 a plain flood of ANY
 # endpoint — a 404, the 402 issue path itself — saturates the single worker just
 # as well. The app can make each request cheaper; only something in FRONT of the
@@ -158,8 +158,8 @@
 # If you ever
 # uncomment it, uncomment the `import ratelimit` line above with it, and treat
 # the 60/min as a placeholder rather than a finding — it is far above any honest
-# agent's pace (register once, ~10 s of proof-of-work on the M-series laptop core
-# kiosk-pow-equihash/bench/README.md names) and far below what it takes to
+# agent's pace (register once, 9 to 20 s of proof of work on an Apple M3 laptop
+# core) and far below what it takes to
 # saturate a worker, but no measurement chose it.
 # (ratelimit) {
 # 	rate_limit {

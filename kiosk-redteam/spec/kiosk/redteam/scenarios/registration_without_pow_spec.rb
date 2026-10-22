@@ -29,7 +29,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
 
     context 'when the server accepts registration without PoW (broken — BREACH)' do
       it 'returns blocked: false' do
-        # Both :skip and "0" succeed — server has no PoW gate
+        # Both :skip and "0" succeed — server has no registration toll
         register_returns(issued('1'), issued('2'))
 
         verdict = scenario.call(client, profile)
@@ -85,7 +85,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
   #
   # "Both attempts were refused" is satisfied by a server that refuses
   # EVERYTHING. The control leg is what makes the two refusals evidence of a
-  # PoW gate rather than evidence of an outage.
+  # registration toll rather than evidence of an outage.
   describe '#call — the refusals must be earned (K-730)' do
     let(:profile) { Kiosk::Redteam::Profile.new(pow_difficulty: 20) }
 

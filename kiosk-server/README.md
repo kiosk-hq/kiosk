@@ -14,7 +14,7 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **`Kiosk::Handler`** — the mixin an operator includes into a controller of their own to declare verbs as ordinary Rails actions; each declaration's `kind` says whether it is a query or an action, so one controller may declare both. The engine registers the controllers in `app/controllers/kiosk/` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
 - **`Kiosk::Server::PaymentClaim`** — the PSP decorator that keeps §11.6's operator half: one capture per payable row, and a paid state anchored to the capture (see [Payments](#payments)).
 - **Client registration and authentication** — `ClientRegistration`, `ClientAssertion`, `AssistantKey` (the one list of signing algorithms an assistant can use), `AuthToll`, and the pluggable agent-IdP resolve and mint per-agent identities.
-- **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
+- **Proof-of-work toll** — `PowGate` asks the toll that the reputation policy sets, as N proof-of-work challenges (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
 - **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
 - **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
 - **`IssuerMiddleware`** — answers `Kiosk.current_issuer` for each request: its origin when that is `c.issuer` or one of `c.additional_origins`, else `c.issuer`. Every origin served is its own operator.
@@ -257,7 +257,7 @@ what can be neither.
 
 ## Multi-process deployments
 
-The PoW gate keeps spent challenge ids in `c.pow_spent_store`, by default
+The toll keeps spent challenge ids in `c.pow_spent_store`, by default
 `Kiosk::Server::PowSpentStores::ActiveRecord`: the `kiosk.pow_spent` table that
 `bin/rails g kiosk:install` lays down. Every process and every deploy shares it,
 so a proof is accepted once (kiosk.tech `protocol.md` §15.2). The token
@@ -550,7 +550,7 @@ change under a caller between the catalog it read and the call it made.
 
 **Draw verb routes with `kiosk` only.** A route you draw at a handler action
 yourself answers 404: the `kiosk` block names the verb that the action answers.
-`Kiosk::Handler` runs authentication, the argument check, the proof-of-work gate
+`Kiosk::Handler` runs authentication, the argument check, the proof-of-work toll
 and the transaction around the action, before your own `before_action` filters.
 
 ### What you get inside a handler
@@ -632,7 +632,7 @@ filters, `rescue_from` or strong parameters, and would teach — in the very fil
 an adopter copies — that Rails does not apply to the surface you expose to
 assistants. Write a controller in `app/controllers/kiosk/`, and the initializer
 keeps what an initializer is for: the identity providers, the payment provider,
-the PoW gates.
+the toll.
 
 
 ## Well-known endpoint (no booted Rails app required)

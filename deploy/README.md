@@ -112,7 +112,7 @@ migrated or restarted, and the push ends in `DEPLOY FAILED`.
 | prove (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not a Kiosk operator) | — |
 
 **The KYC broker is the odd one out**: the gem dir is `kiosk-demo-prove` but it serves
-`kyc.demo.kiosk.tech` and is an **ISSUER, not a Kiosk operator** — no PoW gate,
+`kyc.demo.kiosk.tech` and is an **ISSUER, not a Kiosk operator** — no toll,
 no `/.well-known/kiosk.json`, no agent surface, no payment provider. It depends
 on no kiosk gem. Its env template is `env/kyc-demo.env.example` → copy to
 `/etc/kiosk-demo/prove.env` (the systemd instance is `prove`, matching the dir);
@@ -120,8 +120,8 @@ its Caddy vhost is `kyc.demo.kiosk.tech → 127.0.0.1:3008`. skooti trusts it as
 its KYC issuer (skooti's env pins `KIOSK_PROVE_*` at this broker).
 
 **Every demo tolls registration the same way**: one Equihash proof at the gem
-default n=168 k=7 (~1.3 GiB and ~10 s per proof on the reference solver,
-measured on one M-series laptop core), set in its `config/initializers/kiosk.rb`.
+default n=168 k=7 (1.0 to 1.4 GiB and 9 to 20 s per proof on the reference solver,
+measured on one Apple M3 laptop core), set in its `config/initializers/kiosk.rb`.
 (The toll prices abuse; it is not by itself a DoS shield, and there is
 deliberately no default edge throttle — see "Edge rate-limit" below.)
 
@@ -322,11 +322,11 @@ the default, not forswearing protection. What follows is the analysis you need
 to decide whether to reach for it, and the numbers that say why there is no
 default. None of it is a runbook step.
 
-**What the limiter would be for.** The PoW gate runs **unauthenticated**, before
+**What the limiter would be for.** The toll check runs **unauthenticated**, before
 any lookup, on the three tolled requests that come before a token:
 `POST /kiosk/oauth/register`, `POST /kiosk/auth/claim` and the first device-code
 poll at `POST /kiosk/oauth/token`. Anyone can take a free 402
-challenge and resubmit it with a valid HMAC sig and garbage indices. PoW prices
+challenge and resubmit it with a valid HMAC sig and garbage indices. The toll prices
 the attacker's **solve**; it never prices our **verify**. And at the shipped
 `WEB_CONCURRENCY=1` a plain flood of *any* endpoint -- a 404, the 402 issue path
 itself -- saturates the single worker just as well, so only something in FRONT
@@ -455,10 +455,10 @@ two catalogue documents `GET /kiosk/schema` and `GET /kiosk/openapi.json` — no
 token, no toll, and `Cache-Control: max-age=60, public` so a poker (or an
 assistant) can read what the origin offers before it registers. Everything else
 — every query, every action, `pay` — needs the access token with a DPoP proof and MAY toll
-proof-of-work, and so may `register`. So the register gate is a memory-hard PoW
+proof-of-work, and so may `register`. So the registration toll is a memory-hard proof of work
 by design, and the "true" one-liner ships a copy-paste **solver**
-(`kiosk-pow-equihash/solve.py`). Every demo asks for n=168 k=7, ~9–10 s on an
-M-series laptop core, the only hardware that figure has been measured on —
+(`kiosk-pow-equihash/solve.py`). Every demo asks for n=168 k=7, 9 to 20 s on an
+Apple M3 laptop core, the only hardware that figure has been measured on —
 `kiosk-pow-equihash/bench/README.md`'s measured grid is where to re-run it for
 your own machine. Flow:
 **discover (free) → read the schema (free) → register (solve PoW) → get a token → call a verb
@@ -484,7 +484,7 @@ b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 proofs_for() { jq -c '.challenges[]' | while read -r c; do
     jq -cn --argjson challenge "$c" \
            --argjson nonce "$(python3 kiosk-pow-equihash/solve.py "$c")" \
-           '{challenge:$challenge,nonce:$nonce}'   # ~9–10 s on an M-series core
+           '{challenge:$challenge,nonce:$nonce}'   # 9 to 20 s on an Apple M3 core
   done | jq -sc .; }
 
 #    a) an agent keypair, and its public JWK (RFC 8037). `jws HEADER PAYLOAD`
@@ -569,5 +569,5 @@ curl -s -X POST "$BASE/kiosk/create_order" \
 > The exact challenge/proof JSON shape is what the demo's 402 `pow_required`
 > answer carries and `solve.py` consumes, and the block above is the copy-paste
 > form of it. It is the only one: no demo landing page carries a curl one-liner.
-> Registration asks for the full-strength puzzle, so expect ~9–10 s
-> (measured on an M-series laptop core; other hardware differs).
+> Registration asks for the full-strength toll, so expect 9 to 20 s
+> (measured on an Apple M3 laptop core; other hardware differs).

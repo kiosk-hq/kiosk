@@ -113,7 +113,7 @@ Unlike `kiosk-pow-argon2id` (Argon2id, scalar nonce), Cuckatoo proofs are compos
 }
 ```
 
-`kiosk-server`'s PoW gate passes the proof's `nonce` object unchanged to
+`kiosk-server`'s toll check (`PowGate`) passes the proof's `nonce` object unchanged to
 `kiosk-reputation`'s `Challenge.verify`. `Challenge.verify` passes it unchanged
 to the backend's `.verify(salt:, params:, nonce:)`. So `nonce` is an object,
 not a String.

@@ -2,7 +2,7 @@
 
 # Register-PoW proof driver — the agent golden-path registration leg WITH a
 # real register-time Equihash proof-of-work (the DoD-2 gap: e2e must exercise
-# PoW-gated registration, not a toll-free shortcut).
+# the registration toll, not a toll-free shortcut).
 #
 # Proves, in one run against the live server:
 #   1. A no-proof register is REJECTED with 402 pow_required + challenges[].

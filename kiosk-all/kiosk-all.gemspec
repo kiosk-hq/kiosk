@@ -18,7 +18,7 @@ Gem::Specification.new do |spec|
     /kiosk/<action-name> — plus /kiosk/{schema,openapi.json,pay}), the
     OAuth registration and token endpoints, JWKS,
     KYC attestation, discovery, the account-binding ceremony, the
-    Executor, the PoW gate, the headers middleware and the `kiosk:install`
+    Executor, the proof-of-work toll, the headers middleware and the `kiosk:install`
     generator.
 
     Deliberately out of scope:

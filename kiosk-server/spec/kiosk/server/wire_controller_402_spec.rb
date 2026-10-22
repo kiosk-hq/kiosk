@@ -76,7 +76,7 @@ RSpec.shared_context 'with an origin for WireController' do
   end
 end
 
-RSpec.shared_context 'with a proof-of-work gate on WireController' do
+RSpec.shared_context 'with a proof-of-work toll on WireController' do
   before do
     Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
     Kiosk.configure do |c|
@@ -92,13 +92,13 @@ RSpec.describe Kiosk::Server::WireController do
   describe '402 WWW-Authenticate (W4)' do
     include_context 'with an origin for WireController'
 
-    # ─── PoW gate → WWW-Authenticate: Kiosk-PoW ────────────────────────────
+    # ─── The toll → WWW-Authenticate: Kiosk-PoW ────────────────────────────
     describe 'the pow_required 402' do
-      include_context 'with a proof-of-work gate on WireController'
+      include_context 'with a proof-of-work toll on WireController'
 
       # The reserved plane pays the same toll and answers the same way as the
       # per-verb wire: one answer shape on every Kiosk endpoint, here
-      # `POST <endpoint>/pay` for the PoW gate.
+      # `POST <endpoint>/pay` for the toll.
       it 'carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay' do
         status, headers, problem = dispatch(:pay, pay_env)
         expect(status).to eq(402)

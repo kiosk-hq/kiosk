@@ -5,7 +5,7 @@ require 'kiosk/pow/argon2id'
 require 'kiosk/pow/equihash'
 require 'kiosk/reputation'
 
-# Integration tests for the PoW challenge-response gate.
+# Integration tests for the toll's challenge and response.
 #
 # These tests use the REAL Argon2id backend (kiosk-pow-argon2id) registered at d=4, m=8
 # (minimum libargon2 memory — keeps solve time well under 1 s).

@@ -24,7 +24,7 @@ Gem::Specification.new do |spec|
       - Kiosk::Server::Executor — dispatches a resolved command to the
         queries and actions the host registered.
       - Client registration and authentication, with a pluggable agent-IdP.
-      - The PoW gate that enforces a kiosk-reputation policy's challenge
+      - The proof-of-work toll that a kiosk-reputation policy sets
         (soft dependency; zero overhead when no policy is set).
       - A Rack middleware injecting the Kiosk-Server-Version /
         Kiosk-API-Version / Kiosk-Min-Client response headers, a pure-Ruby

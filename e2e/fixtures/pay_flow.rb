@@ -43,7 +43,7 @@ end
 
 # Register the key (RFC 7591), then get a token from the token endpoint with a
 # client assertion and a DPoP proof. `aud` binds the assertion to this origin so
-# it can't be relayed. Registration is Equihash-PoW-gated
+# it can't be relayed. Registration has an Equihash toll
 # (registration_pow_count=1); register_with_token pays the toll and returns the
 # keypair, the 201 client information and the token.
 require_relative 'equihash_register'

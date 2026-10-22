@@ -4,7 +4,7 @@ Kiosk is a protocol and the reference implementation of it. The parts of this
 repository that carry security weight are the ones an origin exposes to the open
 internet: the OAuth client registration and the token endpoint that
 authenticates a client assertion and a DPoP proof, the token-bearing data
-plane, the proof-of-work gate in front of registration, the payment path that
+plane, the proof-of-work toll in front of registration, the payment path that
 settles a cart mandate against a card saved on the provider's own PSP account,
 and the optional Postgres row-level-security backstop. A flaw in any of those
 lets someone reach data or money that is not theirs on a **running operator's**
@@ -78,7 +78,7 @@ enough to be worth naming:
   its banner. A report that a private key is committed here tells us something we
   wrote down first. A report that one of them is reachable from a **production**
   boot path is a real finding.
-- **Equihash is neither ASIC- nor GPU-proof.** The proof-of-work gate is metered
+- **Equihash is neither ASIC- nor GPU-proof.** The proof-of-work toll is metered
   pricing, not a hardware wall; `kiosk-pow-equihash/README.md` says so at the
   top. Abuse resistance comes from the reputation policy's proof-count knob and
   caps. "A GPU solves this faster than a laptop" is the design, not a bug.

@@ -3,7 +3,7 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # With a PoW gate, registration with no proof or a wrong one must be refused
+      # With a registration toll, registration with no proof or a wrong one must be refused
       # (not a 201, no client_id, not a crash), while a solved control registration succeeds.
       class RegistrationWithoutPow < Scenario
         def initialize
@@ -11,7 +11,7 @@ module Kiosk
         end
 
         def call(client, profile)
-          return skip_verdict('pow_difficulty is 0 (no PoW gate)') unless profile.pow_difficulty.positive?
+          return skip_verdict('pow_difficulty is 0 (no registration toll)') unless profile.pow_difficulty.positive?
 
           attack(client)
         end
@@ -45,7 +45,7 @@ module Kiosk
           'CONTROL FAILED: a properly solved registration must return 201 with ' \
             "a client_id — got HTTP #{control.status} #{control.body.inspect}. " \
             'A server that refuses every registration refuses the two unproven ' \
-            'ones too, which says nothing about a PoW gate.'
+            'ones too, which says nothing about a registration toll.'
         end
 
         # Why this attempt is not a PoW refusal, or nil when it is.

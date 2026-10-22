@@ -6,7 +6,7 @@ require 'kiosk/pow/equihash'
 require_relative '../../support/equihash_kat'
 
 # End-to-end proof that the DEFAULT backend (equihash) works through the REAL
-# N×PoW gate: real HMAC challenge binding + real request-fingerprint + the real
+# N-proof toll: real HMAC challenge binding + real request-fingerprint + the real
 # Kiosk::Pow::Equihash verifier, exercised via PowGate.gate.
 #
 # We drive the gate's VERIFY path with a deterministic known-answer proof
@@ -59,7 +59,7 @@ module PowGateEquihashE2eSpec
   end
 end
 
-RSpec.shared_context 'with an equihash proof-of-work gate' do
+RSpec.shared_context 'with an equihash proof-of-work toll' do
   include PowGateEquihashE2eSpec
 
   before do
@@ -83,7 +83,7 @@ end
 
 RSpec.describe Kiosk::Server::PowGate do
   describe 'with equihash (real backend, real gate)' do
-    include_context 'with an equihash proof-of-work gate'
+    include_context 'with an equihash proof-of-work toll'
 
     it 'issues `count` equihash challenges on an unproven request (the 402 shape)' do
       expect { gate(pow: nil) }.to raise_error(Kiosk::Server::Errors::PowRequired) { |err|

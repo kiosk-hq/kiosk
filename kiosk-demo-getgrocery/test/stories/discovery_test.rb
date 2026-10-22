@@ -66,4 +66,13 @@ class DiscoveryStory < StoryTest
     assert_equal "#{live_url}/sitemap.xml", sitemap
     assert_includes Net::HTTP.get(URI(sitemap)), "<loc>#{live_url}/</loc>"
   end
+
+  test 'the landing page answers the type that Accept ranks first, and a browser gets HTML' do
+    { 'text/markdown, */*' => 'text/markdown', 'text/markdown;q=1.0, */*;q=0.1' => 'text/markdown',
+      'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' => 'text/html' }.each do |accept, type|
+      page = Net::HTTP.get_response(URI("#{live_url}/"), 'Accept' => accept)
+
+      assert_equal ['200', type, 'Accept'], [page.code, page.content_type, page['Vary']], accept
+    end
+  end
 end

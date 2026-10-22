@@ -6,6 +6,13 @@ class ListsController < ApplicationController
   include KioskSessionable
   include Kiosk::SkillLink
 
+  # An assistant that ranks Markdown first in Accept (q-value, then order) reads the page as Markdown.
+  # Rails alone answers HTML to every Accept that also lists */*.
+  before_action only: :index do
+    response.set_header('Vary', 'Accept')
+    request.format = :md if request.accepts.first == Mime[:md]
+  end
+
   # Bob, the seeded housemate whose lists the public board mirrors (db/seeds.rb).
   HOUSEMATE_ID    = '00000000-0000-0000-0000-000000000002'
   HOUSEMATE_LABEL = 'Bob (the housemate)'

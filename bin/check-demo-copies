@@ -1276,6 +1276,12 @@ FRAGMENTS = {
     ships: %w[atablefor getgrocery hoteling philslist skooti stylish],
     why: 'Every storefront landing page sends the engine\'s skill Link header.'
   },
+  'app/controllers/home_controller.rb#before_action' => {
+    rule: :code,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish],
+    why: 'Every storefront landing page answers Markdown to an Accept that ranks it first; ' \
+         "tudu's ListsController holds the same block."
+  },
   'app/controllers/home_controller.rb#index' => {
     rule: :per_demo,
     ships: %w[atablefor getgrocery hoteling philslist prove skooti stylish],

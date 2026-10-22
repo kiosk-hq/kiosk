@@ -3,7 +3,7 @@
 module Kiosk
   module Reputation
     module Policies
-      # One proof-of-work toll on every Nth tolled call of an assistant. N grows
+      # One proof-of-work toll on every Nth tolled call of an account. N grows
       # with what the customer spent here within `within` seconds:
       # N = ceil(10 / share), share = max(0, (cap - spend) / cap). So a customer
       # with no spend pays on every 10th call, at half the cap on every 20th, and

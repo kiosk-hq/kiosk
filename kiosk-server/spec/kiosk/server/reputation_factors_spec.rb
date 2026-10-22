@@ -9,28 +9,36 @@ module ReputationFactorsSpecHelpers
   def create_tables
     Kiosk.configure { |c| c.schema = schema }
     SpecPostgres.recreate_schema(schema)
-    defs = Kiosk::Server::SchemaDefinitions
-    [defs.mandates_sql(schema:, user_id_type: :uuid), defs.visits_sql(schema:, user_id_type: :uuid),
-     defs.refunds_sql(schema:)].each { conn.execute(it) }
+    [%(DROP TABLE IF EXISTS "#{users}" CASCADE), %(CREATE TABLE "#{users}" (id uuid PRIMARY KEY)), *shipped_ddl].each { conn.execute(it) }
   end
 
+  def shipped_ddl
+    defs = Kiosk::Server::SchemaDefinitions
+    [defs.identity_tables_sql(schema:, user_id_type: :uuid, user_table: users),
+     defs.mandates_sql(schema:, user_id_type: :uuid), defs.visits_sql(schema:, user_id_type: :uuid),
+     defs.refunds_sql(schema:)]
+  end
+
+  # A new account, and a live assistant on it.
+  def account = conn.select_value(%(INSERT INTO "#{users}" (id) VALUES (gen_random_uuid()) RETURNING id))
+  def assistant(account) = conn.select_value(%(INSERT INTO "#{schema}".agents (user_id, issuer) VALUES ('#{account}', 'i') RETURNING id))
+
   # The settlement's PSP reference.
-  def settle(cents, at:)
-    agent = SecureRandom.uuid
-    checkout = insert_checkout(agent, cents)
+  def settle(cents, at:, account: user, agent: SecureRandom.uuid)
+    checkout = insert_checkout(account, agent, cents)
     reference = "pi_#{SecureRandom.hex(4)}"
     conn.execute(<<~SQL.squish)
       INSERT INTO "#{schema}".settlements (checkout_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
-      VALUES ('#{checkout}', '#{user}', '#{agent}', 'i', '#{reference}', #{cents}, 'eur', '#{at.utc.iso8601}')
+      VALUES ('#{checkout}', '#{account}', '#{agent}', 'i', '#{reference}', #{cents}, 'eur', '#{at.utc.iso8601}')
     SQL
     reference
   end
 
-  def insert_checkout(agent, cents)
+  def insert_checkout(account, agent, cents)
     reference = SecureRandom.uuid
     conn.select_value(<<~SQL.squish)
       INSERT INTO "#{schema}".checkout_mandates (reference, checkout_hash, user_id, agent_id, issuer, line_items, total_amount_cents, currency, expires_at, sd_jwt)
-      VALUES ('#{reference}', '#{reference}', '#{user}', '#{agent}', 'i', '[]', #{cents}, 'eur', now(), 'j') RETURNING id
+      VALUES ('#{reference}', '#{reference}', '#{account}', '#{agent}', 'i', '[]', #{cents}, 'eur', now(), 'j') RETURNING id
     SQL
   end
 end
@@ -50,7 +58,8 @@ RSpec.describe Kiosk::Server::ReputationFactors do
 
   let(:schema) { 'kiosk_reputation_factors_spec' }
   let(:conn)   { ActiveRecord::Base.connection }
-  let(:user)   { SecureRandom.uuid }
+  let(:users)  { 'kiosk_reputation_factors_spec_users' }
+  let(:user)   { account }
   let(:policy) { Kiosk::Reputation::Policies::RecentSpend.new(within: 7 * 86_400, cap: 100) }
 
   before do
@@ -59,7 +68,10 @@ RSpec.describe Kiosk::Server::ReputationFactors do
     create_tables
   end
 
-  after { SpecPostgres.drop_schema(schema) }
+  after do
+    SpecPostgres.drop_schema(schema)
+    conn.execute(%(DROP TABLE IF EXISTS "#{users}" CASCADE)) unless SpecPostgres.error
+  end
 
   # A caller with no assistant row: these examples count spend, not calls.
   def factors = described_class.for(identity: build_identity(actor: 'human', user_id: user), policy: policy)
@@ -98,9 +110,20 @@ RSpec.describe Kiosk::Server::ReputationFactors do
   end
 
   it "counts no one else's spend" do
-    Kiosk::Visit.record!(user_id: SecureRandom.uuid, value_cents: 25_00)
+    other = account
+    Kiosk::Visit.record!(user_id: other, value_cents: 25_00)
+    settle(40_00, at: Time.current - 3600, account: other, agent: assistant(other))
 
     expect(factors.settled_purchases_cents).to eq(0)
+  end
+
+  it 'counts what an assistant of the customer paid on its own account before a binding moved it here' do
+    own = account
+    agent = assistant(own)
+    settle(40_00, at: Time.current - 3600, account: own, agent:)
+    conn.execute(%(UPDATE "#{schema}".agents SET user_id = '#{user}' WHERE id = '#{agent}'))
+
+    expect([factors.settled_purchases_count, factors.settled_purchases_cents]).to eq([1, 40_00])
   end
 
   it 'leaves the factors empty for a policy with no window' do

@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.6] — 2026-10-22
+
+- 2026-10-22: `Factors#calls_since_proof` is the account's count of tolled calls, which the assistants of one account share.
+- 2026-10-22: Version 0.6.6, the tree cut that matches skill 0.6.6.
+
 ## [0.6.5] — 2026-10-22
 
 - 2026-10-22: Version 0.6.5, the tree cut that matches skill 0.6.5.

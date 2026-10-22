@@ -6,7 +6,7 @@ require 'json'
 module Kiosk
   module Server
     # The proof-of-work toll, in front of every verb that reaches the executor.
-    # The policy decides on each call; a paid proof sets the assistant's count of
+    # The policy decides on each call; a paid proof sets the account's count of
     # tolled calls back to zero. With no `reputation_policy` it returns
     # `:proceed` and touches nothing; `kiosk-reputation` is required only when a
     # policy is set.
@@ -35,7 +35,7 @@ module Kiosk
 
         fp = request_fingerprint(method: method, verb: verb || command, body: body)
         PowToll.new(spec: spec, fingerprint: fp, secret: secret, config: config)
-               .collect!(pow).tap { TolledCalls.reset!(identity.agent_id) if factors.calls_since_proof }
+               .collect!(pow).tap { TolledCalls.reset!(identity.user_id) if factors.calls_since_proof }
       end
 
       def pow_secret!(config)

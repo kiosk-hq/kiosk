@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Migration 002 — Kiosk identity tables: agents, agent_tokens, agent_mappings.
+# Migration 002 — Kiosk identity tables: agents, agent_tokens, agent_mappings, tolled_calls.
 class CreateKioskIdentityTables < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
     execute <<~'SQL'
@@ -9,6 +9,7 @@ class CreateKioskIdentityTables < ActiveRecord::Migration[ActiveRecord::Migratio
   end
 
   def down
+    execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".tolled_calls)
     execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".agent_mappings)
     execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".agent_tokens)
     execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".agents)

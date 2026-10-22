@@ -38,8 +38,8 @@ module Kiosk
       end
 
       # 002: `agents` (`spending_cap_cents`: NULL unlimited, 0 disabled; a cap
-      # has its `spending_cap_currency`; `calls_since_proof`: the tolled calls
-      # since the last paid proof), `agent_tokens`, `agent_mappings`.
+      # has its `spending_cap_currency`), `agent_tokens`, `agent_mappings`, and
+      # `tolled_calls`, each account's tolled calls since its last paid proof.
       def identity_tables_sql(schema: nil, user_id_type: nil, user_table: 'users')
         schema ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -54,7 +54,6 @@ module Kiosk
             human_label         text,
             spending_cap_cents  bigint,
             spending_cap_currency text CHECK (spending_cap_currency ~ '^[a-z]{3}$'),
-            calls_since_proof   bigint NOT NULL DEFAULT 0,
             created_at          timestamptz NOT NULL DEFAULT now(),
             revoked_at          timestamptz,
             issuer              text NOT NULL,
@@ -85,6 +84,11 @@ module Kiosk
             external_id  text NOT NULL,
             agent_id     uuid NOT NULL REFERENCES "#{schema}".agents(id) ON DELETE CASCADE,
             PRIMARY KEY (provider, external_id)
+          );
+
+          CREATE TABLE IF NOT EXISTS "#{schema}".tolled_calls (
+            user_id            #{col_type} PRIMARY KEY REFERENCES "#{user_table}"(id) ON DELETE CASCADE,
+            calls_since_proof  bigint NOT NULL DEFAULT 0
           );
         DDL
       end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_22_100023) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_22_100024) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -252,7 +252,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100023) do
     t.timestamptz "revoked_at"
     t.text "issuer", null: false
     t.text "spending_cap_currency"
-    t.bigint "calls_since_proof", default: 0, null: false
     t.index ["issuer", "public_key"], name: "idx_agents_issuer_public_key_live", unique: true, where: "(revoked_at IS NULL)"
     t.index ["user_id"], name: "idx_agents_user_id", where: "(revoked_at IS NULL)"
     t.check_constraint "(spending_cap_cents IS NULL) = (spending_cap_currency IS NULL)", name: "agents_spending_cap_currency_set"
@@ -372,6 +371,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100023) do
     t.unique_constraint ["checkout_mandate_id"], name: "settlements_checkout_mandate_id_key"
   end
 
+  create_table "kiosk.tolled_calls", primary_key: "user_id", id: :uuid, default: nil, force: :cascade do |t|
+    t.bigint "calls_since_proof", default: 0, null: false
+  end
+
   create_table "kiosk.visits", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "user_id", null: false
     t.bigint "value_cents", null: false
@@ -389,4 +392,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100023) do
   add_foreign_key "kiosk.refunds", "kiosk.settlements", name: "refunds_settlement_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.revocations", "kiosk.agents", name: "revocations_agent_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.settlements", "kiosk.checkout_mandates", name: "settlements_checkout_mandate_id_fkey", on_delete: :cascade
+  add_foreign_key "kiosk.tolled_calls", "public.users", name: "tolled_calls_user_id_fkey", on_delete: :cascade
 end

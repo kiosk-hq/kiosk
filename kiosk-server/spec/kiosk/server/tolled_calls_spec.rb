@@ -10,56 +10,40 @@ module AcceptingEquihash
   def self.verify(nonce:, **) = nonce == 'solved' # rubocop:disable Naming/PredicateMethod -- `verify` is the backend contract Backends.register names
 end
 
-# The toll by call count through the real gate, `RecentSpend` and the agents
-# table: every Nth tolled call answers 402 until a proof pays for it.
+# The toll by call count through the real gate, `RecentSpend` and the shipped
+# tables: every Nth tolled call of an account answers 402 until a proof pays for
+# it, and the assistants bound to one account share the count and the spend.
 RSpec.describe Kiosk::Server::TolledCalls do
-  let(:schema) { 'kiosk_tolled_calls_spec' }
-  let(:users)  { 'kiosk_tolled_calls_spec_users' }
-  let(:conn)   { ActiveRecord::Base.connection }
-  let(:user)   { SecureRandom.uuid }
-  let(:agent)  { create_agent }
+  include_context 'with registered clients'
+
+  let(:conn)  { ActiveRecord::Base.connection }
+  let(:human) { holder! }
+  let(:key)   { OpenSSL::PKey.generate_key('ED25519') }
+  let(:agent) { assistant_of(human, key:) }
 
   before do
-    skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
-
-    create_tables
+    defs = Kiosk::Server::SchemaDefinitions
+    schema = OauthClients::SCHEMA
+    [defs.mandates_sql(schema:, user_id_type: :uuid), defs.visits_sql(schema:, user_id_type: :uuid), defs.refunds_sql(schema:),
+     %(TRUNCATE "#{schema}".checkout_mandates, "#{schema}".visits CASCADE)].each { conn.execute(it) }
     Kiosk::Reputation::Backends.register('equihash', AcceptingEquihash)
     Kiosk.configure do |c|
-      c.schema            = schema
       c.pow_secret        = 'tolled-calls-spec-secret-of-32-bytes'
       c.reputation_policy = Kiosk::Reputation::Policies::RecentSpend.new(within: 7 * 86_400, cap: 100)
     end
   end
 
-  after do
-    Kiosk::Reputation::Backends.reset!
-    SpecPostgres.drop_schema(schema)
-    conn.execute(%(DROP TABLE IF EXISTS "#{users}" CASCADE)) unless SpecPostgres.error
+  after { Kiosk::Reputation::Backends.reset! }
+
+  # A registered assistant, bound to `account`; its client.
+  def assistant_of(account, key: OpenSSL::PKey.generate_key('ED25519'))
+    Kiosk::Server::AccountBinding.bind!(agent_id: register_client(key).id, user_id: account)
   end
 
-  # The customer, and the shipped DDL of the agents, settlements, visits and refunds.
-  def create_tables
-    SpecPostgres.recreate_schema(schema)
-    [%(DROP TABLE IF EXISTS "#{users}" CASCADE), %(CREATE TABLE "#{users}" (id uuid PRIMARY KEY)),
-     %(INSERT INTO "#{users}" (id) VALUES ('#{user}')), *shipped_ddl].each { conn.execute(it) }
+  # An access token of `client`; `jti` names the token.
+  def token(client = agent, jti = 'token-1')
+    build_identity(user_id: client.user_id, agent_id: client.id, claims: { jti:, exp: Time.now.to_i + 3600 })
   end
-
-  def shipped_ddl
-    defs = Kiosk::Server::SchemaDefinitions
-    [defs.identity_tables_sql(schema:, user_id_type: :uuid, user_table: users),
-     defs.mandates_sql(schema:, user_id_type: :uuid), defs.visits_sql(schema:, user_id_type: :uuid),
-     defs.refunds_sql(schema:)]
-  end
-
-  # One more assistant of the customer.
-  def create_agent = conn.select_value(%(INSERT INTO "#{schema}".agents (user_id, issuer) VALUES ('#{user}', 'i') RETURNING id))
-
-  def visit(cents, at: Time.current)
-    conn.exec_query(%(INSERT INTO "#{schema}".visits (user_id, value_cents, visited_at) VALUES ($1, $2, $3)), 'spec', [user, cents, at])
-  end
-
-  # An access token of the agent; `jti` names the token.
-  def token(jti = 'token-1') = build_identity(user_id: user, agent_id: agent, claims: { jti:, exp: Time.now.to_i + 3600 })
 
   def call(identity = token, pow: nil)
     Kiosk::Server::PowGate.gate(identity: identity, command: 'query', verb: 'menu', body: {}, pow: pow)
@@ -67,12 +51,18 @@ RSpec.describe Kiosk::Server::TolledCalls do
     e
   end
 
+  def tolled?(answer) = answer.is_a?(Kiosk::Server::Errors::PowRequired)
+
   # The first call that answers 402, among the next 100.
-  def first_tolled_call(identity = token) = (1..100).find { call(identity).is_a?(Kiosk::Server::Errors::PowRequired) }
+  def first_tolled_call(identity = token) = (1..100).find { tolled?(call(identity)) }
 
   def pay(refusal, identity = token) = call(identity, pow: [{ challenge: refusal.challenges.first, nonce: 'solved' }])
 
-  it 'answers 402 on the 10th call of an assistant with no spend, and the paid proof lets that call through' do
+  def visit(cents, at: Time.current, account: human)
+    conn.exec_query(%(INSERT INTO "#{OauthClients::SCHEMA}".visits (user_id, value_cents, visited_at) VALUES ($1, $2, $3)), 'spec', [account, cents, at])
+  end
+
+  it 'answers 402 on the 10th call of an account with no spend, and the paid proof lets that call through' do
     expect(first_tolled_call).to eq(10)
     expect(pay(call)).to eq(:proceed)
   end
@@ -85,9 +75,23 @@ RSpec.describe Kiosk::Server::TolledCalls do
   end
 
   it 'keeps the count when the assistant gets a new access token' do
-    5.times { call(token('token-1')) }
+    5.times { call(token(agent, 'token-1')) }
 
-    expect(first_tolled_call(token('token-2'))).to eq(5)
+    expect(first_tolled_call(token(agent, 'token-2'))).to eq(5)
+  end
+
+  it 'keeps the count when the assistant rotates its key' do
+    5.times { call }
+    new_key = OpenSSL::PKey.generate_key('ED25519')
+    jwks = jwks_of(new_key)
+    thumbprint = Kiosk::Server::AssistantKey.thumbprint(Kiosk::Server::AssistantKey.from_jwks(jwks))
+    rotated = Kiosk::Server::AgentRotation.call(
+      type: Kiosk::Server::ClientAssertion::TYPE, jwks:,
+      assertion: client_assertion(agent.id, key:, new_key: thumbprint),
+      new_assertion: client_assertion(agent.id, key: new_key)
+    )
+
+    expect(first_tolled_call(token(rotated, 'token-2'))).to eq(5)
   end
 
   it 'answers 402 on the 20th call at half the cap of recent spend, and on none at the cap' do
@@ -104,10 +108,54 @@ RSpec.describe Kiosk::Server::TolledCalls do
     expect(first_tolled_call).to eq(10)
   end
 
-  it 'counts each assistant of one customer on its own' do
+  it 'shares the count among the assistants of one account: nine calls by one, the 10th by another pays' do
+    other = assistant_of(human)
     9.times { call }
-    other = build_identity(user_id: user, agent_id: create_agent, claims: {})
 
-    expect([call(other), call]).to match([:proceed, an_instance_of(Kiosk::Server::Errors::PowRequired)])
+    expect(tolled?(call(token(other)))).to be(true)
+  end
+
+  it 'shares the spend among the assistants of one account: at half the cap every 20th call across both pays' do
+    visit(50_00)
+    other = assistant_of(human)
+    tolled = (1..40).select do |n|
+      identity = token(n.odd? ? agent : other)
+      answer = call(identity)
+      pay(answer, identity) if tolled?(answer)
+    end
+
+    expect(tolled).to eq([20, 40])
+  end
+
+  it 'counts a fresh unbound assistant alone, on the account it got at registration' do
+    9.times { call }
+    unbound = register_client(OpenSSL::PKey.generate_key('ED25519'))
+
+    expect(first_tolled_call(token(unbound))).to eq(10)
+  end
+
+  it "adds the calls of the assistant's previous account to its new account at a binding" do
+    unbound = register_client(OpenSSL::PKey.generate_key('ED25519'))
+    4.times { call(token(unbound)) }
+    3.times { call }
+    bound = Kiosk::Server::AccountBinding.bind!(agent_id: unbound.id, user_id: human)
+
+    expect(first_tolled_call(token(bound))).to eq(3)
+  end
+
+  it 'gives each of the calls made at the same time its own number, so no two of them skip the proof' do
+    account = human
+    gate = Queue.new
+    threads = Array.new(4) do
+      Thread.new do
+        ActiveRecord::Base.connection_pool.with_connection do
+          gate.pop
+          described_class.count!(account)
+        end
+      end
+    end
+    4.times { gate << :go }
+
+    expect(threads.map(&:value).sort).to eq([1, 2, 3, 4])
   end
 end

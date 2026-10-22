@@ -180,10 +180,12 @@ in cents and a currency. The engine refuses a `pay` that passes the cap, or a
 ### Proof of work
 
 Set a policy and the engine asks it on each query, action and `pay`. The
-engine counts each assistant's tolled calls since its last paid proof, and a
-new access token keeps that count. With the ready-made policy, an assistant
-pays a proof on every 10th call, and the more its customer spent here, the
-more calls pass between two proofs:
+engine counts each account's tolled calls since its last paid proof. The
+assistants bound to one account share that count, and a new access token or a
+key rotation keeps it. A binding adds the count of the assistant's previous account
+to the count of its new account. With the ready-made policy, an account pays a
+proof on every 10th call, and the more its customer spent here, the more calls
+pass between two proofs:
 
 ```ruby
 Kiosk.configure do |c|

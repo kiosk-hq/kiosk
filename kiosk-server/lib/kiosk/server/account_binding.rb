@@ -61,6 +61,7 @@ module Kiosk
           transition = client.user_id.to_s != user_id.to_s
           conn.transaction do
             Rows.rebind(conn, config.schema, client.id, user_id, role)
+            TolledCalls.carry!(from: client.user_id, to: user_id) if transition
             claimed(config, client.id, client.user_id, user_id) if transition && config.assistant_claimed
           end
           # The old holder's tokens die (§6.3). The IdP dates new mints at the

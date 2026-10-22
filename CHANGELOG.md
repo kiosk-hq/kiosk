@@ -11,6 +11,18 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.6] — 2026-10-22
+
+- 2026-10-22: **Every gem and `API_VERSION` are 0.6.6, matching skill 0.6.6.** `MIN_CLIENT` stays 0.6.0: a 0.6.5 assistant answers a 402 on any call.
+
+- 2026-10-22: **Every demo and the engine default pin `skill-v0.6.6.md`**, which says that the assistants of one account share the count.
+
+- 2026-10-22: The toll counts the tolled calls of each account, and the assistants of one account share the count and the spend. A binding adds the previous account's count.
+
+- 2026-10-22: The recent spend of an account also counts what its assistants paid on their own accounts before a binding moved them there.
+
+- 2026-10-22: The seven operator demos move the count from `kiosk.agents.calls_since_proof` to `kiosk.tolled_calls`, keyed by the account.
+
 - 2026-10-22: Every gem README installs its gem from RubyGems.
 
 ## [0.6.5] — 2026-10-22

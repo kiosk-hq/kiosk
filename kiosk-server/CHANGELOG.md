@@ -12,6 +12,13 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.6] — 2026-10-22
+
+- 2026-10-22: The gate counts the tolled calls of each account in `tolled_calls`; the assistants of one account share the count. A binding adds the previous account's count.
+- 2026-10-22: The recent spend also counts what an assistant of the account paid before a binding moved it there.
+- 2026-10-22: `kiosk:install` writes `tolled_calls` and no `agents.calls_since_proof`. An installed origin moves the count with a migration of its own.
+- 2026-10-22: Version 0.6.6, the tree cut that matches skill 0.6.6.
+
 ## [0.6.5] — 2026-10-22
 
 - 2026-10-22: Version 0.6.5, the tree cut that matches skill 0.6.5.

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2081 anchors.
+# 2086 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -345,7 +345,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.5'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.6'
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -1219,7 +1219,7 @@ kiosk-server/lib/kiosk/server/schema_definitions.rb	spending_cap_cents  bigint,
 kiosk-server/lib/kiosk/server/schema_document.rb	    module SchemaDocument
 kiosk-server/lib/kiosk/server/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 kiosk-server/lib/kiosk/server/schemas/binding.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
-kiosk-server/lib/kiosk/server/tolled_calls.rb	The count belongs to the assistant, so a new
+kiosk-server/lib/kiosk/server/tolled_calls.rb	The count belongs to the account: the
 kiosk-server/lib/kiosk/server/verb_registry.rb	          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
 kiosk-server/lib/kiosk/server/verb_wire.rb	PowGate.gate(
 kiosk-server/lib/kiosk/server/verb_wire.rb	pow = PowGate.proofs_from_header(
@@ -1925,11 +1925,16 @@ kiosk-server/spec/kiosk/server/sd_jwt_spec.rb	refuses two disclosures with one d
 kiosk-server/spec/kiosk/server/sd_jwt_spec.rb	verifies the closed checkout mandate with the key of its open mandate, and discloses it
 kiosk-server/spec/kiosk/server/signing_key_spec.rb	has the RFC 8037 public members, use sig, alg EdDSA and the kid, and nothing else
 kiosk-server/spec/kiosk/server/signing_key_spec.rb	refuses an RSA key and a P-256 key, and names the command that makes an Ed25519 key
-kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	answers 402 on the 10th call of an assistant with no spend, and the paid proof lets that call through
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	adds the calls of the assistant's previous account to its new account at a binding
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	answers 402 on the 10th call of an account with no spend, and the paid proof lets that call through
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	answers 402 on the 20th call at half the cap of recent spend, and on none at the cap
-kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	counts each assistant of one customer on its own
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	counts a fresh unbound assistant alone, on the account it got at registration
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	counts no spend older than the window
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	gives each of the calls made at the same time its own number, so no two of them skip the proof
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	keeps the count when the assistant gets a new access token
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	keeps the count when the assistant rotates its key
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	shares the count among the assistants of one account: nine calls by one, the 10th by another pays
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	shares the spend among the assistants of one account: at half the cap every 20th call across both pays
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	starts a new count of 10 after the paid proof
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a checkout signed for the origin being served and refuses one signed for the other
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a token on the origin that minted it and refuses it on the other

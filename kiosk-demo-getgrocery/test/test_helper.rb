@@ -9,6 +9,10 @@ require 'kiosk/test_helpers/conformance/minitest'
 require 'kiosk/story_test'
 require 'kiosk/test_helpers/stripe_mock'
 
+# Each run starts on empty tables: a seeded database, or the rows of a stopped
+# run, would break the transactional tests.
+Kiosk::TestHelpers::SeededDatabase.empty
+
 # The conformance matchers read this origin from the handler registry, the
 # router and a GUC-scoped session, as the running server does.
 Kiosk::TestHelpers::Conformance.origin = Kiosk::TestHelpers::Conformance::InProcessOrigin.new

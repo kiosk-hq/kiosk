@@ -9,6 +9,10 @@ require 'kiosk/test_helpers/conformance/in_process_origin'
 require 'kiosk/test_helpers/conformance/minitest'
 require 'kiosk/story_test'
 
+# Each run starts on empty tables: a seeded database, or the rows of a stopped
+# run, would break the transactional tests.
+Kiosk::TestHelpers::SeededDatabase.empty
+
 Kiosk::TestHelpers::Conformance.origin = Kiosk::TestHelpers::Conformance::InProcessOrigin.new
 
 module ActiveSupport

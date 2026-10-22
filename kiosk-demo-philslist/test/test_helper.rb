@@ -6,6 +6,10 @@ require_relative '../config/environment'
 require 'rails/test_help'
 require 'kiosk/story_test'
 
+# Each run starts on empty tables: a seeded database, or the rows of a stopped
+# run, would break the transactional tests.
+Kiosk::TestHelpers::SeededDatabase.empty
+
 # The categories enum is read from the table, which every story reseeds.
 Kiosk::Server::SchemaSlots.refresh_seconds = 0
 

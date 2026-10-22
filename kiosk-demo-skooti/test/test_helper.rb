@@ -8,6 +8,10 @@ require 'kiosk/story_test'
 require 'kiosk/test_helpers/stripe_mock'
 require_relative '../script/lock_sim'
 
+# Each run starts on empty tables: a seeded database, or the rows of a stopped
+# run, would break the transactional tests.
+Kiosk::TestHelpers::SeededDatabase.empty
+
 # A rider's AI assistant: finds a vehicle nearby, reserves it, pays for the
 # first minute and rides — a motorcycle only with a licence on record.
 class Rider < Kiosk::TestHelpers::Customer

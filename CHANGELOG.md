@@ -11,6 +11,18 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.5] — 2026-10-22
+
+- 2026-10-22: **Every gem and `API_VERSION` are 0.6.5, matching skill 0.6.5.** `MIN_CLIENT` stays 0.6.0: a 0.6.4 assistant reads no new header.
+
+- 2026-10-22: **Every demo and the engine default pin `skill-v0.6.5.md`**, which has the text of 0.6.4.
+
+- 2026-10-22: A 401 from `/auth/claim`, `/auth/rotate`, `/auth/link` or `/auth/unlink` names its challenge: `Kiosk-Client-Assertion` or `Kiosk-Session`.
+
+- 2026-10-22: Every demo sends a Content-Security-Policy that takes scripts and styles from its own origin only. The pages with an inline script or style load it from a file now.
+
+- 2026-10-22: A demo landing page answers Markdown when Accept ranks `text/markdown` first, also beside `*/*`, and wraps its content in `<main>`.
+
 ## [0.6.4] — 2026-10-22
 
 - 2026-10-22: **Every gem and `API_VERSION` are 0.6.4, matching skill 0.6.4.** `MIN_CLIENT` stays 0.6.0: a 0.6.3 assistant sends no `scope` and reads no new header.

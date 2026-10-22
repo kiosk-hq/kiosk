@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.5] — 2026-10-22
+
+- 2026-10-22: Version 0.6.5, the tree cut that matches skill 0.6.5.
+- 2026-10-22: A 401 from `/auth/claim`, `/auth/rotate`, `/auth/link` or `/auth/unlink` names its challenge, `Kiosk-Client-Assertion` or `Kiosk-Session`. The engine pages have no inline style.
+
 ## [0.6.4] — 2026-10-22
 
 - 2026-10-22: Version 0.6.4, the tree cut that matches skill 0.6.4.

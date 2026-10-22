@@ -18,12 +18,11 @@ module Kiosk
 
       private
 
+      # No script and no inline style: a host Content-Security-Policy of `default-src 'self'` holds.
       def page(title, text)
         <<~HTML
-          <!DOCTYPE html><html><head><meta charset="utf-8"><title>#{title}</title></head>
-          <body style="font-family:system-ui,sans-serif;text-align:center;padding:64px">
-          <h1>#{title}</h1><p>#{text}</p>
-          </body></html>
+          <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>#{title}</title></head>
+          <body><main><h1>#{title}</h1><p>#{text}</p></main></body></html>
         HTML
       end
     end

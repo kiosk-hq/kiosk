@@ -62,20 +62,7 @@
 
     <%# "Yes" enables once every fact is ticked and a category is chosen; the
         server reads `decision` and `licence_category`. %>
-    <script>
-      (function () {
-        var boxes = Array.prototype.slice.call(document.querySelectorAll(".claim-check"));
-        var choices = Array.prototype.slice.call(document.querySelectorAll(".licence-choice"));
-        var approve = document.getElementById("approve-btn");
-        if (!approve) { return; }
-        function sync() {
-          approve.disabled = !boxes.every(function (b) { return b.checked; }) ||
-            (choices.length > 0 && !choices.some(function (c) { return c.checked; }));
-        }
-        boxes.concat(choices).forEach(function (b) { b.addEventListener("change", sync); });
-        sync();
-      })();
-    </script>
+    <%= javascript_include_tag "/verification.js" %>
 
     <p class="stub">
       <em>Demo stub — nothing is checked here.</em> You just self-assert these

@@ -149,6 +149,11 @@ RSpec.describe 'DeviceVerifyController' do
       expect(html).to include(%(value="deny"))
     end
 
+    it "has no inline script or style, so a host policy of default-src 'self' holds" do
+      _status, html = dispatch(:show, method: 'GET', params: { 'user_code' => start_claim[:user_code] })
+      expect(html).not_to match(/<script|<style|\sstyle=|\son[a-z]+=/i)
+    end
+
     # ── INFORMED CONSENT: the panel names the access being handed over ───────
     #
     # K-072's second half. The ceremony's role is the approver's own, so the

@@ -164,6 +164,7 @@ RSpec.describe Kiosk::Server::PaymentSetup do
       expect(status).to eq(200)
       expect(headers['content-type']).to start_with('text/html')
       expect(body).to include('Your assistant can now pay')
+      expect(body).not_to match(/<script|<style|\sstyle=|\son[a-z]+=/i)
       event = store.since('u-7', 0).first
       expect(event).to include('topic' => 'payment_setup', 'subject' => 'u-7',
                                'data' => { 'status' => 'ready' })

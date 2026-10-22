@@ -2,7 +2,7 @@
   <%# ── Signed-in: the actual tudu app (this IS the storefront) ─────────── %>
   <%# Live DOMAIN activity summary — app-wide counts on tudu's own tables. %>
   <% if @activity %>
-    <ul class="activity" style="margin-top:1.4rem">
+    <ul class="activity top">
       <li><div class="n"><%= @activity[:lists] %></div><div class="l">Lists</div></li>
       <li><div class="n"><%= @activity[:todos] %></div><div class="l">Todos</div></li>
       <li><div class="n"><%= @activity[:done] %></div><div class="l">Done</div></li>

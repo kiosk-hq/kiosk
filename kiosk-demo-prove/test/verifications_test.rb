@@ -87,6 +87,13 @@ class VerificationPageTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_includes response.body, 'not recognised'
   end
+
+  test 'loads its script and style from this origin only, as its Content-Security-Policy says' do
+    get '/verify', params: { request: open_request }
+
+    assert_includes response.headers['Content-Security-Policy'], "default-src 'self'; script-src 'self'; style-src 'self'"
+    assert_no_match(/<script(?![^>]*src=)|<style|\sstyle=/, response.body)
+  end
 end
 
 class ApprovalTest < ActionDispatch::IntegrationTest

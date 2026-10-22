@@ -75,4 +75,11 @@ class DiscoveryStory < StoryTest
       assert_equal ['200', type, 'Accept'], [page.code, page.content_type, page['Vary']], accept
     end
   end
+
+  test 'the landing page loads its script and style from this origin only, as its Content-Security-Policy says' do
+    page = Net::HTTP.get_response(URI("#{live_url}/"))
+
+    assert_includes page['Content-Security-Policy'], "default-src 'self'; script-src 'self'; style-src 'self'"
+    assert_no_match(/<script(?![^>]*src=)|<style|\sstyle=/, page.body)
+  end
 end

@@ -168,6 +168,11 @@ RSpec.describe 'AssistantsController' do
       expect(con.all_sql).not_to include(user_id)
       expect(con).not_to have_received(:quote)
     end
+
+    it "has no inline script or style, so a host policy of default-src 'self' holds" do
+      _status, html = dispatch(:show, method: 'GET')
+      expect(html).not_to match(/<script|<style|\sstyle=|\son[a-z]+=/i)
+    end
   end
 
   describe 'link' do

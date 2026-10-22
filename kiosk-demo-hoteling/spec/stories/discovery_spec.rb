@@ -56,5 +56,11 @@ RSpec.describe 'Discovering the hotel', type: :story do
         expect([page.code, page.content_type, page['Vary']]).to eq(['200', type, 'Accept']), accept
       end
     end
+
+    it 'loads its script and style from this origin only, as its Content-Security-Policy says' do
+      page = Net::HTTP.get_response(URI("#{live_url}/"))
+      expect(page['Content-Security-Policy']).to include("default-src 'self'; script-src 'self'; style-src 'self'")
+      expect(page.body).not_to match(/<script(?![^>]*src=)|<style|\sstyle=/)
+    end
   end
 end

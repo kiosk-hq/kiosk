@@ -516,6 +516,7 @@ EXTRA_SCANNED = [
   'config/puma.rb',
   'config/cable.yml',
   'config/initializers/filter_parameter_logging.rb',
+  'config/initializers/content_security_policy.rb',
   'bin/setup',
   'bin/dev'
 ].freeze
@@ -581,6 +582,10 @@ COPIES = {
               'philslist' => 'has no jobs, so it runs no `plugin :solid_queue`.',
               'tudu' => 'has no jobs, so it runs no `plugin :solid_queue`.' },
     why: 'Port and concurrency come from the environment, so nothing in it is per-demo.'
+  },
+  'config/initializers/content_security_policy.rb' => {
+    rule: :identical,
+    why: 'One policy for every demo: every page takes its scripts and styles from its own origin.'
   },
   'config/initializers/filter_parameter_logging.rb' => {
     rule: :identical,

@@ -119,7 +119,7 @@ module Kiosk
       def authenticated_account_holder!
         identity = Kiosk.configuration.user_idp&.verify(request)
         hint = "sign in to the provider first — this endpoint authenticates via the provider's own session"
-        raise Errors::Unauthenticated.new('account session required', hint:) unless identity
+        raise Errors::SessionRequired.new('account session required', hint:) unless identity
         raise Errors::BadRequest, 'Content-Type must be application/json' unless request.media_type == 'application/json'
 
         identity

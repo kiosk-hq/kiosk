@@ -102,6 +102,7 @@ RSpec.describe Kiosk::Server::AuthController do
         wire_user_idp(nil)
         status, body = dispatch(:link)
         expect_problem(status, body, http: 401, code: 'unauthenticated')
+        expect(last_headers['WWW-Authenticate']).to eq('Kiosk-Session realm="https://provider.example"')
       end
     end
 
@@ -158,6 +159,7 @@ RSpec.describe Kiosk::Server::AuthController do
         status, body = dispatch(:claim, body: claim_body)
         expect_problem(status, body, http: 401, code: 'unauthenticated', detail: /signature invalid/)
         expect(body[:hint]).to eq('sign it')
+        expect(last_headers['WWW-Authenticate']).to eq('Kiosk-Client-Assertion realm="https://provider.example"')
       end
     end
 
@@ -220,6 +222,7 @@ RSpec.describe Kiosk::Server::AuthController do
         wire_user_idp(nil)
         status, body = dispatch(:unlink, body: { agent_id: 'a-1' })
         expect_problem(status, body, http: 401, code: 'unauthenticated')
+        expect(last_headers['WWW-Authenticate']).to eq('Kiosk-Session realm="https://provider.example"')
       end
     end
 

@@ -238,6 +238,16 @@ module Kiosk
         def response_headers = { 'WWW-Authenticate' => Dpop.challenge }
       end
 
+      # The 401 of a refused client assertion (RFC 7523). No registered scheme names one.
+      class ClientAssertionRefused < Unauthenticated
+        def response_headers = { 'WWW-Authenticate' => %(Kiosk-Client-Assertion realm="#{Kiosk.current_issuer}") }
+      end
+
+      # The 401 of a binding path that the provider's own sign-in session authenticates.
+      class SessionRequired < Unauthenticated
+        def response_headers = { 'WWW-Authenticate' => %(Kiosk-Session realm="#{Kiosk.current_issuer}") }
+      end
+
       class Forbidden < Base
         CODE        = 'forbidden'
         HTTP_STATUS = 403

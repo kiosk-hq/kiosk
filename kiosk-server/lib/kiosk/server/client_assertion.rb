@@ -17,7 +17,8 @@ module Kiosk
       REQUIRED_CLAIMS = %w[iss sub aud exp jti].freeze
 
       # A refused client assertion. The `/oauth/*` endpoints answer it as
-      # `invalid_client`, the other endpoints as `401 unauthenticated`.
+      # `invalid_client`, the other endpoints as `401 unauthenticated` with the
+      # `Kiosk-Client-Assertion` challenge.
       class Refused < StandardError
         attr_reader :hint
 
@@ -27,7 +28,7 @@ module Kiosk
         end
 
         def to_oauth = OauthError.new(:invalid_client, "#{message}: #{hint}")
-        def to_problem = Errors::Unauthenticated.new(message, hint: hint)
+        def to_problem = Errors::ClientAssertionRefused.new(message, hint: hint)
       end
 
       # A verified assertion that is not yet spent.

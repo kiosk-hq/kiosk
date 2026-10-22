@@ -52,4 +52,10 @@ RSpec.describe Kiosk::Server::AuthController do
   it 'answers 400 bad_request for a jwks that is not a JWK Set' do
     expect_problem(rotate(JSON.generate(complete.merge(jwks: 'key'))), http: 400, code: 'bad_request')
   end
+
+  it 'answers a refused client assertion with 401 and the Kiosk-Client-Assertion challenge' do
+    response = rotate(JSON.generate(complete))
+    expect_problem(response, http: 401, code: 'unauthenticated')
+    expect(response[1]['WWW-Authenticate']).to eq('Kiosk-Client-Assertion realm="https://demo.example"')
+  end
 end

@@ -12,7 +12,8 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise::SessionsController do
     expect(res.media_type).to eq('application/json')
     error = JSON.parse(res.body).fetch('error')
     expect(error).to include('code' => 'not_signed_in')
-    expect(error.fetch('hint')).to include('http://shop.example/.well-known/kiosk.json')
+    expect(error.fetch('hint')).to include('http://shop.example/.well-known/kiosk.json', 'auth.registration_url',
+                                           'auth.token_url')
   end
 
   it "leaves a browser's sign-out to Devise's redirect" do

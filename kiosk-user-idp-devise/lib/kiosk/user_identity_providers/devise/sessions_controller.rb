@@ -19,9 +19,10 @@ module Kiosk
           render_wire_signpost :unauthorized, 'not_signed_in',
                                message: 'there is no human web session to end — /users/sign_out closes a ' \
                                         'browser session on this site, not a Kiosk credential',
-                               hint: 'assistant credentials belong to the Kiosk HTTP API and are dropped there: GET ' \
-                                     "#{request.base_url}/.well-known/kiosk.json for the register/login " \
-                                     'and revoke endpoints'
+                               hint: 'the credential of an assistant is its key at the Kiosk HTTP API. GET ' \
+                                     "#{request.base_url}/.well-known/kiosk.json: auth.registration_url " \
+                                     'registers your key, auth.token_url gives an access token, and ' \
+                                     'auth.rotate_url replaces your key.'
         end
       end
     end

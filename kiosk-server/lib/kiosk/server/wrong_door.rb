@@ -31,9 +31,9 @@ module Kiosk
 
       # Not a protocol problem document or Kiosk error code: this page is not the protocol.
       def wrong_door_envelope
-        hint = "assistants use the Kiosk HTTP API: GET #{request.base_url}/.well-known/kiosk.json " \
-               'for the register/login endpoints, then GET <endpoint>/schema ' \
-               '(public) for the verbs this origin serves'
+        hint = "an assistant uses the Kiosk HTTP API. GET #{request.base_url}/.well-known/kiosk.json: " \
+               'auth.registration_url registers your key, and auth.token_url gives an access token. ' \
+               'Then GET <endpoint>/schema (public) for the verbs that this origin serves.'
         { ok: false,
           error: { code: 'invalid_authenticity_token', message: self.class::WRONG_DOOR_MESSAGE, hint: hint } }
       end

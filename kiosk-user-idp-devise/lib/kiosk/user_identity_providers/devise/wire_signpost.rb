@@ -18,9 +18,10 @@ module Kiosk
             render_wire_signpost :unprocessable_entity, 'invalid_authenticity_token',
                                  message: 'this is the human sign-in page, not the Kiosk HTTP API — it needs a ' \
                                           'browser session and a CSRF token from its own form',
-                                 hint: 'assistants authenticate with their own keypair: GET ' \
-                                       "#{request.base_url}/.well-known/kiosk.json for the register/login " \
-                                       'endpoints, the catalog link and the modules this origin serves'
+                                 hint: 'an assistant authenticates with its own key. GET ' \
+                                       "#{request.base_url}/.well-known/kiosk.json: auth.registration_url " \
+                                       'registers your key, auth.token_url gives an access token, and ' \
+                                       'schema_url is the catalogue.'
           end
         end
 

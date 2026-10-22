@@ -484,7 +484,7 @@ RSpec.describe 'AssistantsController' do
       expect(envelope.dig('error', 'code')).to eq('invalid_authenticity_token')
       expect(envelope.dig('error', 'message')).to include('not the Kiosk HTTP API')
       expect(envelope.dig('error', 'hint'))
-        .to include('https://provider.example/.well-known/kiosk.json')
+        .to include('https://provider.example/.well-known/kiosk.json', 'auth.registration_url', 'auth.token_url')
     end
 
     it 'answers an Accept: application/json POST the same way' do

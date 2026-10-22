@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
     kiosk-server — the whole host-side surface: the Kiosk controllers
     (one endpoint per verb — GET /kiosk/<query-name>, POST
     /kiosk/<action-name> — plus /kiosk/{schema,openapi.json,pay}), the
-    register/login auth plane, JWKS,
+    OAuth registration and token endpoints, JWKS,
     KYC attestation, discovery, the account-binding ceremony, the
     Executor, the PoW gate, the headers middleware and the `kiosk:install`
     generator.

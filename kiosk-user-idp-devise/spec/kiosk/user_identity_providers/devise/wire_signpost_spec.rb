@@ -14,7 +14,8 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise::WireSignpost do
     expect(res.media_type).to eq('application/json')
     error = JSON.parse(res.body).fetch('error')
     expect(error).to include('code' => 'invalid_authenticity_token')
-    expect(error.fetch('hint')).to include('http://shop.example/.well-known/kiosk.json')
+    expect(error.fetch('hint')).to include('http://shop.example/.well-known/kiosk.json', 'auth.registration_url',
+                                           'auth.token_url')
   end
 
   it 'answers any JSON POST to a CSRF-protected page the same way' do

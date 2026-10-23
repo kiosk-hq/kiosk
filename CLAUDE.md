@@ -75,10 +75,12 @@ skill is `skill.md` on the same site.
 - Every fenced block in a `kiosk-demo-*/before-after.md` derives from its
   demo, declared above the fence: `<!-- derived: generator | from: … -->`.
   When you edit one of these documents, run it.
-- Never edit a shipped migration's code; a change arrives as a new file. A
-  comment in it may be corrected. Renumbering is editing. Before 1.0 a demo's migrations may be collapsed into a fresh
-  install only together with rebuilding every deployed database
-  (`deploy/CHECKLIST.md` §7b). At 1.0 `db/migrate/` becomes append-only.
+- Before 1.0 a shipped migration may be edited when the edit leaves
+  `db/schema.rb` unchanged, and a demo's migrations may be collapsed into a
+  fresh install only together with rebuilding every deployed database
+  (`deploy/CHECKLIST.md` §7b). From 1.0 a change arrives as a new file:
+  `db/migrate/` is append-only, except a migration made in the patch version
+  not yet released. A comment may always be corrected. Renumbering is editing.
 - Every consumer here uses `path:`, which reads the working tree. When a gem
   reads a new asset at runtime, add it to `spec.files`.
 - Version parity (spec §14.1) binds the protocol, this implementation and the

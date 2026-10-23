@@ -11,6 +11,10 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.10] — 2026-10-23
+
+- 2026-10-23: **Every gem and `API_VERSION` are 0.6.10, matching skill 0.6.10, and every demo and the engine default pin `skill-v0.6.10.md`.** `MIN_CLIENT` stays 0.6.0.
+
 ## [0.6.9] — 2026-10-23
 
 - 2026-10-23: **Every gem and `API_VERSION` are 0.6.9, matching skill 0.6.9, and every demo and the engine default pin `skill-v0.6.9.md`.** `MIN_CLIENT` stays 0.6.0.

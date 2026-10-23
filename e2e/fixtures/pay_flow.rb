@@ -69,19 +69,22 @@ checkout = { iss: ISSUER, sub: user_id, iat: Time.now.to_i, jti: SecureRandom.ur
              line_items: [{ order_id: '0b9e6f1c-3d2a-4e5b-8c7d-9a0f1e2d3c4b' }, { sku: 'pizza', qty: 1, price_cents: 1599 }] }
 checkout_jwt = JWT.encode(checkout, operator_key, 'EdDSA', { kid:, typ: 'JWT' })
 
+# The skill's rule: the assistant verifies the checkout before it signs, against
+# the key of the JWKS the origin serves that the kid names, EdDSA.
+_, jwks = get_json("#{SERVER}/kiosk/.well-known/jwks.json")
+jwk_for = ->(header) { Kiosk::Server::Jwk.import(jwks.fetch('keys').find { it['kid'] == header['kid'] }) }
+operator_signed = ->(token) { JWT.decode(token, nil, true, algorithms: ['EdDSA'], &jwk_for).first }
+operator_signed.call(checkout_jwt)
+
 mandates    = Kiosk::TestHelpers::Mandate.pay(key, checkout_jwt, instrument: 'pm_demo')
 pay_request = { checkout_mandate: mandates[:checkout], payment_mandate: mandates[:payment] }
 
 pay_url = "#{SERVER}/kiosk/pay"
 rc, pay = post_json(pay_url, pay_request, auth.call(pay_url))
 
-# The two AP2 receipts, verified as an assistant verifies them: against the key
-# of the JWKS the origin serves that the kid names, EdDSA. Each names the
-# mandate it answers by reference.
-_, jwks = get_json("#{SERVER}/kiosk/.well-known/jwks.json")
-jwk_for = ->(header) { Kiosk::Server::Jwk.import(jwks.fetch('keys').find { it['kid'] == header['kid'] }) }
-receipt = ->(name) { JWT.decode(pay.fetch(name), nil, true, algorithms: ['EdDSA'], &jwk_for).first }
-receipts = rc == 200 ? { checkout: receipt.call('checkout_receipt'), payment: receipt.call('payment_receipt') } : {}
+# The two AP2 receipts, verified as the checkout is. Each names the mandate it
+# answers by reference.
+receipts = rc == 200 ? %i[checkout payment].to_h { [it, operator_signed.call(pay.fetch("#{it}_receipt"))] } : {}
 references = mandates.transform_values { Kiosk::TestHelpers::Mandate.digest(it) }
 
 # The skill's file rule: each payment in its own file in the origin directory,

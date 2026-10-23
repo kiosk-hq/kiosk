@@ -15,8 +15,8 @@ Kiosk.configure do |c|
   c.roles             = %i[customer]
   c.registration_role = :customer
   c.owner             = { name: 'skooti', support: 'demo@kiosk.tech' }
-  c.skill_url         = 'https://kiosk.tech/skill-v0.6.8.md'
-  c.skill_sha256      = '278bfd4bd0d53e3fb45019cf221d71f837cab63270511e976a0cd9ccbbaf2cea'
+  c.skill_url         = 'https://kiosk.tech/skill-v0.6.9.md'
+  c.skill_sha256      = '3f8dfdca965785fd875b962ff9c70cc0958e21af90ad987bc177056917b0b683'
 
   # Demo only: checks every answer in production too. The generated default checks outside production only.
   c.validate_responses = true

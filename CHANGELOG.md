@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.9] — 2026-10-23
+
+- 2026-10-23: **Every gem and `API_VERSION` are 0.6.9, matching skill 0.6.9, and every demo and the engine default pin `skill-v0.6.9.md`.** `MIN_CLIENT` stays 0.6.0.
+
+- 2026-10-23: Demo migration 20261022100025 creates `assistant_accounts` empty: only registration records an assistant account.
+
 ## [0.6.8] — 2026-10-22
 
 - 2026-10-22: **Every gem and `API_VERSION` are 0.6.8, matching skill 0.6.8, and every demo and the engine default pin `skill-v0.6.8.md`.** `MIN_CLIENT` stays 0.6.0.

@@ -11,9 +11,6 @@ module Kiosk
 
       CODE_NOT_RECOGNISED = 'That code was not recognised — it may have expired. Ask the assistant for a fresh one.'
 
-      WRONG_DOOR_MESSAGE = "this is the account holder's browser consent page, not the Kiosk HTTP API — " \
-                           'it needs a signed-in session and a CSRF token from its own form'
-
       # Failed code lookups per session before a 429, against 31^8 possible codes.
       MAX_CODE_ATTEMPTS = 10
 

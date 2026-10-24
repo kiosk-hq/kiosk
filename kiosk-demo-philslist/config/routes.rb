@@ -8,7 +8,7 @@ Rails.application.routes.draw do
   end
 
   # Human sign-in (Devise): the web session that approves assistant links.
-  devise_for :users, controllers: { sessions: 'kiosk/user_identity_providers/devise/sessions' }
+  devise_for :users
 
   # Public root page: what this demo is + live DOMAIN activity (listing counts
   # read from philslist's own tables) + the PUBLIC classifieds board (open

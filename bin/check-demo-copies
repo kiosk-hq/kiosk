@@ -32,7 +32,7 @@ if ARGV.include?('--self-test')
   SELF_TEST_PLANTS = [
     { id: 'code-copy-diverges', rule: 'copy comparison',
       what: 'a rename reaches one of the `:code` copies',
-      ops: [[:edit, 'kiosk-demo-philslist/app/controllers/application_controller.rb', 'WireSignpost', 'Signpost']],
+      ops: [[:edit, 'kiosk-demo-philslist/app/controllers/application_controller.rb', 'ActionController::Base', 'ActionController::API']],
       expect: %r{app/controllers/application_controller\.rb: declared :code — the copies must agree.+\[philslist\]} },
     { id: 'magic-comment-lost', rule: 'copy comparison',
       what: 'one copy loses `# frozen_string_literal: true`',
@@ -626,8 +626,7 @@ COPIES = {
   },
   'app/controllers/application_controller.rb' => {
     rule: :code,
-    except: { 'prove' => 'prove has no Devise, so it has no signpost for assistants to include.' },
-    why: "Standard Rails ApplicationController plus the Devise adapter's signpost for assistants."
+    why: 'Standard Rails ApplicationController.'
   },
   'app/controllers/home_controller.rb' => {
     rule: :per_demo,
@@ -1852,7 +1851,7 @@ E2E_FIXTURES = {
     why: 'The salon back office that confirms an appointment and pushes an event; no demo has one.'
   },
   'application_controller.rb' => {
-    rule: :per_demo,
+    rule: :code,
     why: 'Moves the `rails new --api` app onto ActionController::Base for Devise.'
   },
   'user.rb' => {

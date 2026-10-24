@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-24: `WrongDoor` is removed: the browser pages refuse a POST without the form's CSRF token alike, JSON or not.
 - 2026-10-24: The payment receipt's `network_confirmation_id` is `not reported by the payment provider` when the PSP adapter answers none.
 
 ## [0.6.11] — 2026-10-24

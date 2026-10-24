@@ -289,14 +289,9 @@ RSpec.describe 'DeviceVerifyController' do
     end
   end
 
-  # ── AGENT-SIGNPOST, the forgery-protection path (K-459) ───────────────────
-  # Same story as AssistantsController (its spec carries the long version): an
-  # assistant POSTing JSON to this human consent page has no CSRF token, and in
-  # production the resulting InvalidAuthenticityToken yields the host's generic
-  # error material (a static public/422.html, a status echo, or a bodyless 422),
-  # never a pointer to the protocol. The harness has no Rails app, so the subclass
-  # opts into `protect_from_forgery` to reproduce that condition.
-  describe 'forgery protection on a JSON POST' do
+  # The harness has no Rails app, so the subclass opts into `protect_from_forgery`
+  # as every ActionController::Base of a Rails app does.
+  describe 'forgery protection' do
     include_context 'with a holder signed in to the device verify page'
 
     let(:guarded) do
@@ -306,23 +301,10 @@ RSpec.describe 'DeviceVerifyController' do
       )
     end
 
-    it 'answers a JSON-bodied POST with its own wrong-door body and a pointer to the HTTP API' do
-      status, body, headers = dispatch_guarded(
-        'CONTENT_TYPE' => 'application/json', 'rack.input' => StringIO.new('{}')
-      )
-
-      expect(status).to eq(422)
-      expect(headers['Content-Type']).to include('application/json')
-      expect(body).not_to be_empty
-      envelope = JSON.parse(body)
-      expect(envelope['ok']).to be(false)
-      expect(envelope.dig('error', 'code')).to eq('invalid_authenticity_token')
-      expect(envelope.dig('error', 'hint'))
-        .to include('https://provider.example/.well-known/kiosk.json')
-    end
-
-    it 'still raises for a browser form POST — the CSRF gate is unchanged' do
+    it 'raises InvalidAuthenticityToken for a browser form POST and for a JSON POST' do
       expect { dispatch_guarded('HTTP_ACCEPT' => 'text/html') }
+        .to raise_error(ActionController::InvalidAuthenticityToken)
+      expect { dispatch_guarded('CONTENT_TYPE' => 'application/json', 'rack.input' => StringIO.new('{}')) }
         .to raise_error(ActionController::InvalidAuthenticityToken)
     end
   end

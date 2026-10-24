@@ -2,7 +2,7 @@
 
 Rails.application.routes.draw do
   # Human sign-in (Devise): the web session that approves assistant links.
-  devise_for :users, controllers: { sessions: 'kiosk/user_identity_providers/devise/sessions' }
+  devise_for :users
 
   # Public root page: what this demo is + live DOMAIN activity (fleet + rental
   # counts read from skooti's own tables) + how an agent pokes the protocol. The app

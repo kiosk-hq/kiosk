@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-24: `WireSignpost` and `SessionsController` are removed; route Devise's own sessions controller.
+
 ## [0.6.11] — 2026-10-24
 
 - 2026-10-24: Version 0.6.11, the tree cut that matches skill 0.6.11.

@@ -9,7 +9,6 @@ module Kiosk
     class ApplicationController < ::ActionController::Base
       include AccountHolderGate
       include BindingModuleGate
-      include WrongDoor
 
       prepend_before_action :refuse_unserved_binding
     end

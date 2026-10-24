@@ -9,9 +9,6 @@ module Kiosk
       SIGN_IN_PROMPT = 'Sign in to your account first to manage linked assistants.'
       SIGN_IN_ALERT  = 'Please sign in to manage your linked assistants.'
 
-      WRONG_DOOR_MESSAGE = "this is the account holder's browser page, not the Kiosk HTTP API — " \
-                           'it needs a signed-in session and a CSRF token from its own form'
-
       layout false
 
       def show

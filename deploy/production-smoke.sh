@@ -423,34 +423,7 @@ smoke_stylish() {
     fail "forged X-Staff-Session expected 401, got $staff_code (a role-carrying human stand-in is reachable in production — staff-role self-grant!)"
   fi
 
-  echo "── Assertion 7: JSON POST at the human sign-in form → 422 + the wrong-door JSON body ──"
-  # The app's WireSignpost include; only production reproduces it (dev renders the debug page).
-  signpost="$(curl -s -X POST "${PROXY_HEADERS[@]}" \
-    -H "Content-Type: application/json" -H "Accept: application/json" \
-    --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
-    "${BASE}/users/sign_in")"
-  signpost_code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "${PROXY_HEADERS[@]}" \
-    -H "Content-Type: application/json" -H "Accept: application/json" \
-    --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
-    "${BASE}/users/sign_in")"
-  if [ "$signpost_code" = "422" ] && printf '%s' "$signpost" | grep -q "invalid_authenticity_token"; then
-    pass "JSON sign-in POST → 422 + invalid_authenticity_token body"
-  else
-    fail "JSON sign-in POST expected 422 + invalid_authenticity_token body, got $signpost_code / '$(printf '%s' "$signpost" | head -c 120)' (the signpost regressed to a bodyless error)"
-  fi
-
-  echo "── Assertion 8: JSON DELETE /users/sign_out → 401 + the wrong-door JSON body ──"
-  # Devise alone answers a bodyless 401; the adapter's SessionsController adds the JSON body.
-  signout="$(curl -s -X DELETE "${PROXY_HEADERS[@]}" -H "Accept: application/json" "${BASE}/users/sign_out")"
-  signout_code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "${PROXY_HEADERS[@]}" \
-    -H "Accept: application/json" "${BASE}/users/sign_out")"
-  if [ "$signout_code" = "401" ] && printf '%s' "$signout" | grep -q "not_signed_in"; then
-    pass "JSON sign-out DELETE → 401 + not_signed_in body (not a bodyless 401)"
-  else
-    fail "JSON sign-out DELETE expected 401 + not_signed_in body, got $signout_code / '$(printf '%s' "$signout" | head -c 120)'"
-  fi
-
-  echo "── Assertion 9: unknown path → 404 with a BODY (public/404.html) ──"
+  echo "── Assertion 7: unknown path → 404 with a BODY (public/404.html) ──"
   # Without public/404.html, PublicExceptions falls through and ShowExceptions
   # returns text/html + Content-Length: 0 for every unhandled 404 — the answer
   # an assistant guessing web-app paths (POST /bookings) hits most often.
@@ -464,7 +437,7 @@ smoke_stylish() {
     fail "unknown path expected 404 with a non-empty body, got $notfound_code / ${notfound_len} bytes (no public/404.html → bodyless error)"
   fi
 
-  echo "── Assertion 10: GET /robots.txt and /favicon.ico → 200 statics ──"
+  echo "── Assertion 8: GET /robots.txt and /favicon.ico → 200 statics ──"
   # Caddy proxies EVERYTHING to Puma (no file_server in deploy/Caddyfile), so
   # these serve only if ActionDispatch::Static answers them ahead of routing —
   # Rails 8 defaults config.public_file_server.enabled to true and the demos'
@@ -783,24 +756,7 @@ smoke_tudu() {
       || fail "signed-in /lists expected 200, got $authed_code"
   fi
 
-  echo "── Assertion 5: JSON POST at the human sign-in form → 422 + the wrong-door JSON body ──"
-  # The wrong-door signpost this app returns to a JSON-dialing assistant. Only
-  # production renders it (dev serves the debug page).
-  signpost="$(curl -s -X POST "${PROXY_HEADERS[@]}" \
-    -H "Content-Type: application/json" -H "Accept: application/json" \
-    --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
-    "${BASE}/users/sign_in")"
-  signpost_code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "${PROXY_HEADERS[@]}" \
-    -H "Content-Type: application/json" -H "Accept: application/json" \
-    --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
-    "${BASE}/users/sign_in")"
-  if [ "$signpost_code" = "422" ] && printf '%s' "$signpost" | grep -q "invalid_authenticity_token"; then
-    pass "JSON sign-in POST → 422 + invalid_authenticity_token body"
-  else
-    fail "JSON sign-in POST expected 422 + invalid_authenticity_token body, got $signpost_code / '$(printf '%s' "$signpost" | head -c 120)' (the signpost regressed to a bodyless error)"
-  fi
-
-  echo "── Assertion 6: unknown path → 404 with a BODY (public/404.html) ──"
+  echo "── Assertion 5: unknown path → 404 with a BODY (public/404.html) ──"
   notfound_len="$(curl -s -o /dev/null -w '%{size_download}' "${PROXY_HEADERS[@]}" \
     -H "Accept: text/html" "${BASE}/this-path-does-not-exist")"
   notfound_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" \
@@ -811,7 +767,7 @@ smoke_tudu() {
     fail "unknown path expected 404 with a non-empty body, got $notfound_code / ${notfound_len} bytes (no public/404.html → bodyless error)"
   fi
 
-  echo "── Assertion 7: GET /robots.txt and /favicon.ico → 200 statics ──"
+  echo "── Assertion 6: GET /robots.txt and /favicon.ico → 200 statics ──"
   robots_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/robots.txt")"
   favicon_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/favicon.ico")"
   if [ "$robots_code" = "200" ] && [ "$favicon_code" = "200" ]; then

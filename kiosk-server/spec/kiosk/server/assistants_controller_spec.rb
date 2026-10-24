@@ -474,60 +474,19 @@ RSpec.describe 'AssistantsController' do
     end
   end
 
-  # ── AGENT-SIGNPOST, the forgery-protection path (K-459) ───────────────────
-  # A live assistant POSTing JSON at this `/kiosk/…` page carries no CSRF
-  # token. Rails raises InvalidAuthenticityToken, and PRODUCTION answers it
-  # with whatever the host's PublicExceptions has: the static public/422.html
-  # every demo ships since K-532, a generic {"status":422,"error":…} echo on an
-  # explicit JSON Accept, or a bodyless 422 (text/html, Content-Length 0) on a
-  # host with no such page — never a pointer to the protocol the caller wanted.
-  #
   # A real Rails app installs `protect_from_forgery with: :exception` on every
-  # ActionController::Base (config.action_controller.default_protect_from_forgery);
-  # this bare Metal harness has no Rails app, so the subclass below opts in
-  # explicitly to reproduce the production condition. Subclassing keeps the
-  # shipped controller untouched for the rest of the suite.
-  describe 'forgery protection on a JSON POST' do
+  # ActionController::Base; this bare Metal harness has no Rails app, so the
+  # subclass opts in. Every POST without the form's CSRF token is refused alike.
+  describe 'forgery protection' do
     include_context 'with a forgery-guarded assistants page'
 
-    it 'answers a JSON-bodied POST with its own wrong-door body and a pointer to the HTTP API' do
-      status, body, headers = dispatch_guarded(
-        'CONTENT_TYPE' => 'application/json', 'rack.input' => StringIO.new('{}')
-      )
-
-      expect(status).to eq(422)
-      expect(headers['Content-Type']).to include('application/json')
-      expect(body).not_to be_empty
-      envelope = JSON.parse(body)
-      expect(envelope['ok']).to be(false)
-      expect(envelope.dig('error', 'code')).to eq('invalid_authenticity_token')
-      expect(envelope.dig('error', 'message')).to include('not the Kiosk HTTP API')
-      expect(envelope.dig('error', 'hint'))
-        .to include('https://provider.example/.well-known/kiosk.json', 'auth.registration_url', 'auth.token_url')
-    end
-
-    it 'answers an Accept: application/json POST the same way' do
-      status, body, = dispatch_guarded('HTTP_ACCEPT' => 'application/json')
-
-      expect(status).to eq(422)
-      expect(JSON.parse(body).dig('error', 'code')).to eq('invalid_authenticity_token')
-    end
-  end
-
-  describe 'forgery protection on a browser form POST' do
-    include_context 'with a forgery-guarded assistants page'
-
-    # The signpost must not soften the forgery gate for the surface it guards:
-    # a browser form POST with a bad/absent token keeps failing exactly as it
-    # does today (the exception propagates to Rails' own handling).
-    it 'still raises for a browser form POST — the CSRF gate is unchanged' do
-      expect { dispatch_guarded('HTTP_ACCEPT' => 'text/html') }
-        .to raise_error(ActionController::InvalidAuthenticityToken)
-    end
-
-    it 'still raises for an ambiguous Accept: */* form POST' do
-      expect { dispatch_guarded('HTTP_ACCEPT' => '*/*') }
-        .to raise_error(ActionController::InvalidAuthenticityToken)
+    { 'a browser form POST' => { 'HTTP_ACCEPT' => 'text/html' },
+      'an Accept: */* POST' => { 'HTTP_ACCEPT' => '*/*' },
+      'a JSON POST' => { 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
+                         'rack.input' => StringIO.new('{}') } }.each do |what, env|
+      it "raises InvalidAuthenticityToken for #{what}" do
+        expect { dispatch_guarded(env) }.to raise_error(ActionController::InvalidAuthenticityToken)
+      end
     end
   end
 end

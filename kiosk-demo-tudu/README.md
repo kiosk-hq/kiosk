@@ -134,6 +134,8 @@ list page names them by it). Plus `DeviceGrantRoleSelfSelection`, the shared
 `kiosk-redteam` beat every demo runs: the account-binding ceremony's
 unauthenticated opening request refuses `role`/`scope` at a DECLARED value
 as well as an invented one, while the role-less request still opens it.
+And `CallToll`, the shared beat that tries the known ways past the call toll
+and meets `402 pow_required` on every one.
 
 ### Not-only-commerce proof (`test/stories/discovery_test.rb`)
 

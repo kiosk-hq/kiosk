@@ -114,7 +114,8 @@ The stories in `test/stories/` show it:
   `SelfAssertedTokenForgery`, `UnknownQuery`, `UnknownAction`,
   `UnregisteredVerbIsOrdinaryRefusal`, `MethodMismatch`,
   `OutOfEnumFilterIsNotSilentlyReinterpreted`, `LikeMetacharactersAreEscaped`,
-  `NoSellerPiiOnTheOpenBoard`, `ContactDetailsStayOutOfTheRequestLog`, and the
+  `NoSellerPiiOnTheOpenBoard`, `ContactDetailsStayOutOfTheRequestLog`, the shared
+  `CallToll`, and the
   shared `DeviceGrantRoleSelfSelection`.
 - **Not only commerce** — the capabilities are `schema`, `queries` and `actions`
   only: no `pay`, no `events`; the catalogue is public, and its examples satisfy their own schemas.

@@ -345,7 +345,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.12'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.13'
 kiosk-core/spec/kiosk/kyc_providers/base_spec.rb	refuses a key that is not Ed25519
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
@@ -1414,7 +1414,7 @@ kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	creates a pending :clai
 kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	refuses a device_code opened by another client with invalid_grant
 kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	refuses an unknown device_code, and a link code, with invalid_grant
 kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	tells a client that polls faster than the interval to slow down
-kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s a non-HTML request with a body naming the sign-in URL
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s a non-HTML request with the Kiosk-Session challenge and a body naming the sign-in URL
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s a visitor with no provider session (sign in first)
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s when no user_idp is configured at all
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	approve leaves the row role-less when the session holder has no role
@@ -1755,7 +1755,7 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an amount or a c
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an open mandate, and a payment mandate in the checkout place
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	takes the currency in lower case, the spelling the spending cap counts
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	verifies the mandates the key signs ES256
-kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	answers 401 invalid_client for a missing or refused client assertion
+kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	answers 401 invalid_client and the Kiosk-Client-Assertion challenge for a missing or refused client assertion
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	ignores a scope: the row carries no requested role
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	opens a claim ceremony for the client, with the client's key on the row
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	refuses a role, also an empty one: the assistant does not choose its role

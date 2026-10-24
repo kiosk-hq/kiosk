@@ -21,4 +21,5 @@ Rails.application.configure do
   config.action_controller.allow_forgery_protection = false
   config.active_support.deprecation = :stderr
   config.action_controller.raise_on_missing_callback_actions = true
+  config.active_job.queue_adapter = :test
 end

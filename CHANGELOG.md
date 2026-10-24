@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-24: The KYC broker demo sends a refused callback again from an in-process job, with Rails' default retry_on.
 - 2026-10-24: A JSON call to a human sign-in, sign-out or browser page gets the plain Rails refusal; the JSON pointer to the protocol is removed.
 - 2026-10-24: When the payment provider reports no card network id, the payment receipt's `network_confirmation_id` is `not reported by the payment provider`.
 

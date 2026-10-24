@@ -46,6 +46,11 @@ The callback body the broker POSTs to the operator:
 { "request_id": "<the broker request>", "kyc_jws": "<compact EdDSA JWS>", "nonce": "<echo>" }
 ```
 
+The first POST runs in the human's request. When the callback does not answer
+2xx, `CallbackDeliveryJob` sends it again with Rails' default `retry_on`: five
+attempts in all, about three seconds apart. The job runs in the broker's own
+process (the `:async` adapter), so a restart of the broker drops a pending retry.
+
 The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
 
 ```json

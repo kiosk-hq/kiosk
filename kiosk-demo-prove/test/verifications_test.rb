@@ -113,6 +113,20 @@ class ApprovalTest < ActionDispatch::IntegrationTest
                   *delivered.values_at(:nonce, :callback_url), row.reload.status]
   end
 
+  test 'queues the attestation again when the callback refuses the first attempt' do
+    rid = open_request
+
+    CallbackPoster.stub(:deliver, nil) { approve(rid) }
+
+    assert_response :ok
+    assert_includes response.body, 'We will try again'
+    retry_args = enqueued_jobs.sole.fetch('arguments').first
+
+    assert_equal ['CallbackDeliveryJob', callback_url, rid, ProveRequest.find(rid).nonce],
+                 [enqueued_jobs.sole['job_class'], *retry_args.values_at('callback_url', 'request_id', 'nonce')]
+    decode(retry_args['kyc_jws'])
+  end
+
   # The broker checks a declared audience against the registration and stamps
   # the registered one, which the operator's KycVerifier compares against.
   test "binds aud to the operator's REGISTERED audience, accepting a matching body declaration" do

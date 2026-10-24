@@ -6,8 +6,8 @@ require 'securerandom'
 # secret); the human answers it on the page the request_id links to, and
 # chooses a licence category when the operator asks about a licence; an
 # approval is signed as an anonymized claim and posted to the operator's
-# callback. No CSRF token: the intake authenticates with the secret, the page
-# with the unguessable request_id.
+# callback, again from a job while the callback refuses it. No CSRF token: the
+# intake authenticates with the secret, the page with the unguessable request_id.
 class VerificationsController < ApplicationController
   include OperatorIntake
 
@@ -94,17 +94,17 @@ class VerificationsController < ApplicationController
 
   def approve!(prove_request)
     attributes = ClaimCatalog.attributes_for(prove_request.requested_claims, params[:licence_category])
-    delivery_status = deliver_claim(prove_request, ProveKey.mint(prove_request, attributes))
-
     @decision   = :approved
-    @delivered  = delivery_status.is_a?(Integer) && (200..299).cover?(delivery_status)
+    @delivered  = deliver_claim(prove_request, ProveKey.mint(prove_request, attributes))
     @attributes = attributes
     render :decided
   end
 
+  # The first attempt runs in this request. When the callback refuses it,
+  # `retry_on` queues the next attempt and `perform_now` answers that job.
   def deliver_claim(prove_request, kyc_jws)
-    CallbackPoster.deliver(callback_url: prove_request.callback_url, request_id: prove_request.request_id,
-                           kyc_jws: kyc_jws, nonce: prove_request.nonce)
+    CallbackDeliveryJob.perform_now(callback_url: prove_request.callback_url, request_id: prove_request.request_id,
+                                    kyc_jws: kyc_jws, nonce: prove_request.nonce) == true
   end
 
   def decline!

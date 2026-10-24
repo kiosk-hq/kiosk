@@ -11,6 +11,14 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.11] — 2026-10-24
+
+- 2026-10-24: **Every gem and `API_VERSION` are 0.6.11, matching skill 0.6.11, and every demo and the engine default pin `skill-v0.6.11.md`.** `MIN_CLIENT` stays 0.6.0.
+
+- 2026-10-24: The manage-assistants page shows when each assistant was linked, the spend only on an origin with payments, and the cap only with a `spending_cap`. Demos migrate 20261024100026.
+
+- 2026-10-24: Every demo lockfile takes crass 1.0.8, which fixes a CSS sanitizer bypass.
+
 ## [0.6.10] — 2026-10-23
 
 - 2026-10-23: **Every gem and `API_VERSION` are 0.6.10, matching skill 0.6.10, and every demo and the engine default pin `skill-v0.6.10.md`.** `MIN_CLIENT` stays 0.6.0.

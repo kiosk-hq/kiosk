@@ -12,6 +12,12 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.11] — 2026-10-24
+
+- 2026-10-24: Version 0.6.11, the tree cut that matches skill 0.6.11.
+
+- 2026-10-24: A binding records `agents.bound_at`. The manage-assistants page shows it as the time linked, the spend only with a `payment_provider`, and the cap only with a `spending_cap`.
+
 ## [0.6.10] — 2026-10-23
 
 - 2026-10-23: Version 0.6.10, the tree cut that matches skill 0.6.10.

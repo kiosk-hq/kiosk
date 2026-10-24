@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-24: Every demo serves /privacy, linked from its footer: what it and the Kiosk engine store, and for how long.
 - 2026-10-24: Every demo's robots.txt states its AI-use preferences as an IETF AIPREF `Content-Usage` line too: search and AI use yes, AI training no.
 - 2026-10-24: An operator sets its KYC provider in one setting, `c.kyc_provider`, which names the issuer, the public key and the audience; `kyc_issuer`, `kyc_public_key` and `kyc_audience` are removed.
 - 2026-10-24: The KYC broker demo sends a refused callback again from an in-process job, with Rails' default retry_on.

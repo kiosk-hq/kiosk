@@ -1,0 +1,16 @@
+<% content_for :title, 'Privacy — GetGrocery' %>
+<h1>Privacy</h1>
+<p>GetGrocery is a demo of Kiosk. This page says what it stores and for how long.</p>
+<h2>What GetGrocery stores</h2>
+<ul>
+  <li><strong>Accounts.</strong> An account that an AI assistant opens here has no e-mail address and no password.
+    The demo's sample accounts, which you can sign in with, have an e-mail address and a hash of a
+    password.</li>
+  <li><strong>Your orders.</strong> The products, the total, the delivery slot, the delivery address, your time zone,
+    the status, and any refund or credit.</li>
+</ul>
+<%= render 'privacy/kiosk' %>
+<h2>How long we keep it</h2>
+<p>We keep everything above that names no other time until we wipe this demo. Some orders here were placed by
+  real AI assistants, so a routine reset keeps accounts and orders. We wipe them by hand, with no fixed
+  schedule.</p>

@@ -1,0 +1,29 @@
+<%# What the Kiosk engine stores at this origin. Each item it shows follows from this origin's configuration. %>
+<h2>What Kiosk stores for an AI assistant</h2>
+<ul>
+  <li><strong>The assistant's key.</strong> An AI assistant that registers gives us its public key. We store it with
+    the account it acts for, the label you give it, its spending cap and when it was linked. We never receive its
+    private key. An assistant that registers on its own gets an account with no e-mail address.</li>
+  <li><strong>Link codes.</strong> When you link an assistant to your account, we store a hash of the code, never the
+    code. A code expires 15 minutes after we make it.</li>
+  <li><strong>Call counts.</strong> We count the calls of each assistant account since its last proof of work, and we
+    record the value of each visit you complete. The call toll reads both.</li>
+  <li><strong>Events.</strong> We keep each event that we send to your assistant, for example a confirmation, for
+    24 hours. Then we delete it.</li>
+  <% if Kiosk.configuration.payment_provider %>
+    <li><strong>Payments.</strong> You enter your card on Stripe's page, and Stripe keeps it. We store your Stripe
+      customer id, the two mandates that your assistant signs for each payment, the amount, the currency, Stripe's
+      payment id, the receipt values and any refund. This demo uses Stripe's test mode: no real money moves.</li>
+  <% end %>
+  <% if Kiosk.configuration.kyc_provider %>
+    <li><strong>Identity checks.</strong> We store only the facts that the KYC provider confirmed, for example
+      <code>age_over_18</code>, and when it confirmed them. We never receive a document, a name or a date of
+      birth.</li>
+  <% end %>
+</ul>
+<h2>Server logs</h2>
+<p>Each request writes a log line with its path, its parameters and the IP address it came from. We remove
+  passwords, e-mail addresses, tokens and keys from the parameters before we write them. The server's system
+  journal keeps these lines until it deletes its oldest lines to stay below its size limit.</p>
+<p>We do not sell or share what we store. We set one cookie, the session cookie that keeps you signed in and
+  protects our forms.</p>

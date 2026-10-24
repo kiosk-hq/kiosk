@@ -75,6 +75,18 @@ class DiscoveryStory < StoryTest
     assert_includes robots, "\nContent-Usage: search=y, ai-use=y, train-ai=n\n"
   end
 
+  test 'the privacy page says what the demo stores and for how long, and the footer links it' do
+    assert_includes Net::HTTP.get(URI("#{live_url}/")), '<a href="/privacy">Privacy</a>'
+
+    privacy = Net::HTTP.get_response(URI("#{live_url}/privacy"))
+
+    assert_equal '200', privacy.code
+    assert_includes privacy.body, 'What Kiosk stores for an AI assistant'
+    assert_includes privacy.body, 'How long we keep it'
+    assert_not_includes privacy.body, "Stripe's test mode"
+    assert_not_includes privacy.body, 'Identity checks'
+  end
+
   test 'the landing page answers the type that Accept ranks first, and a browser gets HTML' do
     { 'text/markdown, */*' => 'text/markdown', 'text/markdown;q=1.0, */*;q=0.1' => 'text/markdown',
       'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' => 'text/html' }.each do |accept, type|

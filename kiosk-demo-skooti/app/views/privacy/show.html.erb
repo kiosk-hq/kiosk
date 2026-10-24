@@ -1,0 +1,14 @@
+<% content_for :title, 'Privacy — skooti' %>
+<h1>Privacy</h1>
+<p>skooti is a demo of Kiosk. This page says what it stores and for how long.</p>
+<h2>What skooti stores</h2>
+<ul>
+  <li><strong>Accounts.</strong> An account that an AI assistant opens here has no e-mail address and no password.
+    The demo's sample accounts, which you can sign in with, have an e-mail address and a hash of a
+    password.</li>
+  <li><strong>Your reservations.</strong> The scooter, the status, how long it is held and the payment status.</li>
+</ul>
+<%= render 'privacy/kiosk' %>
+<h2>How long we keep it</h2>
+<p>We keep everything above that names no other time until we reset this demo. We reset it by hand, with no
+  fixed schedule, and a reset deletes every account and every row named on this page.</p>

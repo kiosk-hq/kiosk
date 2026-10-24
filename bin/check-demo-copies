@@ -509,6 +509,8 @@ EXTRA_SCANNED = [
   'test/stories/link_test.rb',
   'test/stories/privacy_test.rb',
   'app/views/crawler/robots.text.erb',
+  'app/views/privacy/_kiosk.html.erb',
+  'app/views/privacy/show.html.erb',
   'public/favicon.ico',
   'public/404.html',
   'public/422.html',
@@ -562,6 +564,25 @@ COPIES = {
     rule: :identical,
     ships: OPERATOR_SEVEN,
     why: 'One crawling policy for the operator seven, pointing agents at the agent surface and crawlers at the sitemap.'
+  },
+  'app/controllers/privacy_controller.rb' => {
+    rule: :per_demo,
+    agree: {
+      %w[atablefor getgrocery hoteling philslist skooti stylish] => {
+        rule: :lockstep, why: 'The six that render it in the landing-page layout.'
+      },
+      %w[prove tudu] => { rule: :lockstep, why: "The two that render it in the application's layout." }
+    },
+    why: "The privacy page in the demo's own layout: the landing page's, or the application's in prove and tudu."
+  },
+  'app/views/privacy/_kiosk.html.erb' => {
+    rule: :identical,
+    ships: OPERATOR_SEVEN,
+    why: 'What the Kiosk engine stores, read from the origin configuration, on every operator privacy page.'
+  },
+  'app/views/privacy/show.html.erb' => {
+    rule: :per_demo,
+    why: 'What each demo stores of its own and how long it keeps it.'
   },
   'app/controllers/crawler_controller.rb' => {
     rule: :identical,
@@ -1233,7 +1254,9 @@ FRAGMENT_EXCLUDED = {
   'test/stories/link_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
   'test/stories/privacy_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
   'app/services/price_checker.rb' => "The one shared unit is `self.call`, whose body is each operator's own catalog.",
-  'app/controllers/kiosk/bookings_controller.rb' => "Two domains' booking verbs, sharing only their published names."
+  'app/controllers/kiosk/bookings_controller.rb' => "Two domains' booking verbs, sharing only their published names.",
+  'app/controllers/privacy_controller.rb' => 'Its one method is the empty `show`; the copies are held whole by `agree:`.',
+  'app/views/privacy/show.html.erb' => 'A view has no Ruby methods or constants to share.'
 }.freeze
 
 FRAGMENTS = {

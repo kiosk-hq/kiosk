@@ -1,0 +1,20 @@
+<%# What this broker stores and for how long. %>
+<main>
+  <h1>Privacy</h1>
+  <p>kyc.demo.kiosk.tech is a demo of a KYC provider for Kiosk operators. It has no accounts. This page says what it
+    stores and for how long.</p>
+  <h2>What it stores</h2>
+  <ul>
+    <li><strong>Verification requests.</strong> For each check that an operator opens: the operator, its callback
+      address, the facts it asks for, its own id for you (an opaque id, never a name or an e-mail address), a nonce,
+      the status and when the request expires, 15 minutes after it opens.</li>
+    <li><strong>Nothing about you.</strong> We never store the facts you confirm, a document, a name or a date of
+      birth. We sign the answer and send it to the operator, and we keep no copy. While the operator does not accept
+      it, the answer stays in this server's memory for at most a minute, so that we can send it again.</li>
+  </ul>
+  <h2>Server logs</h2>
+  <p>Each request writes a log line with its path, its parameters and the IP address it came from. The server's
+    system journal keeps these lines until it deletes its oldest lines to stay below its size limit.</p>
+  <h2>How long we keep it</h2>
+  <p>We keep verification requests until we delete them by hand, with no fixed schedule.</p>
+</main>

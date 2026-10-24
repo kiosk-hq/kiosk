@@ -49,6 +49,21 @@ RSpec.describe 'Discovering the hotel', type: :story do
       expect(Net::HTTP.get(URI(sitemap_url))).to include("<loc>#{live_url}/</loc>")
     end
 
+    it "robots.txt states the site's AI-use preferences in both vocabularies" do
+      robots = Net::HTTP.get(URI("#{live_url}/robots.txt"))
+      expect(robots).to include("\nContent-Signal: search=yes, ai-input=yes, ai-train=no\n",
+                                "\nContent-Usage: search=y, ai-use=y, train-ai=n\n")
+    end
+
+    it 'links the privacy page, which says what the demo stores and for how long' do
+      expect(Net::HTTP.get(URI("#{live_url}/"))).to include('<a href="/privacy">Privacy</a>')
+
+      privacy = Net::HTTP.get_response(URI("#{live_url}/privacy"))
+      expect(privacy.code).to eq('200')
+      expect(privacy.body).to include('What Kiosk stores for an AI assistant', 'How long we keep it', "Stripe's test mode")
+      expect(privacy.body).not_to include('Identity checks')
+    end
+
     it 'answers the type that Accept ranks first, and a browser gets HTML' do
       { 'text/markdown, */*' => 'text/markdown', 'text/markdown;q=1.0, */*;q=0.1' => 'text/markdown',
         'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' => 'text/html' }.each do |accept, type|

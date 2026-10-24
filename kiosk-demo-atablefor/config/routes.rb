@@ -10,6 +10,9 @@ Rails.application.routes.draw do
   # HomeController inherits ActionController::Base so HTML renders.
   root 'home#index'
 
+  # What this demo stores and for how long.
+  get '/privacy', to: 'privacy#show'
+
   # Crawlers: robots.txt names the sitemap.
   get '/robots.txt', to: 'crawler#robots'
   get '/sitemap.xml', to: 'crawler#sitemap'

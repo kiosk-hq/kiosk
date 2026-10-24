@@ -5,6 +5,9 @@ Rails.application.routes.draw do
   # thesis. Rendered HTML — this app keeps the full middleware stack.
   root 'home#index'
 
+  # What this broker stores and for how long.
+  get '/privacy', to: 'privacy#show'
+
   # ── INTAKE (operator → broker, server-to-server) ─────────────────────────
   # An operator (skooti) starts a verification here. Authenticated by a shared
   # bearer secret + a pre-registered operator/callback allow-list (no arbitrary

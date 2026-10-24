@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-25: The broker waits longer before each new attempt at the operator's callback: about 3, 18, 83 and 258 seconds (`retry_on wait: :polynomially_longer`).
 - 2026-10-24: When the operator's callback does not answer 2xx, the broker sends the attestation again from an in-process job, with Rails' default retry_on.
 - 2026-10-21: The broker signs its attestations EdDSA with an Ed25519 `PROVE_KEY_PEM`, and production refuses any other key type.
 - 2026-10-20: The broker offers the licence categories A1, A, B, C and none.

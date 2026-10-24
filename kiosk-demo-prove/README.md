@@ -47,8 +47,9 @@ The callback body the broker POSTs to the operator:
 ```
 
 The first POST runs in the human's request. When the callback does not answer
-2xx, `CallbackDeliveryJob` sends it again with Rails' default `retry_on`: five
-attempts in all, about three seconds apart. The job runs in the broker's own
+2xx, `CallbackDeliveryJob` sends it again with `retry_on wait:
+:polynomially_longer`: five attempts in all, about 3, 18, 83 and 258 seconds
+apart. The job runs in the broker's own
 process (the `:async` adapter), so a restart of the broker drops a pending retry.
 
 The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):

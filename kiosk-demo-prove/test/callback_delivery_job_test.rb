@@ -28,6 +28,22 @@ class CallbackDeliveryJobTest < ActiveJob::TestCase
     assert_equal 2, posts.size
   end
 
+  # :polynomially_longer waits executions**4 + 2 seconds, plus up to 15 % jitter.
+  test 'waits longer before each attempt' do
+    waits = []
+    deliver_answering(nil, nil) do
+      freeze_time do
+        CallbackDeliveryJob.perform_now(**ARGS)
+        waits << (enqueued_jobs.last[:at] - Time.now.to_f)
+        CallbackDeliveryJob.deserialize(enqueued_jobs.last).perform_now
+        waits << (enqueued_jobs.last[:at] - Time.now.to_f)
+      end
+    end
+
+    assert_in_delta 3.15, waits.first, 0.2
+    assert_in_delta 19.2, waits.last, 1.3
+  end
+
   # perform_enqueued_jobs reports the job's last error wrapped in Minitest::UnexpectedError.
   test "stops after Rails' default five attempts" do
     error = nil

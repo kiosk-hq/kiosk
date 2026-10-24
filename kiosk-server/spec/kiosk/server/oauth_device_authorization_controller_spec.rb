@@ -29,11 +29,12 @@ RSpec.describe Kiosk::Server::OauthDeviceAuthorizationController do
     expect([row.client_id, row.public_key_pem, row.requested_role]).to eq([client.id, client.public_key_pem, nil])
   end
 
-  it 'answers 401 invalid_client for a missing or refused client assertion' do
+  it 'answers 401 invalid_client and the Kiosk-Client-Assertion challenge for a missing or refused client assertion' do
     [{}, assertion_params(client.id, key: other_key)].each do |params|
-      status, _headers, body = start(params)
+      status, headers, body = start(params)
       expect(status).to eq(401)
       expect(body['error']).to eq('invalid_client')
+      expect(headers['WWW-Authenticate']).to eq(%(Kiosk-Client-Assertion realm="#{OauthClients::ISSUER}"))
     end
   end
 

@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-25: The `invalid_client` 401 of the token and device-authorization endpoints names `Kiosk-Client-Assertion`; the 401 of the engine pages names `Kiosk-Session`.
+
 ## [0.6.12] — 2026-10-24
 
 - 2026-10-24: **Every gem and `API_VERSION` are 0.6.12, matching skill 0.6.12, and every demo and the engine default pin `skill-v0.6.12.md`.** `MIN_CLIENT` stays 0.6.0.

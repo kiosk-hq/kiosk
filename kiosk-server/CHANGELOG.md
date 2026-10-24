@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-25: The `invalid_client` 401 of the token and device-authorization endpoints names `Kiosk-Client-Assertion`; the 401 of the engine pages names `Kiosk-Session`.
+
 ## [0.6.12] — 2026-10-24
 
 - 2026-10-24: Version 0.6.12, the tree cut that matches skill 0.6.12.

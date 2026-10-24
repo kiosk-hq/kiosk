@@ -4,7 +4,8 @@ module Kiosk
   module Server
     # Requires a human signed in through the operator's own session
     # (`user_idp`), never an agent token. A browser is sent to `sign_in_path`;
-    # any other caller gets a 401 naming where to sign in.
+    # any other caller gets a 401 with the `Kiosk-Session` challenge, naming
+    # where to sign in.
     module AccountHolderGate
       private
 
@@ -22,6 +23,7 @@ module Kiosk
           store_return_location
           redirect_to sign_in_path
         else
+          response.set_header('WWW-Authenticate', Errors::SessionRequired.challenge)
           render plain: sign_in_path ? "#{prompt} #{sign_in_directions(sign_in_path)}" : prompt,
                  status: :unauthorized
         end

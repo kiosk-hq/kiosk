@@ -23,6 +23,7 @@ RSpec.describe Kiosk::Server::OauthTokenController do
     expect(code).to eq(status)
     expect(headers['Cache-Control']).to eq('no-store')
     expect(body).to include('error' => error, 'error_description' => be_a(String))
+    expect(headers['WWW-Authenticate']).to eq(status == 401 ? %(Kiosk-Client-Assertion realm="#{OauthClients::ISSUER}") : nil)
   end
 
   describe 'grant_type=client_credentials' do

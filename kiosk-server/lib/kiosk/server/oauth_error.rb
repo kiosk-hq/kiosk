@@ -24,6 +24,9 @@ module Kiosk
       # RFC 6749 Section 5.2: only a failed client authentication is a 401.
       def status = code == 'invalid_client' ? 401 : 400
 
+      # RFC 9110 Section 11.6.1: a 401 names its challenge, here the client assertion.
+      def response_headers = status == 401 ? { 'WWW-Authenticate' => Errors::ClientAssertionRefused.challenge } : {}
+
       def to_h = { error: code, error_description: message }
     end
   end

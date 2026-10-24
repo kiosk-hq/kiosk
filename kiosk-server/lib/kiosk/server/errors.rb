@@ -240,12 +240,16 @@ module Kiosk
 
       # The 401 of a refused client assertion (RFC 7523). No registered scheme names one.
       class ClientAssertionRefused < Unauthenticated
-        def response_headers = { 'WWW-Authenticate' => %(Kiosk-Client-Assertion realm="#{Kiosk.current_issuer}") }
+        def self.challenge = %(Kiosk-Client-Assertion realm="#{Kiosk.current_issuer}")
+
+        def response_headers = { 'WWW-Authenticate' => self.class.challenge }
       end
 
-      # The 401 of a binding path that the provider's own sign-in session authenticates.
+      # The 401 of a binding path or engine page that the provider's own sign-in session authenticates.
       class SessionRequired < Unauthenticated
-        def response_headers = { 'WWW-Authenticate' => %(Kiosk-Session realm="#{Kiosk.current_issuer}") }
+        def self.challenge = %(Kiosk-Session realm="#{Kiosk.current_issuer}")
+
+        def response_headers = { 'WWW-Authenticate' => self.class.challenge }
       end
 
       class Forbidden < Base

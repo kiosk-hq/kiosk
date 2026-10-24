@@ -126,9 +126,10 @@ RSpec.describe 'DeviceVerifyController' do
 
     # A non-HTML caller gets the 401, and the body names the sign-in page and
     # that a browser opening this page is sent there and back.
-    it '401s a non-HTML request with a body naming the sign-in URL' do
-      status, body = dispatch(:show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'application/json' })
+    it '401s a non-HTML request with the Kiosk-Session challenge and a body naming the sign-in URL' do
+      status, body, headers = dispatch(:show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'application/json' })
       expect(status).to eq(401)
+      expect(headers['WWW-Authenticate']).to eq('Kiosk-Session realm="https://provider.example"')
       expect(body).to include('Sign in')
       expect(body).to include('https://provider.example/users/sign_in')
       expect(body).to include('https://provider.example/kiosk/oauth/device/verify')

@@ -14,6 +14,7 @@ module Kiosk
       end
 
       def render_oauth_error(error)
+        error.response_headers.each { |name, value| response.set_header(name, value) }
         render_oauth(error.to_h, status: error.status)
       end
 

@@ -103,12 +103,12 @@ RSpec.describe 'AssistantsController' do
   describe 'without a provider session' do
     include_context 'with a holder signed in to the assistants page'
 
-    # Default config sets no sign_in_path → the engine keeps its neutral bare
-    # 401 (unchanged API contract). A browser Accept header does NOT change this.
-    it '401s without a provider session when no sign_in_path is configured' do
+    # With no sign_in_path the engine answers 401. A browser Accept header does not change this.
+    it '401s with the Kiosk-Session challenge without a provider session when no sign_in_path is configured' do
       wire_user_idp(nil)
-      status, body = dispatch(:show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'text/html' })
+      status, body, headers = dispatch(:show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'text/html' })
       expect(status).to eq(401)
+      expect(headers['WWW-Authenticate']).to eq('Kiosk-Session realm="https://provider.example"')
       expect(body).to include('Sign in')
     end
   end

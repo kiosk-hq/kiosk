@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.12] — 2026-10-24
+
+- 2026-10-24: Version 0.6.12, the tree cut that matches skill 0.6.12.
+
 - 2026-10-24: `CallToll` checks that call N of an account pays a proof after known bypasses: a new token or key, a second assistant, concurrent or refused calls, a replayed proof.
 
 ## [0.6.11] — 2026-10-24

@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.12] — 2026-10-24
+
+- 2026-10-24: Version 0.6.12, the tree cut that matches skill 0.6.12.
+
 - 2026-10-24: The KYC stand-in replaces `c.kyc_provider` only, and keeps the audience of the provider it stands in for.
 
 ## [0.6.11] — 2026-10-24

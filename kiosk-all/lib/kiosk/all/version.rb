@@ -2,6 +2,6 @@
 
 module Kiosk
   module All
-    VERSION = '0.6.11'
+    VERSION = '0.6.12'
   end
 end

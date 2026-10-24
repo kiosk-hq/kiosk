@@ -10,6 +10,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.12] — 2026-10-24
+
+- 2026-10-24: Version 0.6.12, the tree cut that matches skill 0.6.12.
+
 - 2026-10-24: `Prove.new` takes the broker's `public_key:` and optional `issuer:`; the operator id is the audience.
 
 ## [0.6.11] — 2026-10-24

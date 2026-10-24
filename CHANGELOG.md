@@ -11,6 +11,10 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.12] — 2026-10-24
+
+- 2026-10-24: **Every gem and `API_VERSION` are 0.6.12, matching skill 0.6.12, and every demo and the engine default pin `skill-v0.6.12.md`.** `MIN_CLIENT` stays 0.6.0.
+
 - 2026-10-24: Every demo battery runs `CallToll`: the call toll holds over HTTP against seven known ways to skip a proof.
 - 2026-10-24: Every demo serves /privacy, linked from its footer: what it and the Kiosk engine store, and for how long.
 - 2026-10-24: Every demo's robots.txt states its AI-use preferences as an IETF AIPREF `Content-Usage` line too: search and AI use yes, AI training no.

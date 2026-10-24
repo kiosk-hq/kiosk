@@ -47,7 +47,7 @@ module Kiosk
 
         def agents_sql
           <<~SQL.squish
-            SELECT id, public_key, created_at, human_label, spending_cap_cents, spending_cap_currency
+            SELECT id, public_key, bound_at, human_label, spending_cap_cents, spending_cap_currency
             FROM #{Kiosk.configuration.schema}.agents
             WHERE user_id = $1 AND issuer = $2 AND revoked_at IS NULL
             ORDER BY created_at
@@ -95,7 +95,7 @@ module Kiosk
           {
             agent_id: row.fetch('id'),
             fingerprint: fingerprint(row.fetch('public_key')),
-            created_at: row.fetch('created_at'),
+            bound_at: row.fetch('bound_at', nil),
             human_label: row.fetch('human_label', nil),
             spending_cap_cents: cap&.to_i,
             spending_cap_currency: row.fetch('spending_cap_currency', nil),

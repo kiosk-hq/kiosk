@@ -517,6 +517,14 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
     let!(:agent_id) { bind!(holder).id }
 
+    # An origin that takes payments, with the cap the page saves read by ColumnSpendingCap.
+    before do
+      Kiosk.configure do |c|
+        c.payment_provider = Object.new
+        c.spending_cap     = Kiosk::Server::ColumnSpendingCap.new
+      end
+    end
+
     it 'writes a free-text label and an integer cap through binds' do
       hostile = "Alice's ' OR 1=1 -- assistant"
       status, = dispatch(:update, method: 'POST',
@@ -566,7 +574,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
         expect(body).to include(agent_id[0, 8])
         # The 60-day-old receipt is outside the window, so the bind reached
         # `make_interval` as a day count.
-        expect(body).to include('spent: 2500 cents in EUR —')
+        expect(body).to match(/spent: 2500 cents in EUR\s+— cap/)
       end
 
       it 'lists them with no window configured (the statement drops the bind)' do
@@ -577,7 +585,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
         expect(body).to include(agent_id[0, 8])
         # No window, so both receipts count: the same statement with one bind
         # fewer, which is the branch a mismatched bind list breaks first.
-        expect(body).to include('spent: 12400 cents in EUR —')
+        expect(body).to match(/spent: 12400 cents in EUR\s+— cap/)
       end
     end
 
@@ -588,7 +596,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       2.times { refund!(over_refunded, 1000) }
 
       _, body = dispatch(:show, method: 'GET')
-      expect(body).to include('spent: 1900 cents in EUR —')
+      expect(body).to match(/spent: 1900 cents in EUR\s+— cap/)
     end
 
     it 'shows one figure per currency' do
@@ -596,7 +604,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       settle!(cents: 700, days_ago: 1, currency: 'usd')
 
       _, body = dispatch(:show, method: 'GET')
-      expect(body).to include('spent: 2500 cents in EUR, 700 cents in USD —')
+      expect(body).to match(/spent: 2500 cents in EUR, 700 cents in USD\s+— cap/)
     end
 
     # The fallback, against the failure it is FOR: an origin that never ran the

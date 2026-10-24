@@ -62,8 +62,9 @@ module Kiosk
 
       def render_page(status: :ok)
         @assistants = LinkedAssistants.list(@identity.user_id)
-        # Without a `config.spending_cap` seam the saved cap binds nothing; the page says so.
-        @spending_cap_enforced = !Kiosk.configuration.spending_cap.nil?
+        # The spend shows where the origin takes payments; the cap, where a `spending_cap` reads it.
+        @payments     = !Kiosk.configuration.payment_provider.nil?
+        @spending_cap = !Kiosk.configuration.spending_cap.nil?
         @page_path = request.path.sub(%r{/(link|unlink|update)\z}, '')
         render :show, status: status
       end

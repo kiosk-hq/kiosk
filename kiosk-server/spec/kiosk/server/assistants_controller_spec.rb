@@ -45,6 +45,14 @@ module AssistantsControllerSpecHelpers
     [status, raw, response_headers]
   end
 
+  # An origin that takes payments; `cap:` also gives it a spending_cap that reads the saved cap.
+  def takes_payments(cap: true)
+    Kiosk.configure do |c|
+      c.payment_provider = Object.new
+      c.spending_cap     = (->(**) {} if cap)
+    end
+  end
+
   def minted_row(html)
     store.lookup_by_device_code_hash(
       Kiosk::Server::DeviceAuthorization.hash_device_code(html[%r{<code>([^<]+)</code>}, 1])
@@ -169,6 +177,14 @@ RSpec.describe 'AssistantsController' do
       expect(con).not_to have_received(:quote)
     end
 
+    it 'shows the time of the latest binding as the time linked, not the time of registration' do
+      con.next_exec_result = [{ 'id' => 'agent-1', 'public_key' => pem, 'bound_at' => '2026-10-24 17:53:45+00' }]
+      _status, html = dispatch(:show, method: 'GET')
+
+      expect(html).to include('linked 2026-10-24 17:53:45+00')
+      expect(con.bound(/SELECT/i).first.first).to include('SELECT id, public_key, bound_at,')
+    end
+
     it "has no inline script or style, so a host policy of default-src 'self' holds" do
       _status, html = dispatch(:show, method: 'GET')
       expect(html).not_to match(/<script|<style|\sstyle=|\son[a-z]+=/i)
@@ -276,6 +292,8 @@ RSpec.describe 'AssistantsController' do
   describe 'governance columns' do
     include_context 'with a holder signed in to the assistants page'
 
+    before { takes_payments }
+
     it 'surfaces the label, the spend per currency, and the cap for each bound assistant (show)' do
       con.next_exec_result = [
         { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
@@ -288,8 +306,7 @@ RSpec.describe 'AssistantsController' do
 
       expect(status).to eq(200)
       expect(html).to include('Alice shopper')
-      expect(html).to include('spent: 1200 cents in EUR, 300 cents in USD —')
-      expect(html).to include('cap: 5000 cents in EUR')
+      expect(html).to match(/spent: 1200 cents in EUR, 300 cents in USD\s+— cap: 5000 cents in EUR/)
       agents, spend = con.bound(/SELECT/i)
       expect(agents.first).to include('human_label')
       expect(agents.first).to include('spending_cap_cents, spending_cap_currency')
@@ -304,6 +321,8 @@ RSpec.describe 'AssistantsController' do
 
   describe 'spending-cap window' do
     include_context 'with a holder signed in to the assistants page'
+
+    before { takes_payments }
 
     # The rolling window is a VALUE, so it is `$3` through `make_interval` — the
     # same treatment Executor#spent_in_window gives the same expression.
@@ -324,6 +343,8 @@ RSpec.describe 'AssistantsController' do
 
   describe 'unset and disabled caps' do
     include_context 'with a holder signed in to the assistants page'
+
+    before { takes_payments }
 
     it 'shows «(unnamed)» / «cap: none» when the label and cap are unset' do
       con.next_exec_result = [
@@ -347,42 +368,35 @@ RSpec.describe 'AssistantsController' do
     end
   end
 
-  describe 'spending_cap seam note' do
+  describe 'payments and the spending cap on the page' do
     include_context 'with a holder signed in to the assistants page'
 
-    # K-1014. The editor is rendered unconditionally, and on an origin that configures
-    # no `config.spending_cap` seam the number it saves is read by nothing —
-    # `Executor#enforce_spending_cap!` returns on `seam.nil?` before it looks at
-    # the column. The page must say so where it is rendered; the field keeps
-    # submitting, because setting policy on an origin that may not be the one that
-    # charges is deliberate.
-    it 'says the cap binds NOTHING when the origin configures no spending_cap seam' do
-      Kiosk.configure { |c| c.spending_cap = nil }
+    before do
       con.next_exec_result = [
-        { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-          'human_label' => 'Bot', 'spending_cap_cents' => 5000, 'spending_cap_currency' => 'eur' }
+        { 'id' => 'agent-1', 'public_key' => pem, 'human_label' => 'Bot',
+          'spending_cap_cents' => 5000, 'spending_cap_currency' => 'eur' }
       ]
-      _status, html = dispatch(:show, method: 'GET')
-
-      expect(html).to include('nothing')
-      expect(html).to include('ColumnSpendingCap')
-      # …and the control still submits: this is a note, not a disablement.
-      expect(html).to include(%(name="spending_cap_cents"), %(name="spending_cap_currency"))
-      expect(html).to include('cap: 5000 cents in EUR')
     end
 
-    # THE CONTROL for the example above: with a seam configured the note is absent, so
-    # it cannot pass on a build where the paragraph is unconditional.
-    it 'drops the note once a spending_cap seam IS configured — the control' do
-      Kiosk.configure { |c| c.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } } }
-      con.next_exec_result = [
-        { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-          'human_label' => 'Bot', 'spending_cap_cents' => 5000, 'spending_cap_currency' => 'eur' }
-      ]
+    it 'shows no spend and no cap where the origin takes no payments' do
       _status, html = dispatch(:show, method: 'GET')
 
-      expect(html).not_to include('ColumnSpendingCap')
-      expect(html).to include(%(name="spending_cap_cents"))
+      expect(html).not_to match(/spent|cap|spending/i)
+    end
+
+    it 'shows the spend and no cap where no spending_cap reads the cap' do
+      takes_payments(cap: false)
+      _status, html = dispatch(:show, method: 'GET')
+
+      expect(html).to include('spent: 0 cents')
+      expect(html).not_to match(/cap|spending/i)
+    end
+
+    it 'shows the cap and its fields where a spending_cap reads it' do
+      takes_payments
+      _status, html = dispatch(:show, method: 'GET')
+
+      expect(html).to include('cap: 5000 cents in EUR', %(name="spending_cap_cents"), %(name="spending_cap_currency"))
     end
   end
 

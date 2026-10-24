@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2088 anchors.
+# 2087 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -345,7 +345,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.10'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.11'
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -507,6 +507,8 @@ kiosk-demo-hoteling/spec/stories/search_spec.rb	a guest reads one hotel's rooms,
 kiosk-demo-hoteling/spec/stories/search_spec.rb	a made-up cursor moves through the hotels the search matches, and reaches no other hotel
 kiosk-demo-hoteling/spec/stories/search_spec.rb	a search that matches nothing comes back empty, and a neighbourhood the city does not have is answered with the ones it does
 kiosk-demo-hoteling/spec/stories/search_spec.rb	def total(found) = found.header('x-total-count').to_i
+kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	'spending_cap_cents' => (stay['total_cents'] - 1).to_s,
+kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest sets the cap of her assistant on the assistants page, and the assistant cannot pay past it
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay for the stay that would cross its cap, however the currency is spelled, until the cap is raised
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay in a currency other than its cap's
 kiosk-demo-hoteling/spec/stories/timezone_note_spec.rb	tells a guest on another clock how far the hotel is from them, and moves no date
@@ -672,17 +674,14 @@ kiosk-demo-stylish/test/stories/discovery_test.rb	an assistant that knows nothin
 kiosk-demo-stylish/test/stories/discovery_test.rb	class DiscoveryStory < StoryTest
 kiosk-demo-stylish/test/stories/linking_test.rb	  test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
 kiosk-demo-stylish/test/stories/linking_test.rb	  test 'Alice approves the code her assistant shows her, and it books in her name' do
-kiosk-demo-stylish/test/stories/linking_test.rb	'spending_cap_cents' => '12345')
 kiosk-demo-stylish/test/stories/linking_test.rb	Alice approves the code her assistant shows her, and it books in her name
 kiosk-demo-stylish/test/stories/linking_test.rb	assert first.signs_back_in.refused?(:invalid_client)
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_equal [booked], second.appointments
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_equal account_of(:alice), Appointment.find(alice.books['appointment_id']).user_id
-kiosk-demo-stylish/test/stories/linking_test.rb	assert_includes page.body, 'cap: 12345 cents in EUR'
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_predicate second.signs_back_in, :ok?
 kiosk-demo-stylish/test/stories/linking_test.rb	signs_in(:alice).approves(request['user_code'])
 kiosk-demo-stylish/test/stories/linking_test.rb	test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
 kiosk-demo-stylish/test/stories/linking_test.rb	test 'Alice approves the code her assistant shows her, and it books in her name' do
-kiosk-demo-stylish/test/stories/linking_test.rb	test 'Alice names her assistant and caps its spending on the assistants page' do
 kiosk-demo-stylish/test/stories/linking_test.rb	unlinking the first leaves the second
 kiosk-demo-stylish/test/stories/privacy_test.rb	Alice's assistant sees Alice's appointment and not Bob's
 kiosk-demo-stylish/test/stories/privacy_test.rb	an appointment belongs to whoever booked it, whoever the arguments name

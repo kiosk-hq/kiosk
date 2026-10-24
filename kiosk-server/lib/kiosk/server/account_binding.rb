@@ -147,7 +147,7 @@ module Kiosk
             role ? [', allowed_roles = ARRAY[$3]::text[]', [role]] : [", allowed_roles = '{}'::text[]", []]
           conn.exec_query(<<~SQL.squish, 'Kiosk agent rebind', [user_id, agent_id, *role_binds])
             UPDATE #{schema}.agents
-            SET user_id = $1#{role_set}
+            SET user_id = $1, bound_at = now()#{role_set}
             WHERE id = $2
           SQL
         end

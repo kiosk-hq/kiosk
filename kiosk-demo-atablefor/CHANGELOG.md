@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-24: A migration adds `kiosk.agents.bound_at`; the manage-assistants page shows when each assistant was linked.
 - 2026-10-22: `availability` and `book_table` take a seating today or on the next 13 days; a search with no date shows today and tomorrow. The page states the toll every demo asks.
 - 2026-10-22: A migration adds `kiosk.agents.calls_since_proof`; an assistant pays a proof on every 10th call with no recent spend.
 - 2026-10-21: A migration drops `kiosk.auth_challenges`; `agents.txt` names `Authorization: oauth2`.

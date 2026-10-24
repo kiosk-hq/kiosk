@@ -708,6 +708,9 @@ COPIES = {
   'db/migrate/20261022100025_create_kiosk_assistant_accounts.rb' => {
     rule: :identical, why: "Records the assistant accounts and their merges, as kiosk:install's assistant_accounts table has it."
   },
+  'db/migrate/20261024100026_add_bound_at_to_kiosk_agents.rb' => {
+    rule: :identical, why: "Gives agents the time of their binding, as kiosk:install's agents table has it."
+  },
   'db/migrate/20261018100012_create_solid_cable_messages.rb' => {
     rule: :identical, why: "Action Cable's pubsub queue, on the primary database."
   },

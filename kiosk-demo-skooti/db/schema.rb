@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_22_100025) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_24_100026) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -257,6 +257,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100025) do
     t.timestamptz "revoked_at"
     t.text "issuer", null: false
     t.text "spending_cap_currency"
+    t.timestamptz "bound_at"
     t.index ["issuer", "public_key"], name: "idx_agents_issuer_public_key_live", unique: true, where: "(revoked_at IS NULL)"
     t.index ["user_id"], name: "idx_agents_user_id", where: "(revoked_at IS NULL)"
     t.check_constraint "(spending_cap_cents IS NULL) = (spending_cap_currency IS NULL)", name: "agents_spending_cap_currency_set"

@@ -32,15 +32,6 @@
 
   <section>
     <h2>Currently linked</h2>
-    <% unless @spending_cap_enforced %>
-      <p role="note">
-        <strong>Note:</strong> this origin configures no <code>spending_cap</code>
-        seam, so a cap saved below is recorded against the assistant but nothing
-        reads it when a charge is settled. To make it bind, set
-        <code>c.spending_cap = Kiosk::Server::ColumnSpendingCap.new</code> in the
-        Kiosk initializer.
-      </p>
-    <% end %>
     <% if @assistants.empty? %>
       <p>No assistant accounts are linked yet.</p>
     <% else %>
@@ -49,12 +40,14 @@
           <li>
             <strong><%= assistant[:human_label].to_s.empty? ? "(unnamed)" : assistant[:human_label] %></strong>
             <code><%= assistant[:fingerprint] %></code>
-            — linked <%= assistant[:created_at] %>
+            <% if assistant[:bound_at] %>— linked <%= assistant[:bound_at] %><% end %>
+            <% if @payments %>
             <p>
               <%
                 spent = assistant[:spent_cents].map { |currency, cents| "#{cents} cents in #{currency.upcase}" }
               %>
-              spent: <%= spent.empty? ? "0 cents" : spent.join(", ") %> —
+              spent: <%= spent.empty? ? "0 cents" : spent.join(", ") %>
+              <% if @spending_cap %>
               <%
                 cap = assistant[:spending_cap_cents]
                 cap_label = if cap.nil?
@@ -65,20 +58,24 @@
                               "cap: #{cap} cents in #{assistant[:spending_cap_currency].upcase}"
                             end
               %>
-              <%= cap_label %>
+              — <%= cap_label %>
+              <% end %>
             </p>
+            <% end %>
             <form action="<%= @page_path %>/update" method="post">
               <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
               <input type="hidden" name="agent_id" value="<%= assistant[:agent_id] %>">
               <label>Label
                 <input type="text" name="human_label" value="<%= assistant[:human_label] %>">
               </label>
+              <% if @spending_cap %>
               <label>Spending cap (cents, blank = no cap)
                 <input type="number" name="spending_cap_cents" min="0" value="<%= assistant[:spending_cap_cents] %>">
               </label>
               <label>Cap currency (ISO 4217 code; the assistant cannot pay in another currency)
                 <input type="text" name="spending_cap_currency" maxlength="3" value="<%= assistant[:spending_cap_currency]&.upcase %>">
               </label>
+              <% end %>
               <button type="submit">Save</button>
             </form>
             <form action="<%= @page_path %>/unlink" method="post">

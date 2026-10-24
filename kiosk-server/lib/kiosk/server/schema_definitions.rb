@@ -38,7 +38,8 @@ module Kiosk
       end
 
       # 002: `agents` (`spending_cap_cents`: NULL unlimited, 0 disabled; a cap
-      # has its `spending_cap_currency`), `agent_tokens`, `agent_mappings`,
+      # has its `spending_cap_currency`; `bound_at`: the time of the latest
+      # binding), `agent_tokens`, `agent_mappings`,
       # `tolled_calls`, each account's tolled calls since its last paid proof,
       # and `assistant_accounts`, the accounts that registration opened and the
       # account that each one merged into at its first binding.
@@ -57,6 +58,7 @@ module Kiosk
             spending_cap_cents  bigint,
             spending_cap_currency text CHECK (spending_cap_currency ~ '^[a-z]{3}$'),
             created_at          timestamptz NOT NULL DEFAULT now(),
+            bound_at            timestamptz,
             revoked_at          timestamptz,
             issuer              text NOT NULL,
             CONSTRAINT agents_spending_cap_currency_set

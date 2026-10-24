@@ -24,6 +24,12 @@ module AccountBindingSpecHelpers
   end
 
   def roles_of(client) = Kiosk::Server::Client.find(client.id).allowed_roles
+
+  def bound_at(client = self.client)
+    ActiveRecord::Base.connection.select_value(
+      %(SELECT bound_at FROM "#{Kiosk.configuration.schema}".agents WHERE id = $1), 'spec', [client.id]
+    )
+  end
 end
 
 RSpec.describe Kiosk::Server::AccountBinding do
@@ -41,6 +47,13 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
       expect([bound.id, bound.user_id, bound.role]).to eq([client.id, holder, 'owner'])
       expect(bound.public_key_pem).to eq(client.public_key_pem)
+    end
+
+    it 'records the time of the binding on the agent, which registration leaves empty' do
+      registered = bound_at
+      bind
+
+      expect([registered, bound_at]).to match([nil, be_within(5).of(Time.current)])
     end
 
     it 'requires a user_id and a live client' do

@@ -28,6 +28,21 @@ RSpec.describe "An assistant's spending cap", type: :story do
     expect(Kiosk::Settlement.where(user_id: guest.principal.user_id).pluck(:currency)).to eq(%w[eur eur])
   end
 
+  it 'a guest sets the cap of her assistant on the assistants page, and the assistant cannot pay past it' do
+    User.create!(email: 'cap-page@example.test', password: 'cap-page-password')
+    ada   = a_person(email: 'cap-page@example.test', password: 'cap-page-password')
+    guest = ada.links(a_guest)
+    stay  = guest.reserves(check_in: Date.current + 90, check_out: Date.current + 92)
+    page  = ada.visits('/kiosk/auth/assistants')
+    ada.site.post_form('/kiosk/auth/assistants/update', 'authenticity_token' => ada.site.csrf_token(page.body),
+                                                        'agent_id' => guest.principal.agent_id,
+                                                        'spending_cap_cents' => (stay['total_cents'] - 1).to_s,
+                                                        'spending_cap_currency' => 'EUR')
+
+    expect(ada.visits('/kiosk/auth/assistants').body).to include("cap: #{stay['total_cents'] - 1} cents in EUR")
+    expect(guest.pays_for(stay)).to be_refused(:spending_cap_exceeded)
+  end
+
   it "a guest's assistant cannot pay in a currency other than its cap's" do
     guest = a_guest
     stay  = guest.reserves(check_in: Date.current + 90, check_out: Date.current + 92)

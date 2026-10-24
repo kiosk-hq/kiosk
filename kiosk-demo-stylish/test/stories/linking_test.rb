@@ -31,23 +31,18 @@ class LinkingStory < StoryTest
     assert_predicate second.signs_back_in, :ok?
   end
 
-  test 'Alice names her assistant and caps its spending on the assistants page' do
+  test 'Alice names her assistant on the assistants page, which shows no spending cap: the salon takes no payments' do
     linked = assistant_of(:alice)
     alice  = signs_in(:alice)
     page   = alice.visits('/kiosk/auth/assistants')
 
     assert_includes page.body, linked.principal.agent_id
-
+    assert_no_match(/spending|spent|cap:/i, page.body)
     renamed = alice.site.post_form('/kiosk/auth/assistants/update', 'authenticity_token' => alice.site.csrf_token(page.body),
                                                                     'agent_id' => linked.principal.agent_id,
-                                                                    'human_label' => 'Alice booking bot',
-                                                                    'spending_cap_currency' => 'EUR',
-                                                                    'spending_cap_cents' => '12345')
+                                                                    'human_label' => 'Alice booking bot')
 
     assert_equal '200', renamed.code
-    page = alice.visits('/kiosk/auth/assistants')
-
-    assert_includes page.body, 'Alice booking bot'
-    assert_includes page.body, 'cap: 12345 cents in EUR'
+    assert_includes alice.visits('/kiosk/auth/assistants').body, 'Alice booking bot'
   end
 end

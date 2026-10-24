@@ -50,5 +50,12 @@ RSpec.describe Booking do
       expect(booking.reload).to be_paid.and be_confirmed
       expect(booking.confirmation_code).to be_present
     end
+
+    it "names the booking in the checkout receipt's order_id, the field AP2 gives that id" do
+      receipt = Kiosk::Server::Receipts.issue(checkout: checkout(ada), payment: checkout(ada), settlement_id: 'settlement',
+                                              psp_reference: 'pi_fixture', network_confirmation_id: nil)
+
+      expect(JWT.decode(receipt[:checkout_receipt], nil, false).first['order_id']).to eq(booking.id)
+    end
   end
 end

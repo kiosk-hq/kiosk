@@ -53,6 +53,10 @@ RSpec.describe Kiosk::Server::TolledCalls do
 
   def tolled?(answer) = answer.is_a?(Kiosk::Server::Errors::PowRequired)
 
+  def calls_since_proof
+    conn.select_value(%(SELECT calls_since_proof FROM "#{OauthClients::SCHEMA}".tolled_calls WHERE user_id = '#{human}'))
+  end
+
   # The first call that answers 402, among the next 100.
   def first_tolled_call(identity = token) = (1..100).find { tolled?(call(identity)) }
 
@@ -65,6 +69,12 @@ RSpec.describe Kiosk::Server::TolledCalls do
   it 'answers 402 on the 10th call of an account with no spend, and the paid proof lets that call through' do
     expect(first_tolled_call).to eq(10)
     expect(pay(call)).to eq(:proceed)
+  end
+
+  it 'counts a 402 and the retry that pays it as one call: the paid retry sets the count to zero' do
+    refusal = Array.new(10) { call }.last
+
+    expect([tolled?(refusal), pay(refusal), calls_since_proof]).to eq([true, :proceed, 0])
   end
 
   it 'starts a new count of 10 after the paid proof' do
@@ -176,16 +186,14 @@ RSpec.describe Kiosk::Server::TolledCalls do
       Kiosk::Server::Routing::VerbRoute.new(:query, 'menu').call(env).first
     end
 
-    def count = conn.select_value(%(SELECT calls_since_proof FROM "#{OauthClients::SCHEMA}".tolled_calls WHERE user_id = '#{human}'))
-
     it 'counts no call refused before the toll: a refused token or arguments that do not match the schema' do
       expect([get_menu(token: 'not-a-token'), get_menu('?size=large')]).to eq([401, 400])
-      expect(count).to be_nil
+      expect(calls_since_proof).to be_nil
     end
 
     it 'counts a call that the operation itself refuses' do
       expect(get_menu).to eq(404)
-      expect(count).to eq(1)
+      expect(calls_since_proof).to eq(1)
     end
   end
 end

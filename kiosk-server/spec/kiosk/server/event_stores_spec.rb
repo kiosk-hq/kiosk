@@ -125,9 +125,10 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
     expect(store.since('u1', 0).first['subject']).to be_nil
   end
 
-  it 'answers head 0 and an empty tail on a fresh origin' do
+  it 'answers head 0 and an empty tail on a fresh origin, and gives the first event an id of 1 or more' do
     expect(store.head).to eq(0)
     expect(store.since('u1', 0)).to eq([])
+    expect(store.append('u1', event)).to be >= 1
   end
 
   it 'keeps identities apart' do

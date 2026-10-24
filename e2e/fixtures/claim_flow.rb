@@ -131,7 +131,7 @@ rc, da = post_form(DEVICE_AUTHORIZATION, assertion_params(client_id, key, ISSUER
 abort "device_authorization failed: #{rc} #{da}" unless rc == 200
 device_code = da.fetch('device_code')
 user_code   = da.fetch('user_code')
-results[:da_fields] = %w[device_code user_code verification_uri expires_in interval].all? { |k| da.key?(k) }
+results[:da_fields] = %w[device_code user_code verification_uri verification_uri_complete expires_in interval].all? { |k| da.key?(k) }
 
 # Poll with a valid client assertion before approval → authorization_pending.
 rc, tok = token_post(client_id, key, { grant_type: GRANT, device_code: device_code })

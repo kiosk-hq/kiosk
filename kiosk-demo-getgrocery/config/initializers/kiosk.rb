@@ -38,15 +38,12 @@ end
 
 # KYC: the broker that checks the customer, and the claims this origin asks for.
 Kiosk.configure do |c|
-  c.kyc_provider = Kiosk::KycProviders::Prove.new(
-    operator_id: 'getgrocery',
-    intake_secret: ENV.fetch('KIOSK_PROVE_INTAKE_SECRET'),
-    url: ENV.fetch('KIOSK_PROVE_BROKER_URL')
-  )
   c.kyc_claims     = %w[age_over_18]
-  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
-  c.kyc_public_key = ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')
-  c.kyc_audience   = 'getgrocery'
+  c.kyc_provider   = Kiosk::KycProviders::Prove.new(
+    operator_id: 'getgrocery', intake_secret: ENV.fetch('KIOSK_PROVE_INTAKE_SECRET'),
+    url: ENV.fetch('KIOSK_PROVE_BROKER_URL'), issuer: ENV.fetch('KIOSK_PROVE_ISSUER'),
+    public_key: ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')
+  )
 end
 
 # The proof-of-work toll.

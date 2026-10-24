@@ -107,32 +107,6 @@ module Kiosk
         def kyc_claims
           @kyc_claims || []
         end
-
-        # Must match the `iss` of submitted KYC attestations.
-        attr_writer :kyc_issuer
-
-        def kyc_issuer
-          @kyc_issuer
-        end
-
-        # The `aud` a KYC attestation must carry. Default: the origin being served.
-        attr_writer :kyc_audience
-
-        def kyc_audience
-          @kyc_audience || Kiosk.current_issuer
-        end
-
-        # The KYC provider's Ed25519 public key: an OpenSSL::PKey or a PEM string.
-        def kyc_public_key
-          @kyc_public_key
-        end
-
-        def kyc_public_key=(value)
-          @kyc_public_key = value.is_a?(String) ? OpenSSL::PKey.read(value) : value
-          return if @kyc_public_key.nil? || Jwk.ed25519?(@kyc_public_key)
-
-          raise ArgumentError, "kyc_public_key must be an Ed25519 key or its PEM string, got #{@kyc_public_key.class}"
-        end
       end
 
       # The database settings: where Kiosk's tables live and how a request reaches them.

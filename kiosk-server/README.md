@@ -98,13 +98,16 @@ their names, `require!(%w[age_over_18])`, and may pass its own `detail:`.
 
 ```ruby
 Kiosk.configure do |c|
-  c.kyc_provider   = Kiosk::KycProviders::Prove.new(operator_id: "acme", intake_secret: ENV["PROVE_SECRET"])
-  c.kyc_claims     = %w[age_over_18]
-  c.kyc_issuer     = "https://kyc.example"   # the `iss` the provider signs
-  c.kyc_public_key = ENV["KYC_PUBLIC_KEY_PEM"]
-  c.kyc_audience   = "acme"                  # the `aud` it mints for you
+  c.kyc_claims   = %w[age_over_18]
+  c.kyc_provider = Kiosk::KycProviders::Prove.new(operator_id: "acme", intake_secret: ENV["PROVE_SECRET"],
+                                                  public_key: ENV["PROVE_PUBLIC_KEY_PEM"])
 end
 ```
+
+The provider names the `iss` it signs, its Ed25519 public key and the `aud` it
+mints for you, and the engine checks every attestation against them. To accept
+attestations at `POST <mount>/agents/kyc` only, with no `request_kyc`, set
+`c.kyc_provider = Kiosk::KycProviders::Base.new(issuer:, public_key:, audience:)`.
 
 ### Payments
 

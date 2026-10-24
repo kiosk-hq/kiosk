@@ -17,21 +17,23 @@ module Kiosk
     #   rider.requests_verification
     #   the_verification_service_confirms(rider, age_over_18: true)
     module Kyc
-      ISSUER   = 'https://kyc.test.invalid'
-      SETTINGS = %i[kyc_provider kyc_issuer kyc_public_key].freeze
+      ISSUER = 'https://kyc.test.invalid'
 
-      # Opens checks without a network and signs attestations for them.
+      # Opens checks without a network and signs attestations for them, for
+      # the audience of the provider it stands in for.
       class Provider < Kiosk::KycProviders::Base
         Check = Data.define(:subject, :audience, :nonce, :callback_url)
 
         def self.key = @key ||= OpenSSL::PKey.generate_key('ED25519')
 
-        def initialize
-          super
+        def initialize(audience:)
+          super(issuer: ISSUER, public_key: self.class.key, audience:)
           @checks = {}
         end
 
-        def open_verification(subject:, audience:, callback_url:, **)
+        def opens_verifications? = true
+
+        def open_verification(subject:, callback_url:, **)
           request_id = SecureRandom.uuid
           @checks[request_id] = Check.new(subject:, audience:, nonce: SecureRandom.hex(16), callback_url:)
           { request_id:, nonce: @checks[request_id].nonce, verification_url: "#{ISSUER}/verify?request=#{request_id}" }
@@ -72,7 +74,7 @@ module Kiosk
       # An attestation the provider signed for this principal, as an assistant
       # submits it to `POST <endpoint>/agents/kyc`.
       def kyc_attestation(principal, **attributes)
-        @kyc_provider.attest(principal.user_id, Kiosk.configuration.kyc_audience, attributes)
+        @kyc_provider.attest(principal.user_id, @kyc_provider.audience, attributes)
       end
 
       private
@@ -83,15 +85,13 @@ module Kiosk
 
       def stand_in_for_kyc_provider
         config = Kiosk.configuration
-        @replaced_kyc_settings = SETTINGS.to_h { [it, config.public_send(it)] }
-        @kyc_provider = Provider.new
-        config.kyc_provider   = @kyc_provider
-        config.kyc_issuer     = ISSUER
-        config.kyc_public_key = Provider.key
+        @replaced_kyc_provider = config.kyc_provider
+        @kyc_provider = Provider.new(audience: @replaced_kyc_provider&.audience)
+        config.kyc_provider = @kyc_provider
       end
 
       def restore_kyc_provider
-        @replaced_kyc_settings&.each { |setting, value| Kiosk.configuration.public_send(:"#{setting}=", value) }
+        Kiosk.configuration.kyc_provider = @replaced_kyc_provider if @kyc_provider
       end
     end
   end

@@ -49,7 +49,7 @@ module Kiosk
         def claims = Array(Kiosk.configuration.kyc_claims).map(&:to_s)
 
         def served!
-          return if provider
+          return if provider&.opens_verifications?
 
           raise Errors::ModuleNotServed.new(
             'this operator does not serve the KYC module',
@@ -115,8 +115,8 @@ module Kiosk
 
         # Names only a path this origin serves.
         def gate_hint
-          return REQUEST_HINT if provider
-          return ATTEST_HINT if Kiosk.configuration.kyc_public_key
+          return REQUEST_HINT if provider&.opens_verifications?
+          return ATTEST_HINT if provider
 
           CLOSED_HINT
         end
@@ -148,9 +148,7 @@ module Kiosk
           private
 
           def open_verification(user_id)
-            Kyc.provider.open_verification(subject: user_id, claims: Kyc.claims,
-                                           audience: Kiosk.configuration.kyc_audience.to_s,
-                                           callback_url: Kyc.callback_url)
+            Kyc.provider.open_verification(subject: user_id, claims: Kyc.claims, callback_url: Kyc.callback_url)
           rescue Kiosk::KycProviders::Unavailable => e
             FailureLog.report("#{NAME} could not open a verification", e)
             raise Errors::WireError.new(

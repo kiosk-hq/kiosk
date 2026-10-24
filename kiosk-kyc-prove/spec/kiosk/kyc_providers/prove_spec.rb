@@ -2,10 +2,13 @@
 
 require 'json'
 require 'net/http'
+require 'openssl'
 require 'socket'
 
+PROVE_SPEC_KEY = OpenSSL::PKey.generate_key('ED25519')
+
 RSpec.shared_context 'with a Prove broker client' do
-  subject(:prove) { described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: 'https://broker.example/') }
+  subject(:prove) { described_class.new(operator_id: 'shop', intake_secret: 's3cret', public_key: PROVE_SPEC_KEY, url: 'https://broker.example/') }
 
   let(:sent) { [] }
 
@@ -23,8 +26,7 @@ RSpec.shared_context 'with a Prove broker client' do
   end
 
   def open!
-    prove.open_verification(subject: 'u-1', claims: %w[age_over_18 licence_a], audience: 'shop',
-                            callback_url: 'https://shop.example/kiosk/kyc/callback')
+    prove.open_verification(subject: 'u-1', claims: %w[age_over_18 licence_a], callback_url: 'https://shop.example/kiosk/kyc/callback')
   end
 end
 
@@ -41,8 +43,18 @@ RSpec.describe Kiosk::KycProviders::Prove do
     expect(prove.accepts?({})).to be(false)
   end
 
+  it "checks attestations against the broker's issuer, its key and the operator id as the audience" do
+    expect([prove.issuer, prove.public_key, prove.audience]).to eq(['https://broker.example', PROVE_SPEC_KEY, 'shop'])
+  end
+
+  it "takes the broker's issuer when it differs from the broker's URL, and opens verifications" do
+    broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', public_key: PROVE_SPEC_KEY.public_to_pem,
+                                 url: 'http://127.0.0.1:3020', issuer: 'https://kyc.test.local')
+    expect([broker.issuer, broker.opens_verifications?]).to eq(['https://kyc.test.local', true])
+  end
+
   it 'refuses to be built without an intake secret' do
-    expect { described_class.new(operator_id: 'shop', intake_secret: '') }.to raise_error(ArgumentError)
+    expect { described_class.new(operator_id: 'shop', intake_secret: '', public_key: PROVE_SPEC_KEY) }.to raise_error(ArgumentError)
   end
 
   describe '#open_verification' do
@@ -68,8 +80,8 @@ RSpec.describe Kiosk::KycProviders::Prove do
 
     it 'dials an IPv6 literal intake by its bare address' do
       answer(201, request_id: 'r-1', verification_url: 'http://[::1]:3004/v/r-1', nonce: 'n-1')
-      broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: 'http://[::1]:3004/')
-      broker.open_verification(subject: 'u-1', claims: %w[age_over_18], audience: 'shop', callback_url: 'https://shop.example/cb')
+      broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', public_key: PROVE_SPEC_KEY, url: 'http://[::1]:3004/')
+      broker.open_verification(subject: 'u-1', claims: %w[age_over_18], callback_url: 'https://shop.example/cb')
 
       http, = sent.first
       expect([http.address, http.port]).to eq(['::1', 3004])
@@ -83,10 +95,10 @@ RSpec.describe Kiosk::KycProviders::Prove do
     it 'raises Unavailable when the broker answers bytes that are not HTTP' do
       server = TCPServer.new('127.0.0.1', 0)
       listener = Thread.new { server.accept.then { |peer| peer.readpartial(4096) && peer.write("garbage\r\n") && peer.close } }
-      broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: "http://127.0.0.1:#{server.addr[1]}/")
+      broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', public_key: PROVE_SPEC_KEY, url: "http://127.0.0.1:#{server.addr[1]}/")
 
       expect do
-        broker.open_verification(subject: 'u-1', claims: %w[age_over_18], audience: 'shop', callback_url: 'https://shop.example/cb')
+        broker.open_verification(subject: 'u-1', claims: %w[age_over_18], callback_url: 'https://shop.example/cb')
       end.to raise_error(Kiosk::KycProviders::Unavailable, /could not be reached/)
     ensure
       listener&.join(1)

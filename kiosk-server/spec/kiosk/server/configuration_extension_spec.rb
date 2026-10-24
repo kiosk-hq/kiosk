@@ -211,16 +211,6 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
   end
 
-  describe 'kyc_public_key' do
-    it 'reads the PEM of an Ed25519 key, and refuses an RSA key' do
-      key = OpenSSL::PKey.generate_key('ED25519')
-      Kiosk.configure { |c| c.kyc_public_key = key.public_to_pem }
-      expect(Kiosk.configuration.kyc_public_key.public_to_pem).to eq(key.public_to_pem)
-      expect { Kiosk.configure { |c| c.kyc_public_key = OpenSSL::PKey::RSA.generate(2048).public_to_pem } }
-        .to raise_error(ArgumentError, /Ed25519/)
-    end
-  end
-
   describe 'pow_secret' do
     it 'refuses a secret shorter than 32 bytes' do
       expect { Kiosk.configure { |c| c.pow_secret = 'short' } }

@@ -11,20 +11,22 @@ gem "kiosk-kyc-prove"
 
 ## Configure
 
-Register with the broker first: it holds your operator id, your intake secret,
-the host your callback lives on and the audience it mints attestations for.
+Register with the broker first: it holds your operator id, your intake secret
+and the host your callback lives on.
 
 ```ruby
 require "kiosk/kyc_providers/prove"
 
 Kiosk.configure do |c|
-  c.kyc_provider   = Kiosk::KycProviders::Prove.new(operator_id: "acme", intake_secret: ENV.fetch("PROVE_SECRET"))
-  c.kyc_claims     = %w[age_over_18]
-  c.kyc_issuer     = Kiosk::KycProviders::Prove::HOSTED
-  c.kyc_public_key = ENV["PROVE_PUBLIC_KEY_PEM"]
-  c.kyc_audience   = "acme"
+  c.kyc_claims   = %w[age_over_18]
+  c.kyc_provider = Kiosk::KycProviders::Prove.new(operator_id: "acme", intake_secret: ENV.fetch("PROVE_SECRET"),
+                                                  public_key: ENV.fetch("PROVE_PUBLIC_KEY_PEM"))
 end
 ```
+
+`public_key` is the broker's Ed25519 public key, which it serves at
+`<url>/prove_key.pem`. The engine checks each attestation against that key,
+against the broker's issuer and against your operator id as the audience.
 
 kiosk-server then serves `request_kyc` and the broker's callback. The adapter:
 
@@ -35,7 +37,8 @@ kiosk-server then serves `request_kyc` and the broker's callback. The adapter:
 - accepts only attestations whose `operator` claim is your operator id.
 
 `Prove.new` talks to the hosted broker at `Prove::HOSTED`
-(`https://kyc.demo.kiosk.tech`); pass `url:` for another one.
+(`https://kyc.demo.kiosk.tech`); pass `url:` for another one. The issuer is the
+broker's URL; pass `issuer:` when the broker signs another one.
 
 ## License
 

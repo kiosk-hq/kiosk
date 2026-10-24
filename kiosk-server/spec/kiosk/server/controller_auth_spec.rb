@@ -119,8 +119,7 @@ module ControllerAuthSpecKycHelpers
 
   def configure_kyc
     Kiosk.configure do |c|
-      c.kyc_issuer     = kyc_issuer
-      c.kyc_public_key = kyc_key
+      c.kyc_provider   = Kiosk::KycProviders::Base.new(issuer: kyc_issuer, public_key: kyc_key)
       # The zero-config default idp verifies against the
       # provider's own signing key — configure one like a real install.
       c.signing_key    = Kiosk::Server::SigningKey.generate

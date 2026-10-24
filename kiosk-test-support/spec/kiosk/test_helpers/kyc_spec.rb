@@ -4,13 +4,17 @@ require 'kiosk/test_helpers/assistant'
 require 'kiosk/test_helpers/kyc'
 require 'kiosk/server'
 
-KycSpecOperator = Struct.new(:kyc_provider, :kyc_issuer, :kyc_public_key, :kyc_audience)
+KycSpecOperator = Struct.new(:kyc_provider)
 
 # An operator configuration that the helper replaces for the length of each
 # example, then puts back. The stub comes before the include, because the
 # helper's own hooks read the configuration.
 RSpec.shared_context 'with a KYC operator' do
-  let(:configuration) { KycSpecOperator.new(:brokers_provider, 'https://broker.example', :brokers_key, 'skooti') }
+  let(:brokers_provider) do
+    Kiosk::KycProviders::Base.new(issuer: 'https://broker.example', public_key: OpenSSL::PKey.generate_key('ED25519'),
+                                  audience: 'skooti')
+  end
+  let(:configuration) { KycSpecOperator.new(brokers_provider) }
   let(:rider) { Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'u1', token: 'tok', key: nil) }
   let(:customer) { Struct.new(:principal).new(rider) }
   let(:callback_url) { 'http://127.0.0.1:3001/kiosk/kyc/callback' }
@@ -19,23 +23,23 @@ RSpec.shared_context 'with a KYC operator' do
 
   # The helper's own after hook runs first and must have put every setting back.
   after do
-    expect(configuration.to_a).to eq([:brokers_provider, 'https://broker.example', :brokers_key, 'skooti']) # rubocop:disable RSpec/ExpectInHook -- an example cannot observe the helper's after hook; only a later hook can.
+    expect(configuration.kyc_provider).to be(brokers_provider) # rubocop:disable RSpec/ExpectInHook -- an example cannot observe the helper's after hook; only a later hook can.
   end
 
   include Kiosk::TestHelpers::Kyc
 
   def verified(jws)
-    JWT.decode(jws, Kiosk.configuration.kyc_public_key, true,
-               algorithm: 'EdDSA', iss: Kiosk.configuration.kyc_issuer, verify_iss: true).first
+    JWT.decode(jws, Kiosk.configuration.kyc_provider.public_key, true,
+               algorithm: 'EdDSA', iss: Kiosk.configuration.kyc_provider.issuer, verify_iss: true).first
   end
 end
 
 RSpec.describe Kiosk::TestHelpers::Kyc do
   include_context 'with a KYC operator'
 
-  it 'stands in for the provider, issuer and key for the length of the test' do
-    expect(configuration.kyc_provider).to be_a(Kiosk::KycProviders::Base)
-    expect(configuration.kyc_issuer).to eq(described_class::ISSUER)
+  it "stands in for the provider for the length of the test, with the operator's audience" do
+    expect(configuration.kyc_provider).to be_a(described_class::Provider)
+    expect([configuration.kyc_provider.issuer, configuration.kyc_provider.audience]).to eq([described_class::ISSUER, 'skooti'])
   end
 
   it 'signs an attestation for the principal, addressed to this operator' do
@@ -57,7 +61,7 @@ RSpec.describe Kiosk::TestHelpers::Kyc do
 
   describe 'callback delivery' do
     it 'delivers a passed check to the callback the engine gave it' do
-      opened = configuration.kyc_provider.open_verification(subject: 'u1', claims: %w[licence_a], audience: 'skooti', callback_url:)
+      opened = configuration.kyc_provider.open_verification(subject: 'u1', claims: %w[licence_a], callback_url:)
       callback = stub_request(:post, callback_url).to_return(json_return(200, 'ok' => true))
 
       jws = the_verification_service_confirms(customer, licence_a: true)
@@ -68,7 +72,7 @@ RSpec.describe Kiosk::TestHelpers::Kyc do
     end
 
     it 'says so when the engine refuses the callback' do
-      configuration.kyc_provider.open_verification(subject: 'u1', claims: [], audience: 'skooti', callback_url:)
+      configuration.kyc_provider.open_verification(subject: 'u1', claims: [], callback_url:)
       stub_request(:post, callback_url).to_return(problem_return('forbidden', status: 403))
 
       expect { the_verification_service_confirms(customer) }.to raise_error(/refused the KYC callback: 403/)

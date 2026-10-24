@@ -839,7 +839,7 @@ assert "unknown action → 404"         "$status" "404"
 # of an unknown code".
 
 # (3) module_not_served -- the whole CAPABILITY is absent from this origin.
-# This app configures no `kyc_public_key` (fixtures/initializer_kiosk.rb), so
+# This app configures no `kyc_provider` (fixtures/initializer_kiosk.rb), so
 # `POST /kiosk/agents/kyc` is a PUBLISHED path with no module behind it. 501,
 # not 404: the URL is right. And not 403 either -- `forbidden` is
 # identity-scoped, this refusal is origin-wide.

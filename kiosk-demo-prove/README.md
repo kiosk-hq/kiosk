@@ -21,9 +21,9 @@ endpoints (`GET <endpoint>/schema`, `POST <endpoint>/pay`) and not one
 per-verb endpoint, because it registers no verb. It has no toll, and it
 serves no `/.well-known/kiosk.json`. It is the mirror ISSUER
 side of the Kiosk trust primitives an operator's `Kiosk::Server::KycVerifier`
-already accepts: it signs anonymized attestations that the operator trusts via
-the existing `c.kyc_issuer` / `c.kyc_public_key` config — no new framework
-surface. It depends on **no** kiosk gem.
+already accepts: it signs anonymized attestations that the operator trusts
+through its `c.kyc_provider` (`Kiosk::KycProviders::Prove`, which names this
+broker's issuer and public key) — no new framework surface. It depends on **no** kiosk gem.
 
 ## The three legs
 
@@ -73,8 +73,8 @@ The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
 - **No replay across operators.** The claim carries `operator`/`aud`; the
   operator's callback handler rejects a claim not addressed to it. The engine
   `KycVerifier` **also** enforces this at the endpoint: every
-  `POST /kiosk/agents/kyc` rejects a claim whose `aud` != the operator's
-  `kyc_audience`, so the cross-operator check lives in BOTH the operator
+  `POST /kiosk/agents/kyc` rejects a claim whose `aud` != the audience of the
+  operator's KYC provider, so the cross-operator check lives in BOTH the operator
   callback layer and the normative protocol.
 - **No replay across subjects.** `sub` is the operator's `user_id` for the
   requesting agent; the operator's `KycVerifier` rejects a `sub` mismatch (the

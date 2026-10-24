@@ -180,7 +180,8 @@ RSpec.describe Kiosk::Server::IssuerMiddleware do
     end
 
     it 'defaults the KYC attestation audience to the origin being served' do
-      expect(Kiosk.with_issuer(b) { Kiosk.configuration.kyc_audience }).to eq(b)
+      provider = Kiosk::KycProviders::Base.new(issuer: 'https://kyc.example', public_key: OpenSSL::PKey.generate_key('ED25519'))
+      expect(Kiosk.with_issuer(b) { provider.audience }).to eq(b)
     end
   end
 end

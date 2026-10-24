@@ -28,9 +28,7 @@ RSpec.shared_context 'with a configured KYC verifier' do
 
   before do
     Kiosk.configure do |c|
-      c.kyc_issuer     = kyc_issuer
-      c.kyc_audience   = kyc_audience
-      c.kyc_public_key = kyc_key
+      c.kyc_provider = Kiosk::KycProviders::Base.new(issuer: kyc_issuer, public_key: kyc_key, audience: kyc_audience)
     end
   end
 end
@@ -74,13 +72,13 @@ RSpec.describe Kiosk::Server::KycVerifier do
 
     # The issuer and the audience bind a claim to this operator. A claim minted
     # for another operator's audience does not unlock this one.
-    it 'raises Errors::Forbidden when the iss does not match kyc_issuer' do
+    it "raises Errors::Forbidden when the iss does not match the provider's issuer" do
       raw_jws = sign_kyc(valid_payload(iss: 'https://evil-kyc.example'))
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /issuer/)
     end
 
-    it "raises Errors::Forbidden when aud does not match this operator's kyc_audience" do
+    it "raises Errors::Forbidden when aud does not match the provider's audience" do
       raw_jws = sign_kyc(valid_payload(aud: 'other-operator'))
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /audience/)
@@ -92,16 +90,16 @@ RSpec.describe Kiosk::Server::KycVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
 
-    it 'accepts an attestation whose aud matches kyc_audience (happy path)' do
+    it "accepts an attestation whose aud matches the provider's audience (happy path)" do
       raw_jws = sign_kyc(valid_payload(aud: kyc_audience))
       claims  = described_class.verify(raw_jws: raw_jws, subject: 'u-1')
       expect(claims[:aud]).to eq(kyc_audience)
       expect(claims[:level]).to eq('verified')
     end
 
-    it 'defaults kyc_audience to the operator issuer when not explicitly set' do
+    it 'defaults the audience to the operator issuer when the provider names none' do
       Kiosk.configure do |c|
-        c.kyc_audience = nil
+        c.kyc_provider = Kiosk::KycProviders::Base.new(issuer: kyc_issuer, public_key: kyc_key)
         c.issuer       = 'https://operator.example'
       end
       raw_jws = sign_kyc(valid_payload(aud: 'https://operator.example'))
@@ -144,18 +142,26 @@ RSpec.describe Kiosk::Server::KycVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
 
+    it 'raises Errors::Forbidden when the provider does not accept the attestation' do
+      refusing = Class.new(Kiosk::KycProviders::Base) { def accepts?(_payload) = false }
+      Kiosk.configuration.kyc_provider = refusing.new(issuer: kyc_issuer, public_key: kyc_key, audience: kyc_audience)
+
+      expect { described_class.verify(raw_jws: sign_kyc(valid_payload), subject: 'u-1') }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /provider does not accept/)
+    end
+
     it 'raises Errors::Forbidden for an attestation signed RS256' do
       raw_jws = JWT.encode(valid_payload, OpenSSL::PKey::RSA.generate(2048), 'RS256')
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /signature invalid/)
     end
 
-    # An origin with no `kyc_public_key` serves no KYC at all. That is an
+    # An origin with no `kyc_provider` serves no KYC at all. That is an
     # origin-wide fact, so the answer is module_not_served (501), not forbidden.
-    context 'without a kyc_public_key' do
-      before { Kiosk.configure { |c| c.kyc_public_key = nil } }
+    context 'without a kyc_provider' do
+      before { Kiosk.configure { |c| c.kyc_provider = nil } }
 
-      it 'raises Errors::ModuleNotServed when kyc_public_key is not configured' do
+      it 'raises Errors::ModuleNotServed when kyc_provider is not configured' do
         expect { described_class.verify(raw_jws: sign_kyc(valid_payload), subject: 'u-1') }
           .to raise_error(Kiosk::Server::Errors::ModuleNotServed, /does not serve the KYC module/)
       end

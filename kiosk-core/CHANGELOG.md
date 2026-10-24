@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-24: `KycProviders::Base.new(issuer:, public_key:, audience:)` names what an attestation is checked against; `open_verification` takes no `audience:`.
+
 ## [0.6.11] — 2026-10-24
 
 - 2026-10-24: Version 0.6.11, the tree cut that matches skill 0.6.11.

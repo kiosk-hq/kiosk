@@ -279,7 +279,7 @@ else
           'it is an AUTHENTICATED probe and a live run mints no token'
 end
 
-# This origin configures no `kyc_public_key`, so the KYC attestation path is
+# This origin configures no `kyc_provider`, so the KYC attestation path is
 # PUBLISHED with no module behind it: 501 module_not_served.
 if AUTH
   status, raw = post('/kiosk/agents/kyc', JSON.generate(kyc_jws: 'not.a.jws'), AUTH.call('POST', '/kiosk/agents/kyc'))

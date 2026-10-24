@@ -11,23 +11,27 @@ module Kiosk
   module KycProviders
     # The Prove anonymizing KYC broker. The operator registers with the broker
     # once (an operator id, an intake secret and its callback host); the broker
-    # then signs only the booleans the human confirmed, with `operator` set to
-    # the operator the verification was opened for.
+    # then signs only the booleans the human confirmed, with `operator` and
+    # `aud` set to the operator the verification was opened for.
     class Prove < Base
       HOSTED = 'https://kyc.demo.kiosk.tech'
 
       attr_reader :operator_id
 
-      def initialize(operator_id:, intake_secret:, url: HOSTED)
+      # `issuer` is the broker's `iss`, by default its URL; `public_key` is its
+      # Ed25519 public key, which the broker serves at `<url>/prove_key.pem`.
+      def initialize(operator_id:, intake_secret:, public_key:, url: HOSTED, issuer: url.to_s.chomp('/'))
         raise ArgumentError, "the broker's intake secret for #{operator_id} is required" if intake_secret.to_s.empty?
 
-        super()
+        super(issuer:, public_key:, audience: operator_id.to_s)
         @operator_id = operator_id.to_s
         @secret      = intake_secret.to_s
         @intake      = URI.join("#{url.to_s.chomp('/')}/", 'verifications')
       end
 
-      def open_verification(subject:, claims:, audience:, callback_url:)
+      def opens_verifications? = true
+
+      def open_verification(subject:, claims:, callback_url:)
         intake = post(operator_id: operator_id, callback_url: callback_url, requested_claims: claims,
                       subject_handle: subject, audience: audience)
         fields = intake.values_at('request_id', 'verification_url', 'nonce').map(&:to_s)

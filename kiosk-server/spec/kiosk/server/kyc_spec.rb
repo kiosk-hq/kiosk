@@ -45,16 +45,13 @@ module KycSpec
       c.event_store = store
     end
     configure_kyc(kyc_provider)
-    Kiosk::Server::Kyc.register! if kyc_provider
+    Kiosk::Server::Kyc.register! if kyc_provider&.opens_verifications?
   end
 
   def configure_kyc(kyc_provider)
     Kiosk.configure do |c|
-      c.kyc_provider   = kyc_provider
-      c.kyc_claims     = %w[age_over_18 licence_a]
-      c.kyc_issuer     = 'https://kyc.example'
-      c.kyc_audience   = 'shop'
-      c.kyc_public_key = kyc_key
+      c.kyc_provider = kyc_provider
+      c.kyc_claims   = %w[age_over_18 licence_a]
     end
   end
 
@@ -129,6 +126,8 @@ end
 class KycSpecProvider < Kiosk::KycProviders::Base
   attr_accessor :opened, :failing
 
+  def opens_verifications? = true
+
   def open_verification(**args)
     raise Kiosk::KycProviders::Unavailable, 'down' if failing
 
@@ -152,7 +151,7 @@ RSpec.shared_context 'with Postgres for KYC' do
 
   let(:store)    { MemoryEventStore.new }
   let(:kyc_key)  { OpenSSL::PKey.generate_key('ED25519') }
-  let(:provider) { KycSpecProvider.new }
+  let(:provider) { KycSpecProvider.new(issuer: 'https://kyc.example', public_key: kyc_key, audience: 'shop') }
 end
 
 RSpec.shared_context "with the KYC provider's callback" do
@@ -166,10 +165,10 @@ RSpec.shared_context "with the KYC provider's callback" do
 end
 
 RSpec.describe Kiosk::Server::Kyc do
-  describe 'an origin with no KYC provider' do
+  describe 'an origin whose KYC provider opens no verifications' do
     include_context 'with Postgres for KYC'
 
-    before { configure(nil) }
+    before { configure(Kiosk::KycProviders::Base.new(issuer: 'https://kyc.example', public_key: kyc_key, audience: 'shop')) }
 
     it 'publishes neither request_kyc nor its topic' do
       expect(Kiosk::Server::Actions.known).not_to include('request_kyc')
@@ -191,8 +190,8 @@ RSpec.describe Kiosk::Server::Kyc do
         }
     end
 
-    it 'gates naming no KYC path when no kyc_public_key is configured either' do
-      Kiosk.configuration.kyc_public_key = nil
+    it 'gates naming no KYC path when no kyc_provider is configured either' do
+      Kiosk.configuration.kyc_provider = nil
       expect { as('u-1', 'a-1') { described_class.require! } }
         .to raise_error(Kiosk::Server::Errors::KycRequired) { |e|
           expect(e.hint).not_to include('agents/kyc')
@@ -212,7 +211,7 @@ RSpec.describe Kiosk::Server::Kyc do
 
       expect(status).to eq(200)
       expect(body).to include('status' => 'pending', 'verification_url' => start_with('https://kyc.example/verify/'))
-      expect(provider.opened).to eq(subject: 'u-1', claims: %w[age_over_18 licence_a], audience: 'shop',
+      expect(provider.opened).to eq(subject: 'u-1', claims: %w[age_over_18 licence_a],
                                     callback_url: 'https://shop.example/kiosk/kyc/callback')
     end
 
@@ -380,7 +379,7 @@ RSpec.describe Kiosk::Server::Kyc do
   describe '.register!' do
     it 'refuses a kyc_provider with no kyc_claims, which no verification could satisfy' do
       Kiosk.configure do |c|
-        c.kyc_provider = Kiosk::KycProviders::Base.new
+        c.kyc_provider = KycSpecProvider.new(issuer: 'https://kyc.example', public_key: OpenSSL::PKey.generate_key('ED25519'))
         c.kyc_claims   = []
       end
 

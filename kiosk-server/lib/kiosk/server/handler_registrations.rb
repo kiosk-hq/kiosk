@@ -18,7 +18,7 @@ module Kiosk
           load_handlers_dir
           handlers.select! { |name| name.safe_constantize&.kiosk_register! }
           PaymentSetup.register! if Kiosk.configuration.payment_provider
-          Kyc.register! if Kiosk.configuration.kyc_provider
+          Kyc.register! if Kiosk.configuration.kyc_provider&.opens_verifications?
           refuse_cross_kind_collisions!
         end
 

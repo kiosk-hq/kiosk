@@ -9,11 +9,11 @@ class CallbackDeliveryJob < ApplicationJob
 
   retry_on NotAccepted
 
-  # @return [true] when the callback answered 2xx
+  # @return [Integer] the 2xx status the callback answered
   def perform(callback_url:, request_id:, kyc_jws:, nonce:)
     status = CallbackPoster.deliver(callback_url:, request_id:, kyc_jws:, nonce:)
     raise NotAccepted, "#{callback_url} answered #{status.inspect}" unless (200..299).cover?(status)
 
-    true
+    status
   end
 end

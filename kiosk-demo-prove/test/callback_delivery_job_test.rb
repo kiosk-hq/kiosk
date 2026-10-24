@@ -6,13 +6,13 @@ class CallbackDeliveryJobTest < ActiveJob::TestCase
   ARGS = { callback_url: 'http://127.0.0.1:3004/kyc/callback', request_id: 'r-1', kyc_jws: 'a.b.c', nonce: 'n-1' }.freeze
 
   # Runs the job with the callback answering `statuses` in turn; returns the posts it made.
-  def deliver_answering(*statuses)
+  def deliver_answering(*statuses, &)
     posts = []
     answer = lambda do |**args|
       posts << args
       statuses.shift
     end
-    CallbackPoster.stub(:deliver, answer) { yield }
+    CallbackPoster.stub(:deliver, answer, &)
     posts
   end
 

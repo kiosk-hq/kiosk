@@ -95,16 +95,19 @@ class VerificationsController < ApplicationController
   def approve!(prove_request)
     attributes = ClaimCatalog.attributes_for(prove_request.requested_claims, params[:licence_category])
     @decision   = :approved
-    @delivered  = deliver_claim(prove_request, ProveKey.mint(prove_request, attributes))
+    @delivered  = claim_delivered?(prove_request, ProveKey.mint(prove_request, attributes))
     @attributes = attributes
     render :decided
   end
 
-  # The first attempt runs in this request. When the callback refuses it,
-  # `retry_on` queues the next attempt and `perform_now` answers that job.
-  def deliver_claim(prove_request, kyc_jws)
-    CallbackDeliveryJob.perform_now(callback_url: prove_request.callback_url, request_id: prove_request.request_id,
-                                    kyc_jws: kyc_jws, nonce: prove_request.nonce) == true
+  # The first attempt runs in this request and answers the callback's status.
+  # When the callback refuses it, `retry_on` queues the next attempt and
+  # `perform_now` answers that job instead.
+  def claim_delivered?(prove_request, kyc_jws)
+    answer = CallbackDeliveryJob.perform_now(callback_url: prove_request.callback_url,
+                                             request_id: prove_request.request_id,
+                                             kyc_jws: kyc_jws, nonce: prove_request.nonce)
+    (200..299).cover?(answer)
   end
 
   def decline!

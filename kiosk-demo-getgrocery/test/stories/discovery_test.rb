@@ -67,6 +67,13 @@ class DiscoveryStory < StoryTest
     assert_includes Net::HTTP.get(URI(sitemap)), "<loc>#{live_url}/</loc>"
   end
 
+  test "robots.txt states the site's AI-use preferences in both vocabularies" do
+    robots = Net::HTTP.get(URI("#{live_url}/robots.txt"))
+
+    assert_includes robots, "\nContent-Signal: search=yes, ai-input=yes, ai-train=no\n"
+    assert_includes robots, "\nContent-Usage: search=y, ai-use=y, train-ai=n\n"
+  end
+
   test 'the landing page answers the type that Accept ranks first, and a browser gets HTML' do
     { 'text/markdown, */*' => 'text/markdown', 'text/markdown;q=1.0, */*;q=0.1' => 'text/markdown',
       'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' => 'text/html' }.each do |accept, type|

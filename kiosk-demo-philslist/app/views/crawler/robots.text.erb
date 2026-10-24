@@ -2,8 +2,11 @@
 User-agent: *
 Allow: /agents.txt
 Disallow:
-# How AI systems may use this site's content (contentsignals.org).
+# How AI systems may use this site's content, in two vocabularies: Content
+# Signals (contentsignals.org) and the IETF AI Preferences drafts
+# (draft-ietf-aipref-vocab-08, draft-ietf-aipref-attach-05).
 Content-Signal: search=yes, ai-input=yes, ai-train=no
+Content-Usage: search=y, ai-use=y, train-ai=n
 
 # robots.txt governs the human web. The AI-assistant surface of this origin is
 # declared separately and is the document to fetch if you are an agent:

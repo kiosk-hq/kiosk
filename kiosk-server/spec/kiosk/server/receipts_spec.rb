@@ -48,11 +48,12 @@ RSpec.describe Kiosk::Server::Receipts do
     expect(schema('paymentReceipt').validate(claims(:payment_receipt)).to_a).to be_empty
   end
 
-  context 'when the payment provider reports no network id' do
+  context 'when the payment provider reports no network id, as stripe-mock does' do
     let(:network_confirmation_id) { nil }
 
-    it 'leaves network_confirmation_id out' do
-      expect(claims(:payment_receipt)).not_to have_key('network_confirmation_id')
+    it 'names the fixed text that says so, which the published receipt schema accepts' do
+      expect(claims(:payment_receipt)).to include('network_confirmation_id' => 'not reported by the payment provider')
+      expect(schema('paymentReceipt').validate(claims(:payment_receipt)).to_a).to be_empty
     end
   end
 end

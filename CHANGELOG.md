@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-24: When the payment provider reports no card network id, the payment receipt's `network_confirmation_id` is `not reported by the payment provider`.
+
 ## [0.6.11] — 2026-10-24
 
 - 2026-10-24: **Every gem and `API_VERSION` are 0.6.11, matching skill 0.6.11, and every demo and the engine default pin `skill-v0.6.11.md`.** `MIN_CLIENT` stays 0.6.0.

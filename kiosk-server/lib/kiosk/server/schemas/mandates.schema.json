@@ -143,8 +143,8 @@
     },
     "paymentReceipt": {
       "type": "object",
-      "description": "The claims of the payment receipt a successful pay answers (AP2 v0.2 payment_receipt.json, status Success). `network_confirmation_id` is present only when the payment provider reports it; AP2 requires it, so a receipt without it does not satisfy AP2's schema (protocol.md 11.3).",
-      "required": ["status", "iss", "iat", "reference", "payment_id", "psp_confirmation_id"],
+      "description": "The claims of the payment receipt a successful pay answers (AP2 v0.2 payment_receipt.json, status Success).",
+      "required": ["status", "iss", "iat", "reference", "payment_id", "psp_confirmation_id", "network_confirmation_id"],
       "properties": {
         "status": { "const": "Success" },
         "iss": { "type": "string", "description": "The operator's issuer." },
@@ -152,7 +152,7 @@
         "reference": { "type": "string", "description": "The reference of the payment mandate: the base64url SHA-256 of its compact SD-JWT." },
         "payment_id": { "type": "string", "description": "The settlement_id." },
         "psp_confirmation_id": { "type": "string", "description": "The psp_reference." },
-        "network_confirmation_id": { "type": "string", "description": "The card network's id of the transaction." }
+        "network_confirmation_id": { "type": "string", "minLength": 1, "description": "The card network's id of the transaction, or `not reported by the payment provider` when the payment provider reports none (protocol.md 11.3)." }
       }
     }
   }

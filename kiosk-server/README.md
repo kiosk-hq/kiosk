@@ -170,7 +170,8 @@ and a new pair for the same checkout is accepted.
 A settled `pay` answers the settlement and the two AP2 receipts,
 `checkout_receipt` and `payment_receipt`, which your origin signs EdDSA with
 `c.signing_key`. The payment receipt carries the card network's id of the charge
-when your PSP adapter's `capture` answers `network_confirmation_id`.
+that your PSP adapter's `capture` answers as `network_confirmation_id`. When the
+adapter answers none, the receipt carries `not reported by the payment provider`.
 
 Set `c.spending_cap = Kiosk::Server::ColumnSpendingCap.new` to cap what each
 assistant spends. The human sets the cap on `/kiosk/auth/assistants`: an amount

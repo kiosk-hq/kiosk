@@ -148,6 +148,7 @@ scenarios share:
 | `MandateReplay` | A's signed mandates re-submitted under B's token are rejected |
 | `UnpaidGatedAction` | the gated action without a prior settled payment is denied |
 | `WrongCurrencyPayment` | a payment mandate in a currency other than its checkout's is refused before any capture |
+| `CallToll` | call N of an account meets `402 pow_required`, after a new access token, a rotated key, a second assistant that a person links to the same account, calls sent at the same time, a refused call, and a proof sent again; a registration with no proof is refused. It needs `tolled_calls_per_proof`, `tolled_query` and `person` |
 | `MissingKyc` | the gated action after payment but without an attestation is denied |
 | `ExpiredKyc` | an attestation whose `exp` has passed is rejected |
 | `ForgedKyc` | an attestation with a wrong issuer or a bad signature is rejected |

@@ -5,6 +5,7 @@
 #   SERVER_URL=http://127.0.0.1:3004 bundle exec ruby ../kiosk-redteam/suites/skooti.rb
 
 require 'kiosk/redteam'
+require 'kiosk/test_helpers/person'
 require 'kiosk/user_identity_providers/devise_session'
 require 'jwt'
 require 'openssl'
@@ -126,7 +127,11 @@ profile = Kiosk::Redteam::Profile.new(
 
   kyc_valid: ->(user_id) { ProveTestIssuer.attest(user_id: user_id) },
   kyc_expired: ->(user_id) { ProveTestIssuer.attest_expired(user_id: user_id) },
-  kyc_forged: method(:attest_forged)
+  kyc_forged: method(:attest_forged),
+  # CallToll: a new account pays a proof of work on every 10th call (RecentSpend with no spend).
+  tolled_calls_per_proof: 10,
+  tolled_query: 'my_reservations',
+  person: -> { Kiosk::TestHelpers::Person.new(BASE_URL, email: 'ben@example.com', password: 'skooti-demo-password') }
 )
 
 # skooti's own scenarios, run by the registry beside the library ones.
@@ -331,6 +336,7 @@ scenarios = [
   # Role self-selection at the device_authorization request a registered client signs.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   Kiosk::Redteam::Scenarios::WrongCurrencyPayment.new, # payment currency ≠ checkout currency
+  Kiosk::Redteam::Scenarios::CallToll.new, # the call toll holds against known bypasses
   SkootiScenarios::TamperedPriceCheckout.new,            # forged checkout — below quote
   SkootiScenarios::InflatedTotalCheckout.new,            # forged checkout — total ≠ line sum
   SkootiScenarios::MalformedUuidArg.new,                 # junk uuid → typed 400, no 500

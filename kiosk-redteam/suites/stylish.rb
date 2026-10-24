@@ -390,6 +390,17 @@ BATTERY.record('UntypedBookingInput', bad_failures.empty?,
                bad_failures.empty? ? "#{BAD_INPUTS.size} bad-input shapes → typed 400 bad_request, no PG internals; bare + priced bookings still succeed" : bad_failures.join(' | '))
 
 # The shared kiosk-redteam beat; this origin declares two roles, so a skip is a breach.
+# The call toll holds against known bypasses: a new account pays a proof of work on every 10th call.
+BATTERY.scenario(
+  Kiosk::Redteam::Scenarios::CallToll.new,
+  client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),
+  profile: Kiosk::Redteam::Profile.new(
+    tolled_calls_per_proof: 10, tolled_query: 'my_appointments',
+    person: -> { Kiosk::TestHelpers::Person.new(SERVER, email: 'bob@example.com', password: 'combette-demo-password') }
+  ),
+  on_skip: :breach
+)
+
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),

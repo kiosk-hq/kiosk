@@ -212,6 +212,17 @@ BATTERY.record('ContactDetailsStayOutOfTheRequestLog',
                '(want 200, the contact line masked on every one of them, and the unfiltered title present)')
 
 # The shared kiosk-redteam beat; this origin declares a role, so a skip is a breach.
+# The call toll holds against known bypasses: a new account pays a proof of work on every 10th call.
+BATTERY.scenario(
+  Kiosk::Redteam::Scenarios::CallToll.new,
+  client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),
+  profile: Kiosk::Redteam::Profile.new(
+    tolled_calls_per_proof: 10, tolled_query: 'my_listings',
+    person: -> { Kiosk::TestHelpers::Person.new(SERVER, email: 'bob@example.com', password: 'philslist-demo-password') }
+  ),
+  on_skip: :breach
+)
+
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),

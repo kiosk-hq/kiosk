@@ -325,6 +325,17 @@ BATTERY.record('WholeValuedFloatBody',
                'spec Section 8.1 item 8, and it is INTENTIONAL that they differ)')
 
 # The device-grant claim must not let a caller pick its own role; this origin declares one, so a skip is a breach.
+# The call toll holds against known bypasses: a new account pays a proof of work on every 10th call.
+BATTERY.scenario(
+  Kiosk::Redteam::Scenarios::CallToll.new,
+  client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),
+  profile: Kiosk::Redteam::Profile.new(
+    tolled_calls_per_proof: 10, tolled_query: 'my_bookings',
+    person: -> { Kiosk::TestHelpers::Person.new(SERVER, email: 'bea@example.com', password: 'atablefor-demo-password') }
+  ),
+  on_skip: :breach
+)
+
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),

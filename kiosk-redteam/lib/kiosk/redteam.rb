@@ -25,6 +25,7 @@ require 'kiosk/redteam/scenarios/forged_kyc'
 require 'kiosk/redteam/scenarios/spent_resource_reuse'
 require 'kiosk/redteam/scenarios/pay_for_other_use_self'
 require 'kiosk/redteam/scenarios/wrong_currency_payment'
+require 'kiosk/redteam/scenarios/call_toll'
 
 module Kiosk
   # Adversarial regression harness: drives hostile HTTP scenarios against a

@@ -5,6 +5,7 @@
 #   SERVER_URL=http://127.0.0.1:3003 bundle exec ruby ../kiosk-redteam/suites/hoteling.rb
 
 require 'kiosk/redteam'
+require 'kiosk/test_helpers/person'
 require 'jwt'
 require 'net/http'
 require 'securerandom'
@@ -94,7 +95,11 @@ profile = Kiosk::Redteam::Profile.new(
   # No KYC — hoteling does not require identity verification
   kyc_valid: nil,
   kyc_expired: nil,
-  kyc_forged: nil
+  kyc_forged: nil,
+  # CallToll: a new account pays a proof of work on every 10th call (RecentSpend with no spend).
+  tolled_calls_per_proof: 10,
+  tolled_query: 'my_bookings',
+  person: -> { Kiosk::TestHelpers::Person.new(BASE_URL, email: 'ben@example.com', password: 'hoteling-demo-password') }
 )
 
 # hoteling's own attacks, beside the shared ones in Kiosk::Redteam::Scenarios.
@@ -653,7 +658,8 @@ scenarios = [
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   # The claim ceremony's door: the device_authorization request a registered client signs.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-  Kiosk::Redteam::Scenarios::WrongCurrencyPayment.new,      # payment currency ≠ checkout currency
+  Kiosk::Redteam::Scenarios::WrongCurrencyPayment.new, # payment currency ≠ checkout currency
+  Kiosk::Redteam::Scenarios::CallToll.new, # the call toll holds against known bypasses
   HotelingScenarios::TamperedPriceCheckout.new,             # forged checkout — below quote
   HotelingScenarios::InflatedTotalCheckout.new,             # forged checkout — total ≠ line sum
   HotelingScenarios::ForgedCheckoutRef.new,                 # forged checkout naming junk → 403, no SQL

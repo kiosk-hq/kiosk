@@ -7,6 +7,7 @@
 require 'active_support/time'
 require 'json'
 require 'kiosk/redteam'
+require 'kiosk/test_helpers/person'
 require 'net/http'
 require 'openssl'
 require 'securerandom'
@@ -115,7 +116,11 @@ profile = Kiosk::Redteam::Profile.new(
 
   kyc_valid: nil,
   kyc_expired: nil,
-  kyc_forged: nil
+  kyc_forged: nil,
+  # CallToll: a new account pays a proof of work on every 10th call (RecentSpend with no spend).
+  tolled_calls_per_proof: 10,
+  tolled_query: 'my_orders',
+  person: -> { Kiosk::TestHelpers::Person.new(BASE_URL, email: 'hana@example.com', password: 'getgrocery-demo-password') }
 )
 
 # getgrocery's own attacks, beside the shared ones in Kiosk::Redteam::Scenarios.
@@ -636,6 +641,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   Kiosk::Redteam::Scenarios::WrongCurrencyPayment.new,
+  Kiosk::Redteam::Scenarios::CallToll.new, # the call toll holds against known bypasses
   GetgroceryScenarios::TamperedPriceCheckout.new,
   GetgroceryScenarios::InflatedTotalCheckout.new,
   GetgroceryScenarios::MalformedItemsCart.new,

@@ -8,6 +8,7 @@ require 'json'
 require 'securerandom'
 
 require 'kiosk/redteam'
+require 'kiosk/test_helpers/person'
 
 SERVER   = ENV.fetch('SERVER_URL')
 EMAIL    = 'alice@example.com'
@@ -245,6 +246,17 @@ BATTERY.record('ChosenNameNeverTheAddress',
                "(want the chosen name #{chosen_name.inspect} there and no address in it)")
 
 # Shared kiosk-redteam beat; this origin declares a role, so a skip is a breach.
+# The call toll holds against known bypasses: a new account pays a proof of work on every 10th call.
+BATTERY.scenario(
+  Kiosk::Redteam::Scenarios::CallToll.new,
+  client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),
+  profile: Kiosk::Redteam::Profile.new(
+    tolled_calls_per_proof: 10, tolled_query: 'my_lists',
+    person: -> { Kiosk::TestHelpers::Person.new(SERVER, email: 'bob@example.com', password: 'tudu-demo-password') }
+  ),
+  on_skip: :breach
+)
+
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),

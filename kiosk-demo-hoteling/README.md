@@ -107,8 +107,9 @@ ruby -I ../kiosk-test-support/lib -rkiosk/test_helpers/stripe_mock -e 'Kiosk::Te
 It starts stripe-mock and listens on port 12111. Then, in the terminal where you
 run `bin/setup`, run `export STRIPE_MOCK_URL=http://localhost:12111`.
 Without this variable the app sends each payment to the real Stripe API with a
-placeholder key, and the payment fails. `docker compose up` does not start stripe-mock, so payment fails
-there too.
+placeholder key, and the payment fails. The `docker compose up` in this directory
+runs the demo alone, so payment fails there. `docker compose up` at the repository
+root runs the whole fleet with stripe-mock, and payment works.
 
 `bin/setup` seeds this demo and leaves the origin running on
 <http://localhost:3000>. Then say this to your AI assistant:

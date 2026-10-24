@@ -1,0 +1,132 @@
+# The whole demo fleet in containers: `docker compose up` in this directory.
+#
+# It runs what the deployed box runs: the seven operator demos, the KYC broker
+# (kiosk-demo-prove) and one Postgres, all on one host. Every container joins
+# the network of the `db` container, so the apps reach each other on
+# 127.0.0.1 and localhost, as they do on the box and on a laptop. The ports
+# are published on `db` for that reason: it owns the network.
+#
+# Payment goes to stripe-mock through the relay in kiosk-test-support, which
+# answers a confirmed charge as `succeeded` (see kiosk-demo-getgrocery's
+# README). The deployed box charges Stripe in test mode instead.
+#
+# What still differs from the deployed box, and why, is in README.md under
+# "Run the fleet in containers".
+#
+# Each demo directory has its own compose.yaml too. That one runs the demo
+# alone, without the broker and without stripe-mock.
+name: kiosk-fleet
+
+x-demo: &demo
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: kiosk-demo
+  network_mode: service:db
+  depends_on:
+    db:
+      condition: service_healthy
+
+x-db-env: &db-env
+  PGHOST: 127.0.0.1
+  PGUSER: postgres
+  PGPASSWORD: postgres
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    ports:
+      - "3001:3001" # getgrocery
+      - "3002:3002" # atablefor
+      - "3003:3003" # hoteling
+      - "3004:3004" # skooti
+      - "3005:3005" # stylish
+      - "3006:3006" # philslist
+      - "3007:3007" # tudu
+      - "3020:3020" # prove, the KYC broker
+
+  # The release .github/workflows/ci.yml pins as STRIPE_MOCK_VERSION. Move both together.
+  stripe-mock:
+    image: stripe/stripe-mock:v0.205.0
+    entrypoint: ["/bin/stripe-mock", "-http-port", "12112", "-https-port", "12113"]
+    network_mode: service:db
+    depends_on:
+      db:
+        condition: service_healthy
+
+  stripe-relay:
+    <<: *demo
+    working_dir: /kiosk/kiosk-test-support
+    command: ["ruby", "-Ilib", "-rkiosk/test_helpers/stripe_mock", "-e", "Kiosk::TestHelpers::StripeMock.serve(12111, 12112)"]
+
+  prove:
+    <<: *demo
+    working_dir: /kiosk/kiosk-demo-prove
+    environment:
+      <<: *db-env
+      PORT: "3020"
+
+  getgrocery:
+    <<: *demo
+    working_dir: /kiosk/kiosk-demo-getgrocery
+    environment:
+      <<: *db-env
+      PORT: "3001"
+      STRIPE_MOCK_URL: http://127.0.0.1:12111
+
+  atablefor:
+    <<: *demo
+    working_dir: /kiosk/kiosk-demo-atablefor
+    environment:
+      <<: *db-env
+      PORT: "3002"
+
+  hoteling:
+    <<: *demo
+    working_dir: /kiosk/kiosk-demo-hoteling
+    environment:
+      <<: *db-env
+      PORT: "3003"
+      STRIPE_MOCK_URL: http://127.0.0.1:12111
+
+  skooti:
+    <<: *demo
+    working_dir: /kiosk/kiosk-demo-skooti
+    environment:
+      <<: *db-env
+      PORT: "3004"
+      STRIPE_MOCK_URL: http://127.0.0.1:12111
+
+  stylish:
+    <<: *demo
+    working_dir: /kiosk/kiosk-demo-stylish
+    environment:
+      <<: *db-env
+      PORT: "3005"
+
+  philslist:
+    <<: *demo
+    working_dir: /kiosk/kiosk-demo-philslist
+    environment:
+      <<: *db-env
+      PORT: "3006"
+
+  tudu:
+    <<: *demo
+    working_dir: /kiosk/kiosk-demo-tudu
+    environment:
+      <<: *db-env
+      PORT: "3007"
+
+volumes:
+  pgdata:

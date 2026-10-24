@@ -131,10 +131,10 @@ ruby -I ../kiosk-test-support/lib -rkiosk/test_helpers/stripe_mock -e 'Kiosk::Te
 It starts stripe-mock and listens on port 12111. Then, in the terminal where you
 run `bin/setup`, run `export STRIPE_MOCK_URL=http://localhost:12111`.
 Without this variable the app sends each payment to the real Stripe API with a
-placeholder key, and the payment fails. `docker compose up` does not start stripe-mock, so payment fails
-there too. Under `docker compose up`, `request_kyc` fails as well and answers 500
-`action_failed`. The app looks for the KYC broker at `http://127.0.0.1:3020`, and
-inside the container that address is the container itself.
+placeholder key, and the payment fails. The `docker compose up` in this directory
+runs the demo alone, so payment and `request_kyc` fail there. `docker compose up`
+at the repository root runs the whole fleet with the KYC broker and stripe-mock,
+and both work.
 
 On your own machine, `request_kyc` needs the KYC broker on port 3020. In a third
 terminal, in `../kiosk-demo-prove`, run `bin/rails db:reset`, then

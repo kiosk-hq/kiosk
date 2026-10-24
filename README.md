@@ -157,6 +157,33 @@ PACKAGED, and kiosk-server shipped without its view templates for exactly that
 reason. Adding a non-`lib/` file a gem needs at runtime
 means adding it to that gem's `spec.files`.
 
+## Run the fleet in containers
+
+`docker compose up` at the repository root runs the seven operator demos, the
+KYC broker, stripe-mock with its relay and one Postgres, on the ports each demo
+README names. All containers share one network, so the apps reach each other on
+`127.0.0.1` as they do on the deployed box. Payment and the identity check work.
+A demo's battery runs against it from the host, for example in
+`kiosk-demo-skooti`:
+
+```
+SERVER_URL=http://localhost:3004 bundle exec ruby ../kiosk-redteam/suites/skooti.rb
+```
+
+What still differs from the deployed box, and why:
+
+- The apps run in Rails development mode. Production mode needs the secrets the
+  box keeps in its env files and sends its session cookie only over TLS.
+- No TLS: each origin is `http://localhost:<port>`. The box serves HTTPS through
+  Caddy.
+- Each start resets every database and makes a new signing key, so assistant
+  registrations and tokens do not survive a restart. The box migrates and keeps
+  both.
+- Payment goes to stripe-mock. The box charges Stripe in test mode, which needs
+  a Stripe key.
+- The KYC broker signs with the development key this repository tracks. The box's
+  broker has its own key.
+
 ## Contributing
 
 **[CONTRIBUTING.md](CONTRIBUTING.md)** is the whole of it: how to run one gem,

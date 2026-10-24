@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-25: `docker compose up` at the root runs the whole demo fleet with the KYC broker and stripe-mock, so payment and the identity check work in containers.
 - 2026-10-25: The KYC broker waits longer before each new attempt at the operator's callback (`retry_on wait: :polynomially_longer`).
 - 2026-10-25: The `invalid_client` 401 of the token and device-authorization endpoints names `Kiosk-Client-Assertion`; the 401 of the engine pages names `Kiosk-Session`.
 

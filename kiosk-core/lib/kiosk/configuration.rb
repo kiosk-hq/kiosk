@@ -3,42 +3,82 @@
 require 'uri'
 
 module Kiosk
-  # Host-application settings, filled via `Kiosk.configure`. Defaults suit a greenfield
-  # Rails app on the bundled agent-IdP; the provider supplies its own user
-  # model and (optionally) a user-IdP adapter.
+  # The settings of an origin, set in `config/initializers/kiosk.rb` with
+  # `Kiosk.configure { |c| ... }`. Each setting below says what it does, its
+  # default and an example. kiosk-server and the adapter gems add more settings.
   class Configuration
-    # Class name as a String, resolved at request time.
+    # The class name of your account model, as a String. Registration makes an
+    # account in it for each new assistant, and account binding finds the
+    # person's account in it. Required.
+    #   c.user_model = 'User'
     attr_accessor :user_model
 
-    # :uuid (default), :bigint, :integer or :text.
+    # The type of the primary key of `user_model`: :uuid, :bigint, :integer or
+    # :text. The kiosk tables and SQL functions store the account id in this
+    # type. Default :uuid. A table that Rails made with its default key is :bigint.
+    #   c.user_id_type = :bigint
     attr_accessor :user_id_type
 
-    # Nil in satellite mode: the provider's own frontend drives the protocol endpoints.
+    # The adapter that tells which person is signed in on your own site, from
+    # the browser session. The account-binding pages read it: the page that
+    # makes a link code, the page that approves a device code, and the page
+    # that unlinks an assistant. Default nil: these pages refuse every person,
+    # so nobody can link an assistant to an account. With Devise, use the
+    # adapter of the kiosk-user-idp-devise gem.
+    #   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
     attr_accessor :user_idp
 
-    # Nil uses kiosk-server's bundled DefaultAgentIdp; set only to front another agent-identity system.
+    # The adapter that verifies the access token of an assistant on each call.
+    # Default nil: kiosk-server verifies the tokens that its own token endpoint
+    # issues. Keep the default. Set it only when another system issues the
+    # tokens of the assistants. The value is a {Kiosk::AgentIdentityProviders::Base}.
+    #   c.agent_idp = MyTokenVerifier.new
     attr_accessor :agent_idp
 
-    # A {Kiosk::PaymentProviders::Base}; nil means no payment.
+    # The adapter that charges the card of a customer for a paid action, a
+    # {Kiosk::PaymentProviders::Base}. Default nil: the origin takes no money,
+    # and discovery does not list `pay`. The kiosk-pay-stripe gem gives Stripe.
+    #   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY'))
     attr_accessor :payment_provider
 
-    # A {Kiosk::KycProviders::Base}; nil makes `request_kyc` answer `module_not_served`.
+    # The KYC service that confirms facts about a customer, for example an age
+    # over 18, a {Kiosk::KycProviders::Base}. Default nil: the action
+    # `request_kyc` answers `module_not_served`. The kiosk-kyc-prove gem gives
+    # the Prove broker.
+    #   c.kyc_provider = Kiosk::KycProviders::Prove.new(operator_id: 'shop',
+    #     intake_secret: ENV.fetch('KIOSK_PROVE_INTAKE_SECRET'), public_key: ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM'))
     attr_accessor :kyc_provider
 
-    # Runtime DB role named in kiosk-rls GRANTs and `SET LOCAL ROLE`; the DBA creates it.
+    # The Postgres role that the opt-in kiosk-rls gem gives table access to,
+    # and that kiosk-server changes to with `SET LOCAL ROLE` when
+    # `enforce_db_role` is true. Your database administrator makes the role.
+    # Default 'app_role'. Without kiosk-rls and with `enforce_db_role` false
+    # (the default), nothing reads it: do not set it.
+    #   c.app_role = 'shop_app'
     attr_accessor :app_role
 
-    # E.g. `%i[customer master support]`. Never `:admin`.
+    # The roles that an assistant can get, as Symbols. A token carries one of
+    # them, and your code reads it to decide what the assistant can do. Name a
+    # role by the job of a person (customer, support), not by a power (admin).
+    # Default []: no token carries a role. Most origins need one role,
+    # %i[customer]. kiosk-server's `registration_role` names the role that a
+    # new assistant gets.
+    #   c.roles = %i[customer support]
     attr_accessor :roles
 
-    # The default origin served: `iss` of tokens and mandates, required proof `aud`,
-    # discovery `issuer`. Readers ask `Kiosk.current_issuer`.
+    # The origin of this deployment: scheme, host and port. It is the `iss` of
+    # the tokens and checkouts that the engine signs, the `aud` that the proof
+    # of an assistant must name, and the `issuer` of discovery. Required.
+    # Code reads it with `Kiosk.current_issuer`.
+    #   c.issuer = 'https://shop.example'
     attr_accessor :issuer
 
-    # Further origins, each a separate operator in the protocol. Exact origins only;
-    # an alias of the SAME business is better redirected
+    # More origins, each a separate operator for the protocol, with its own
+    # discovery and its own assistant accounts. Exact origins only. Default [].
+    # A second name of the SAME business is better redirected
     # to the issuer at the edge. (Rails' `config.hosts` governs which Host
     # headers are accepted, not which origin the operator is.)
+    #   c.additional_origins = ['https://second-shop.example']
     attr_accessor :additional_origins
 
     def initialize

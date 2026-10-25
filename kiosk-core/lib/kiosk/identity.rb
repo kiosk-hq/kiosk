@@ -1,9 +1,16 @@
 # frozen_string_literal: true
 
 module Kiosk
-  # The principal making a request, as an IdP adapter's #verify returns it.
-  # `actor` is "agent", "human" or "service"; `agent_id` is present iff the
-  # actor is an agent and must be a uuid (the schema types it so, with no knob).
+  # The principal of a request, as the #verify of an identity adapter returns
+  # it. `actor` says who makes the request:
+  #   "agent"   — an AI assistant with an access token. kiosk-server makes it.
+  #   "human"   — a person signed in on the site of the operator. The `user_idp`
+  #               adapter makes it, for example kiosk-user-idp-devise.
+  #   "service" — a program of the operator, for an adapter that the operator
+  #               writes. No Kiosk gem makes it.
+  # The audit sink receives the actor of each action, and SQL reads it with
+  # `kiosk.current_actor()`.
+  # `agent_id` is the UUID of the assistant: present for an agent, nil otherwise.
   Identity = Data.define(:user_id, :role, :actor, :agent_id, :claims)
 
   # Validates user_id, actor and agent_id on construction.

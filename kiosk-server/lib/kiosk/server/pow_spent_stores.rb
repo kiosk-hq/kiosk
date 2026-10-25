@@ -89,7 +89,7 @@ module Kiosk
         end
 
         def connection = ::ActiveRecord::Base.lease_connection
-        def table = %("#{Kiosk.configuration.schema}".pow_spent)
+        def table = %("#{Kiosk.configuration.schema}".kiosk_pow_spent)
       end
     end
   end

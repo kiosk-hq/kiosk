@@ -10,7 +10,7 @@ class UnstartedRideStory < StoryTest
 
   def refund_notices
     ActiveRecord::Base.connection.select_value(
-      "SELECT count(*) FROM kiosk.events WHERE topic = 'payment' AND data->>'payment_state' = 'refunded'"
+      "SELECT count(*) FROM kiosk_events WHERE topic = 'payment' AND data->>'payment_state' = 'refunded'"
     )
   end
 

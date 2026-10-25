@@ -113,8 +113,8 @@ SELECT format('CREATE DATABASE %I OWNER %I', :'pv_db', :'pv_user')
   WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'pv_db')\gexec
 
 -- ── Ownership / privilege hardening ─────────────────────────────────────────
--- Each app role owns its own DB (set above) so `db:prepare` can create the
--- `kiosk` schema, tables and (opt-in) RLS policies. No app role is granted on
+-- Each app role owns its own DB (set above) so `db:prepare` can create its
+-- tables, the `kiosk_*` tables among them. No app role is granted on
 -- any other app's DB — cross-tenant isolation at the cluster boundary, on top
 -- of the per-agent app-layer isolation. Revoke PUBLIC connect so
 -- only the owning role reaches each DB.

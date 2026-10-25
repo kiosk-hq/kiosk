@@ -247,7 +247,7 @@ module Kiosk
                     JSON.generate(attributes), user_id.to_s)
           end
 
-          def table(name) = connection.quote_table_name("#{Kiosk.configuration.schema}.#{name}")
+          def table(name) = connection.quote_table_name("#{Kiosk.configuration.schema}.kiosk_#{name}")
 
           def execute(sql, *binds) = connection.exec_query(sql, 'Kiosk KYC', binds).to_a
 

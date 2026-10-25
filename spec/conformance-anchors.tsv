@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2087 anchors.
+# 2072 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -290,7 +290,7 @@ e2e/run.sh	bundle exec rails g kiosk:install --user-id-type=uuid >/dev/null
 e2e/run.sh	bundle exec rails g kiosk:pay_stripe:install --user-id-type=uuid >/dev/null
 e2e/run.sh	cp "$FIXTURES/routes.rb"             config/routes.rb
 e2e/run.sh	export KIOSK_AUDIT_SINK_REDACTED_FILE="$AUDIT_EVENTS_REDACTED"
-e2e/run.sh	log "assert DB-level uniqueness on kiosk.agents.public_key (live rows)"
+e2e/run.sh	log "assert DB-level uniqueness on kiosk_agents.public_key (live rows)"
 e2e/run.sh	rails new "$APP_NAME" --skip-bundle -d postgresql --skip-test --api --skip-git \
 e2e/schema_conformance.rb	    conforms("the #{part}'s claims", "#{B}/mandates.schema.json",
 e2e/schema_conformance.rb	  conforms('the pay REQUEST body', "#{B}/mandates.schema.json", cap.fetch('request'),
@@ -489,7 +489,7 @@ kiosk-demo-hoteling/before-after.md	`spec/stories/booking_spec.rb` runs the erra
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.registration_pow_count = 1
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.spending_cap           = Kiosk::Server::ColumnSpendingCap.new
-kiosk-demo-hoteling/db/migrate/20261018100013_create_kiosk_pay_stripe_customers.rb	t.column :user_id, :uuid, null: false
+kiosk-demo-hoteling/db/migrate/20261025100010_create_kiosk_pay_stripe_customers.rb	t.column :user_id, :uuid, null: false
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	echoes a calendar day back byte-identical
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	publishes each property's own zone in its hotel_detail row
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	reads each property's zone off the property
@@ -748,7 +748,7 @@ kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	requested_claims: claims,
 kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	super(issuer:, public_key:, audience: operator_id.to_s)
 kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
-kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	Generate the migration for the stripe_customers table of kiosk-pay-stripe.
+kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	Generate the migration for the kiosk_stripe_customers table of kiosk-pay-stripe.
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	class_option :user_id_type, type: :string, default: 'uuid'
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/templates/create_kiosk_pay_stripe_customers.rb.tt	t.column :user_id, :<%= options[:user_id_type] %>, null: false
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
@@ -1011,6 +1011,7 @@ kiosk-rls/README.md	This gem emits DDL and ships no rake tasks.
 kiosk-rls/README.md	When you opt in, `enable_rls_on` emits both `ENABLE ROW LEVEL SECURITY` **and** `FORCE ROW LEVEL SECURITY`
 kiosk-rls/README.md	`kiosk-rls` is an **optional** companion for providers who want an additional DB-level row enforcement layer
 kiosk-rls/README.md	an app that uses this gem needs `config.active_record.schema_format = :sql`
+kiosk-rls/lib/generators/kiosk/rls/install/templates/create_kiosk_rls_functions.rb.tt	CREATE FUNCTION kiosk_current_user_id()
 kiosk-rls/lib/kiosk/rls/dsl.rb	def add_kiosk_policy_to(table_name, action, name: nil, using: nil, check: nil)
 kiosk-rls/lib/kiosk/rls/dsl.rb	def change_kiosk_policy_on(table_name, action, name: nil, using: nil, check: nil)
 kiosk-rls/lib/kiosk/rls/dsl.rb	def enable_rls_on(table_name, app_role: nil, sequences: [], &block)
@@ -1019,6 +1020,7 @@ kiosk-rls/lib/kiosk/rls/dsl.rb	def rename_kiosk_policy_on(table_name, from:, to:
 kiosk-rls/lib/kiosk/rls/emitter.rb	          %(ALTER TABLE #{quote_ident(table_name)} FORCE ROW LEVEL SECURITY)
 kiosk-rls/lib/kiosk/rls/emitter.rb	        def statements_for(table)
 kiosk-rls/lib/kiosk/rls/railtie.rb	          ActiveRecord::Migration.include(Kiosk::RLS::DSL)
+kiosk-rls/spec/generators/install_generator_spec.rb	returns the user id in the operator's id type
 kiosk-server/CHANGELOG.md	- `rake kiosk:doctor` — follow-up.
 kiosk-server/CHANGELOG.md	`Kiosk::OperationResult` and `render_kiosk_result` are removed
 kiosk-server/LICENSE.txt	Version 2.0, January 2004
@@ -1057,23 +1059,20 @@ kiosk-server/app/controllers/kiosk/server/wire_controller.rb	include VerbWire
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	rescue_from ::ActionDispatch::Http::Parameters::ParseError do
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	rescue_from Errors::Base, with: :render_wire_error
 kiosk-server/kiosk-server.gemspec	spec.license       = 'Apache-2.0'
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_device_authorizations.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_events.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_identity_tables.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_kyc_attributes.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_mandates.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_pow_spent.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_refunds.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_revocations.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_schema.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_visits.rb.tt',
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	Generate the Kiosk initializer and its canonical base migrations.
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	MIGRATIONS = %w[identity_tables device_authorizations mandates kyc_attributes events
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	def draw_wire_routes
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	desc 'Generate the Kiosk initializer and its canonical base migrations. '
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template 'create_kiosk_refunds.rb.tt',
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template 'create_kiosk_schema.rb.tt',
-kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_kyc_attributes.rb.tt	<%= ddl(:kyc_attributes, user_id_type: user_id_type, user_table: options[:user_table]) %>
-kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_visits.rb.tt	<%= ddl(:visits, user_id_type: user_id_type) %>
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	pow_spent revocations visits refunds].freeze
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	create_table <%= table :agents %>, id: :uuid do |t|
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	index: { where: 'revoked_at IS NULL' }
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	name: 'kiosk_agents_spending_cap_currency_set'
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	t.bigint :spending_cap_cents
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	t.index %i[issuer public_key], unique: true, where: 'revoked_at IS NULL'
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_kyc_attributes.rb.tt	create_table <%= table :kyc_attributes %>, primary_key: %i[user_id name] do |t|
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_kyc_attributes.rb.tt	create_table <%= table :kyc_requests %>, id: :text do |t|
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_mandates.rb.tt	class CreateKioskMandates
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_visits.rb.tt	create_table <%= table :visits %>, id: :uuid do |t|
 kiosk-server/lib/kiosk/owned.rb	scope :own, -> { owned_by(Kiosk.current_user_id) }
 kiosk-server/lib/kiosk/payable.rb	return PENDING  if status == Kiosk::Server::PaymentClaim::PAYING
 kiosk-server/lib/kiosk/server/account_binding.rb	      def bind!(agent_id:, user_id:, requested_role: nil)
@@ -1206,16 +1205,6 @@ kiosk-server/lib/kiosk/server/routing.rb	def actions(*names) = draw(:post, :acti
 kiosk-server/lib/kiosk/server/routing.rb	def queries(*names) = draw(:get, :query, names)
 kiosk-server/lib/kiosk/server/routing.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-server/lib/kiosk/server/routing.rb	registry = HandlerMixin.registry_for(@kind)
-kiosk-server/lib/kiosk/server/schema_definitions.rb	          CREATE INDEX IF NOT EXISTS idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
-kiosk-server/lib/kiosk/server/schema_definitions.rb	      def identity_tables_sql(schema: nil, user_id_type: nil, user_table: 'users')
-kiosk-server/lib/kiosk/server/schema_definitions.rb	      def mandates_sql(schema: nil, user_id_type: nil)
-kiosk-server/lib/kiosk/server/schema_definitions.rb	.current_user_id() RETURNS 
-kiosk-server/lib/kiosk/server/schema_definitions.rb	CONSTRAINT agents_spending_cap_currency_set
-kiosk-server/lib/kiosk/server/schema_definitions.rb	CREATE OR REPLACE FUNCTION "#{schema}".current_user_id() RETURNS #{cast} LANGUAGE sql STABLE AS $$
-kiosk-server/lib/kiosk/server/schema_definitions.rb	agent_mappings (
-kiosk-server/lib/kiosk/server/schema_definitions.rb	def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
-kiosk-server/lib/kiosk/server/schema_definitions.rb	def kyc_attributes_sql(schema: nil, user_id_type: nil, user_table: nil)
-kiosk-server/lib/kiosk/server/schema_definitions.rb	spending_cap_cents  bigint,
 kiosk-server/lib/kiosk/server/schema_document.rb	    module SchemaDocument
 kiosk-server/lib/kiosk/server/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 kiosk-server/lib/kiosk/server/schemas/binding.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
@@ -1242,6 +1231,7 @@ kiosk-server/lib/kiosk/skill_link.rb	module SkillLink
 kiosk-server/lib/kiosk/skill_link.rb	response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk", #{API_CATALOG}))
 kiosk-server/listen.py	the DPoP proof your private key signs for them
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	draws no verb of its own — a fresh app declares none
+kiosk-server/spec/generators/kiosk/install_generator_spec.rb	keeps a KYC grant as a row keyed on the person, with no value column
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	so the protocol plane wins by first match
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	writes no separate routes file
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	deactivates the client and revokes its tokens, also one minted in the same second
@@ -1682,8 +1672,6 @@ kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a wrong audience
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects an expired token
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	round-trips an issued token and returns symbol-keyed claims
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	stamps `nbf` at the issue instant — equal to `iat`, inside the lifetime
-kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	declares no value column — presence of the row IS the grant
-kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	keys the grants on the person, in the host's user id type
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 400 bad_request when request_id or kyc_jws is missing
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 404 for a request_id it never opened
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 500 action_failed when the provider does not open one
@@ -1854,7 +1842,7 @@ kiosk-server/spec/kiosk/server/pow_gate_spec.rb	still issues a 402 at the shippe
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	verifies for the identical method + verb + args (the control)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	wraps a single {…} proof into a one-element proofs list
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	is idempotent and visible to a second instance
-kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	keys the table on the challenge id, so the PK is the single-use gate
+kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	is laid down by the install generator
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	leaves exactly one row for N racing claims of one id
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	rejects a replay claimed on a DIFFERENT database connection
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	rejects a replay claimed through a second, independent store instance
@@ -1891,9 +1879,6 @@ kiosk-server/spec/kiosk/server/routing_spec.rb	draws GET <mount_path>/<name> for
 kiosk-server/spec/kiosk/server/routing_spec.rb	draws POST <mount_path>/<name> for each action
 kiosk-server/spec/kiosk/server/routing_spec.rb	draws no other method on a verb's path
 kiosk-server/spec/kiosk/server/routing_spec.rb	mounts the engine FIRST, so the protocol plane wins by first match
-kiosk-server/spec/kiosk/server/schema_definitions_spec.rb	adds a PARTIAL unique index on (issuer, public_key) for LIVE rows only
-kiosk-server/spec/kiosk/server/schema_definitions_spec.rb	defines all four current_*() helpers
-kiosk-server/spec/kiosk/server/schema_definitions_spec.rb	keeps the public_key uniqueness partial so a revoked key can re-register
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	answers an origin with nothing registered, rather than refusing
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	does not republish the module set the discovery document owns
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	is 32 lowercase hex characters

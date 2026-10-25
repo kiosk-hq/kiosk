@@ -22,14 +22,11 @@ module Kiosk
         base.teardown { SeededDatabase.empty }
       end
 
+      # Every table on the search path but Rails' own two.
       def self.empty
         connection = ActiveRecord::Base.connection
-        schemas = ActiveRecord.dump_schemas.split(',').map { connection.quote(it.strip) }.join(', ')
-        tables = connection.select_values(<<~SQL)
-          SELECT format('%I.%I', schemaname, tablename) FROM pg_tables
-          WHERE schemaname IN (#{schemas}) AND tablename NOT IN ('schema_migrations', 'ar_internal_metadata')
-        SQL
-        connection.execute("TRUNCATE #{tables.join(', ')} RESTART IDENTITY CASCADE") if tables.any?
+        tables = connection.tables - %w[schema_migrations ar_internal_metadata]
+        connection.execute("TRUNCATE #{tables.map { connection.quote_table_name(it) }.join(', ')} RESTART IDENTITY CASCADE") if tables.any?
       end
     end
 

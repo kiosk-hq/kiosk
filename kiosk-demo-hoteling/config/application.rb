@@ -23,8 +23,6 @@ module KioskDemoHoteling
     # Jobs wait in the database and run beside Puma (config/puma.rb); a finished one is deleted.
     config.active_job.queue_adapter = :solid_queue
     config.solid_queue.preserve_finished_jobs = false
-    # public first: the kiosk tables reference public.users.
-    config.active_record.dump_schemas = 'public,kiosk'
 
     # The property's own decision: how often it declines, and how long it takes.
     config.x.hoteling.decline_rate           = 0.2

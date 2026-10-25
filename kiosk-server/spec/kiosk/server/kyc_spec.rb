@@ -19,8 +19,7 @@ module KycSpec
     conn.execute(%(CREATE TABLE "#{SCHEMA}".people (id text PRIMARY KEY)))
     conn.execute(%(INSERT INTO "#{SCHEMA}".people VALUES ('u-1'), ('u-2')))
     conn.execute(%(SET search_path TO "#{SCHEMA}", public))
-    conn.execute(Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(schema: SCHEMA, user_id_type: :text,
-                                                                     user_table: 'people'))
+    KioskTables.create(:kyc_attributes, schema: SCHEMA, user_id_type: 'text', user_table: 'people')
   end
 
   # The engine's verb controller with the executor's session on a {FakeConnection}.
@@ -105,7 +104,7 @@ module KycSpec
   def open_request(age: 0, user_id: 'u-1')
     id = "old-#{SecureRandom.hex(4)}"
     ActiveRecord::Base.connection.exec_query(
-      "INSERT INTO \"#{SCHEMA}\".kyc_requests (id, user_id, nonce, created_at) VALUES ($1, $2, 'n', now() - make_interval(secs => $3))",
+      "INSERT INTO \"#{SCHEMA}\".kiosk_kyc_requests (id, user_id, nonce, created_at) VALUES ($1, $2, 'n', now() - make_interval(secs => $3))",
       'spec', [id, user_id, age]
     )
     id
@@ -117,7 +116,7 @@ module KycSpec
 
   def granted(user_id = 'u-1')
     ActiveRecord::Base.connection.exec_query(
-      %(SELECT name FROM "#{SCHEMA}".kyc_attributes WHERE user_id = $1 ORDER BY name), 'spec', [user_id]
+      %(SELECT name FROM "#{SCHEMA}".kiosk_kyc_attributes WHERE user_id = $1 ORDER BY name), 'spec', [user_id]
     ).to_a.map { |row| row.fetch('name') }
   end
 end
@@ -236,7 +235,7 @@ RSpec.describe Kiosk::Server::Kyc do
     it "stops counting a verification after the window, or once approved, or another person's" do
       2.times { open_request(age: described_class::OPEN_WINDOW + 60) }
       ActiveRecord::Base.connection.execute(
-        %(UPDATE "#{KycSpec::SCHEMA}".kyc_requests SET approved_at = now() WHERE id = '#{open_request}')
+        %(UPDATE "#{KycSpec::SCHEMA}".kiosk_kyc_requests SET approved_at = now() WHERE id = '#{open_request}')
       )
       open_request(user_id: 'u-2')
       open_request

@@ -27,7 +27,7 @@ module AccountBindingSpecHelpers
 
   def bound_at(client = self.client)
     ActiveRecord::Base.connection.select_value(
-      %(SELECT bound_at FROM "#{Kiosk.configuration.schema}".agents WHERE id = $1), 'spec', [client.id]
+      %(SELECT bound_at FROM "#{Kiosk.configuration.schema}".kiosk_agents WHERE id = $1), 'spec', [client.id]
     )
   end
 end

@@ -8,8 +8,8 @@ module Kiosk
   #               adapter makes it, for example kiosk-user-idp-devise.
   #   "service" — a program of the operator, for an adapter that the operator
   #               writes. No Kiosk gem makes it.
-  # The audit sink receives the actor of each action, and SQL reads it with
-  # `kiosk.current_actor()`.
+  # The audit sink receives the actor of each action, and an RLS policy reads
+  # it with `kiosk_current_actor()` (kiosk-rls).
   # `agent_id` is the UUID of the assistant: present for an agent, nil otherwise.
   Identity = Data.define(:user_id, :role, :actor, :agent_id, :claims)
 

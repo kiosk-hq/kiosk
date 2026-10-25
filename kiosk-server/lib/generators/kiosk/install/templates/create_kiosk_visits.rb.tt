@@ -1,16 +1,15 @@
 # frozen_string_literal: true
 
-# Migration 011 — create kiosk.visits.
-# The visits the operator records as fulfilled (Kiosk::Visit.record!), which
-# lower the proof-of-work toll for a returning customer.
+# The visits the operator records as fulfilled (Kiosk::Visit.record!). Their
+# value lowers the proof-of-work toll for a returning customer.
 class CreateKioskVisits < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
-  def up
-    execute <<~'SQL'
-<%= ddl(:visits, user_id_type: user_id_type) %>
-    SQL
-  end
-
-  def down
-    execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".visits)
+  def change
+    create_table <%= table :visits %>, id: :uuid do |t|
+      t.column :user_id, <%= user_id_type %>, null: false
+      t.bigint :value_cents, null: false
+      t.timestamptz :visited_at, null: false, default: -> { 'now()' }
+      t.check_constraint 'value_cents >= 0', name: 'kiosk_visits_value_cents'
+      t.index %i[user_id visited_at]
+    end
   end
 end

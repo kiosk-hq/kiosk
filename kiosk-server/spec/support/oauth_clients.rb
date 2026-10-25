@@ -11,7 +11,7 @@ require 'securerandom'
 # (RFC 7523) and token-request DPoP proofs (RFC 9449).
 module OauthClients
   SCHEMA = 'kiosk_oauth_spec'
-  # `identity_tables_sql` references the principals table unqualified, so it lives in `public`.
+  # The migrations name the principals table unqualified, so it lives in `public`.
   USERS  = 'kiosk_oauth_spec_users'
   ISSUER = 'https://provider.example'
   SIGNING_KEY = Kiosk::Server::SigningKey.generate
@@ -30,7 +30,7 @@ module OauthClients
     SpecPostgres.recreate_schema(SCHEMA)
     conn.execute(%(DROP TABLE IF EXISTS "#{USERS}" CASCADE))
     conn.execute(%(CREATE TABLE "#{USERS}" (id uuid PRIMARY KEY DEFAULT gen_random_uuid())))
-    conn.execute(Kiosk::Server::SchemaDefinitions.identity_tables_sql(schema: SCHEMA, user_id_type: :uuid, user_table: USERS))
+    KioskTables.create(:identity_tables, :mandates, :visits, :refunds, schema: SCHEMA, user_table: USERS)
     @created = true
   end
 
@@ -99,7 +99,7 @@ RSpec.shared_context 'with registered clients' do
     skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
 
     OauthClients.create_tables
-    ActiveRecord::Base.connection.execute(%(TRUNCATE "#{OauthClients::SCHEMA}".agents, "#{OauthClients::USERS}" CASCADE))
+    ActiveRecord::Base.connection.execute(%(TRUNCATE "#{OauthClients::SCHEMA}".kiosk_agents, "#{OauthClients::USERS}" CASCADE))
     Kiosk.configure do |c|
       c.schema            = OauthClients::SCHEMA
       c.issuer            = OauthClients::ISSUER

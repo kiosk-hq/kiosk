@@ -41,7 +41,7 @@ end
 # `set_config(name, value, true)` is transaction-local. A fake records strings
 # and cannot show whether Postgres agrees, and this property fails OPEN if it
 # regresses: an unset `app.current_user_id` makes every
-# `kiosk.current_user_id()` predicate and every RLS policy see NULL, and a
+# RLS policy that calls `kiosk_current_user_id()` see NULL, and a
 # leaked one makes them see the PREVIOUS request's principal. Same skip
 # contract as the other real-Postgres files.
 RSpec.shared_context 'with real Postgres for the session context' do

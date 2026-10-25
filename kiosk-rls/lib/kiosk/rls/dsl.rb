@@ -11,8 +11,8 @@ module Kiosk
     module DSL
       # @example
       #   enable_rls_on :rentals do
-      #     policy :select, using: "user_id = kiosk.current_user_id()"
-      #     policy :insert, check: "user_id = kiosk.current_user_id() AND kiosk.current_role() = 'customer'"
+      #     policy :select, using: "user_id = kiosk_current_user_id()"
+      #     policy :insert, check: "user_id = kiosk_current_user_id() AND kiosk_current_role() = 'customer'"
       #     comment "Scooter rentals owned by the renting user."
       #   end
       def enable_rls_on(table_name, app_role: nil, sequences: [], &block)

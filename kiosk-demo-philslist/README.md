@@ -35,7 +35,7 @@ Demonstrates:
 - App-layer data isolation on an **owned resource**: any signed-in assistant may
   `browse_listings` across all sellers, but `my_listings` /
   `edit_listing` / `close_listing` are scoped to
-  `owner_id = kiosk.current_user_id()` — the first demo where cross-owner
+  `owner_id = Kiosk.current_user_id` (`Listing.own`) — the first demo where cross-owner
   **write** denial (not just read exclusion) is the headline
 - `post_listing` / `edit_listing` / `close_listing` actions (owner-only writes)
 - A **public, read-only classifieds board** at `/` and `/listings` (open

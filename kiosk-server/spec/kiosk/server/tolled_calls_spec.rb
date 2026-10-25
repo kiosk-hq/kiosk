@@ -22,10 +22,8 @@ RSpec.describe Kiosk::Server::TolledCalls do
   let(:agent) { assistant_of(human, key:) }
 
   before do
-    defs = Kiosk::Server::SchemaDefinitions
     schema = OauthClients::SCHEMA
-    [defs.mandates_sql(schema:, user_id_type: :uuid), defs.visits_sql(schema:, user_id_type: :uuid), defs.refunds_sql(schema:),
-     %(TRUNCATE "#{schema}".checkout_mandates, "#{schema}".visits CASCADE)].each { conn.execute(it) }
+    conn.execute(%(TRUNCATE "#{schema}".kiosk_checkout_mandates, "#{schema}".kiosk_visits CASCADE))
     Kiosk::Reputation::Backends.register('equihash', AcceptingEquihash)
     Kiosk.configure do |c|
       c.pow_secret        = 'tolled-calls-spec-secret-of-32-bytes'
@@ -54,7 +52,7 @@ RSpec.describe Kiosk::Server::TolledCalls do
   def tolled?(answer) = answer.is_a?(Kiosk::Server::Errors::PowRequired)
 
   def calls_since_proof
-    conn.select_value(%(SELECT calls_since_proof FROM "#{OauthClients::SCHEMA}".tolled_calls WHERE user_id = '#{human}'))
+    conn.select_value(%(SELECT calls_since_proof FROM "#{OauthClients::SCHEMA}".kiosk_tolled_calls WHERE user_id = '#{human}'))
   end
 
   # The first call that answers 402, among the next 100.
@@ -63,7 +61,7 @@ RSpec.describe Kiosk::Server::TolledCalls do
   def pay(refusal, identity = token) = call(identity, pow: [{ challenge: refusal.challenges.first, nonce: 'solved' }])
 
   def visit(cents, at: Time.current, account: human)
-    conn.exec_query(%(INSERT INTO "#{OauthClients::SCHEMA}".visits (user_id, value_cents, visited_at) VALUES ($1, $2, $3)), 'spec', [account, cents, at])
+    conn.exec_query(%(INSERT INTO "#{OauthClients::SCHEMA}".kiosk_visits (user_id, value_cents, visited_at) VALUES ($1, $2, $3)), 'spec', [account, cents, at])
   end
 
   it 'answers 402 on the 10th call of an account with no spend, and the paid proof lets that call through' do

@@ -17,6 +17,10 @@ module Kiosk
   module Server
   end
 
+  # Kiosk's tables are `kiosk_*` in the configured schema; Rails names every
+  # model in this namespace with it: Kiosk::Settlement is `public.kiosk_settlements`.
+  def self.table_name_prefix = "#{configuration.schema}.kiosk_"
+
   # The user id and role of the principal the protocol resolved.
   def self.current_user_id = Server::SessionContext.identity.user_id
   def self.current_role    = Server::SessionContext.identity.role

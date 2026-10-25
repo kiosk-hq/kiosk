@@ -1,0 +1,29 @@
+# frozen_string_literal: true
+
+# The functions an RLS policy calls to read the principal of the request.
+# kiosk-server sets the GUCs they read with SET LOCAL in each request transaction.
+class CreateKioskRlsFunctions < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def up
+    execute <<~SQL
+      CREATE FUNCTION kiosk_current_user_id() RETURNS <%= options[:user_id_type] %> LANGUAGE sql STABLE AS $$
+        SELECT NULLIF(current_setting('<%= options[:guc_namespace] %>.current_user_id', true), '')::<%= options[:user_id_type] %>
+      $$;
+
+      CREATE FUNCTION kiosk_current_role() RETURNS text LANGUAGE sql STABLE AS $$
+        SELECT NULLIF(current_setting('<%= options[:guc_namespace] %>.current_role', true), '')
+      $$;
+
+      CREATE FUNCTION kiosk_current_actor() RETURNS text LANGUAGE sql STABLE AS $$
+        SELECT NULLIF(current_setting('<%= options[:guc_namespace] %>.current_actor', true), '')
+      $$;
+
+      CREATE FUNCTION kiosk_current_agent_id() RETURNS uuid LANGUAGE sql STABLE AS $$
+        SELECT NULLIF(current_setting('<%= options[:guc_namespace] %>.current_agent_id', true), '')::uuid
+      $$;
+    SQL
+  end
+
+  def down
+    execute 'DROP FUNCTION kiosk_current_user_id(), kiosk_current_role(), kiosk_current_actor(), kiosk_current_agent_id()'
+  end
+end

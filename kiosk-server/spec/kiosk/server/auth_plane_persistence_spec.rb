@@ -66,10 +66,7 @@ module AuthPlanePersistenceSpec
     drop_schema(conn)
     conn.execute(%(CREATE SCHEMA "#{SCHEMA}"))
     conn.execute(%(CREATE TABLE "#{USERS}" (id uuid PRIMARY KEY DEFAULT gen_random_uuid())))
-    defs = Kiosk::Server::SchemaDefinitions
-    conn.execute(defs.identity_tables_sql(schema: SCHEMA, user_id_type: :uuid, user_table: USERS))
-    conn.execute(defs.mandates_sql(schema: SCHEMA, user_id_type: :uuid))
-    conn.execute(defs.refunds_sql(schema: SCHEMA))
+    KioskTables.create(:identity_tables, :mandates, :refunds, schema: SCHEMA, user_table: USERS)
   end
 
   def self.drop_schema(conn)
@@ -77,7 +74,7 @@ module AuthPlanePersistenceSpec
     conn.execute(%(DROP TABLE IF EXISTS "#{USERS}" CASCADE))
   end
 
-  def table(name) = %("#{SCHEMA}".#{name})
+  def table(name) = %("#{SCHEMA}".kiosk_#{name})
 
   # Empty the agents and principals tables, then insert the given principals.
   def seed_principals(*ids)
@@ -619,11 +616,8 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(status).to eq(200)
       expect(body).to include('spent: 0 cents')
     ensure
-      connection.execute(%(DROP TABLE #{table('refunds')}))
-      connection.execute(Kiosk::Server::SchemaDefinitions.mandates_sql(
-                           schema: AuthPlanePersistenceSpec::SCHEMA, user_id_type: :uuid
-                         ))
-      connection.execute(Kiosk::Server::SchemaDefinitions.refunds_sql(schema: AuthPlanePersistenceSpec::SCHEMA))
+      %w[refunds payment_mandates checkout_mandates].each { connection.execute(%(DROP TABLE #{table(it)})) }
+      KioskTables.create(:mandates, :refunds, schema: AuthPlanePersistenceSpec::SCHEMA)
     end
 
     # The cap the page saves is the cap the seam reads, in the cap's own currency.

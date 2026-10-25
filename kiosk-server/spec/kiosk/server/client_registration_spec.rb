@@ -13,7 +13,7 @@ RSpec.describe Kiosk::Server::ClientRegistration do
     expect(&).to raise_error(Kiosk::Server::OauthError, message) { |e| expect(e.code).to eq('invalid_client_metadata') }
   end
 
-  def agent_count = ActiveRecord::Base.connection.select_value(%(SELECT count(*) FROM "#{OauthClients::SCHEMA}".agents))
+  def agent_count = ActiveRecord::Base.connection.select_value(%(SELECT count(*) FROM "#{OauthClients::SCHEMA}".kiosk_agents))
 
   it 'creates an assistant account and a client with the registration role' do
     client = register
@@ -39,7 +39,7 @@ RSpec.describe Kiosk::Server::ClientRegistration do
   it 'gives an unlinked key a new client and a new account' do
     first = register
     ActiveRecord::Base.connection.exec_query(
-      %(UPDATE "#{OauthClients::SCHEMA}".agents SET revoked_at = now() WHERE id = $1), 'spec', [first.id]
+      %(UPDATE "#{OauthClients::SCHEMA}".kiosk_agents SET revoked_at = now() WHERE id = $1), 'spec', [first.id]
     )
     second = register
     expect(second.id).not_to eq(first.id)

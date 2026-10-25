@@ -2,13 +2,13 @@
 
 RSpec.describe Kiosk::RLS::Policy do
   describe '.new' do
-    let(:valid) { { name: 'rentals_select', action: :select, using: 'user_id = kiosk.current_user_id()' } }
+    let(:valid) { { name: 'rentals_select', action: :select, using: 'user_id = kiosk_current_user_id()' } }
 
     it 'constructs with name, action and a USING predicate' do
       policy = described_class.new(**valid)
       expect(policy.name).to   eq('rentals_select')
       expect(policy.action).to eq(:select)
-      expect(policy.using).to  eq('user_id = kiosk.current_user_id()')
+      expect(policy.using).to  eq('user_id = kiosk_current_user_id()')
       expect(policy.check).to  be_nil
     end
 
@@ -26,7 +26,7 @@ RSpec.describe Kiosk::RLS::Policy do
   end
 
   describe '.new coercion' do
-    let(:valid) { { name: 'rentals_select', action: :select, using: 'user_id = kiosk.current_user_id()' } }
+    let(:valid) { { name: 'rentals_select', action: :select, using: 'user_id = kiosk_current_user_id()' } }
 
     it 'coerces action to a symbol' do
       policy = described_class.new(**valid, action: 'select')
@@ -40,7 +40,7 @@ RSpec.describe Kiosk::RLS::Policy do
   end
 
   describe '.new validation' do
-    let(:valid) { { name: 'rentals_select', action: :select, using: 'user_id = kiosk.current_user_id()' } }
+    let(:valid) { { name: 'rentals_select', action: :select, using: 'user_id = kiosk_current_user_id()' } }
 
     it 'accepts all five valid action kinds' do
       %i[select insert update delete all].each do |action|
@@ -72,7 +72,7 @@ RSpec.describe Kiosk::RLS::Policy do
   end
 
   describe 'value equality' do
-    let(:valid) { { name: 'rentals_select', action: :select, using: 'user_id = kiosk.current_user_id()' } }
+    let(:valid) { { name: 'rentals_select', action: :select, using: 'user_id = kiosk_current_user_id()' } }
 
     it 'two policies with same fields are equal' do
       a = described_class.new(**valid)
@@ -88,7 +88,7 @@ RSpec.describe Kiosk::RLS::Policy do
   end
 
   describe 'immutability' do
-    let(:valid) { { name: 'rentals_select', action: :select, using: 'user_id = kiosk.current_user_id()' } }
+    let(:valid) { { name: 'rentals_select', action: :select, using: 'user_id = kiosk_current_user_id()' } }
 
     it 'instances are frozen (Data class)' do
       expect(described_class.new(**valid)).to be_frozen

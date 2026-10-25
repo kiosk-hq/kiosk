@@ -1,0 +1,20 @@
+# frozen_string_literal: true
+
+# The event tail. `id` is the origin's one ascending cursor: a single integer
+# resumes every subscription on a socket. `identity_key` is a user id, so every
+# assistant of one person reads the same tail.
+class CreateKioskEvents < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def change
+    create_table :kiosk_events do |t|
+      t.text :identity_key, null: false
+      t.text :topic, null: false
+      t.text :subject
+      t.timestamptz :occurred_at, null: false
+      t.jsonb :data, null: false
+      # The retention sweep reads it.
+      t.timestamptz :created_at, null: false, default: -> { 'now()' }, index: true
+      # `since` for one subscriber: the cursor scan, in id order.
+      t.index %i[identity_key id]
+    end
+  end
+end

@@ -131,7 +131,7 @@ module Kiosk
 
         def revoke_owned(conn, schema, agent_id, user_id)
           conn.exec_query(<<~SQL.squish, 'Kiosk agent unlink', [agent_id, user_id, Kiosk.current_issuer]).to_a.first
-            UPDATE #{schema}.agents
+            UPDATE #{schema}.kiosk_agents
             SET revoked_at = now()
             WHERE id = $1
               AND user_id = $2
@@ -146,7 +146,7 @@ module Kiosk
           role_set, role_binds =
             role ? [', allowed_roles = ARRAY[$3]::text[]', [role]] : [", allowed_roles = '{}'::text[]", []]
           conn.exec_query(<<~SQL.squish, 'Kiosk agent rebind', [user_id, agent_id, *role_binds])
-            UPDATE #{schema}.agents
+            UPDATE #{schema}.kiosk_agents
             SET user_id = $1, bound_at = now()#{role_set}
             WHERE id = $2
           SQL

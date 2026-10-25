@@ -147,7 +147,7 @@ module Kiosk
         private
 
         def connection = ::ActiveRecord::Base.lease_connection
-        def table = %("#{Kiosk.configuration.schema}".device_authorizations)
+        def table = %("#{Kiosk.configuration.schema}".kiosk_device_authorizations)
 
         def insert_sql
           placeholders = (1..COLUMNS.size).map { |i| "$#{i}" }.join(', ')

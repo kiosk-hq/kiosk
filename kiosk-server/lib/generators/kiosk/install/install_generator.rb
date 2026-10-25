@@ -7,7 +7,7 @@ require 'rails/generators/migration'
 module Kiosk
   module Generators
     # `bin/rails g kiosk:install`: writes the Kiosk initializer, the Kiosk routes
-    # and the migrations, with the DDL of {Kiosk::Server::SchemaDefinitions} written into each.
+    # and the migrations of Kiosk's `kiosk_*` tables.
     class InstallGenerator < ::Rails::Generators::Base
       include ::Rails::Generators::Migration
 
@@ -18,12 +18,10 @@ module Kiosk
 
       class_option :user_table,    type: :string, default: 'users',
                                    desc: "Provider's user table name"
-      class_option :user_id_type,  type: :string, default: 'uuid',
+      class_option :user_id_type,  type: :string, default: 'uuid', enum: %w[uuid bigint integer text],
                                    desc: 'User-id column type: uuid | bigint | integer | text'
-      class_option :schema,        type: :string, default: 'kiosk',
-                                   desc: 'Postgres schema name for Kiosk helpers and tables'
-      class_option :guc_namespace, type: :string, default: 'app',
-                                   desc: 'GUC namespace prefix used in the session GUC names'
+      class_option :schema,        type: :string, default: 'public',
+                                   desc: "Postgres schema of Kiosk's tables"
 
       # Ascending timestamps within one run, so the migrations sort in order.
       @migration_counter = 0
@@ -36,23 +34,30 @@ module Kiosk
         end
       end
 
-      no_commands do
-        # One SchemaDefinitions method's DDL, indented for the migration's heredoc.
-        def ddl(name, **)
-          Kiosk::Server::SchemaDefinitions.public_send(:"#{name}_sql", schema: options[:schema], **)
-                                          .gsub(/^(?=.)/, '      ')
-        end
+      MIGRATIONS = %w[identity_tables device_authorizations mandates kyc_attributes events
+                      pow_spent revocations visits refunds].freeze
 
-        def user_id_type = options[:user_id_type].to_sym
+      no_commands do
+        def public_schema? = options[:schema] == 'public'
+
+        # A Kiosk table as a migration names it: `:kiosk_agents`, or `"ops.kiosk_agents"`.
+        def table(name) = public_schema? ? ":kiosk_#{name}" : %("#{options[:schema]}.kiosk_#{name}")
+
+        # The type of `users.id`, which every `user_id` column takes.
+        def user_id_type = ":#{options[:user_id_type]}"
+
+        # The foreign key of a `user_id` column: a row goes with its user.
+        def users_key = "{ to_table: :#{options[:user_table]}, on_delete: :cascade }"
       end
 
       def create_initializer
         template 'initializer.rb.tt', 'config/initializers/kiosk.rb'
       end
 
-      # schema.rb dumps only the search path's schemas unless told otherwise;
-      # public goes first because the kiosk tables reference the user table.
+      # schema.rb dumps only the search path's schemas unless told otherwise.
       def dump_kiosk_schema
+        return if public_schema?
+
         application %(config.active_record.dump_schemas = "public,#{options[:schema]}")
       end
 
@@ -66,54 +71,10 @@ module Kiosk
         RUBY
       end
 
-      def create_schema_migration
-        migration_template 'create_kiosk_schema.rb.tt',
-                           'db/migrate/create_kiosk_schema.rb'
-      end
-
-      def create_identity_tables_migration
-        migration_template 'create_kiosk_identity_tables.rb.tt',
-                           'db/migrate/create_kiosk_identity_tables.rb'
-      end
-
-      def create_device_authorizations_migration
-        migration_template 'create_kiosk_device_authorizations.rb.tt',
-                           'db/migrate/create_kiosk_device_authorizations.rb'
-      end
-
-      def create_mandates_migration
-        migration_template 'create_kiosk_mandates.rb.tt',
-                           'db/migrate/create_kiosk_mandates.rb'
-      end
-
-      def create_kyc_attributes_migration
-        migration_template 'create_kiosk_kyc_attributes.rb.tt',
-                           'db/migrate/create_kiosk_kyc_attributes.rb'
-      end
-
-      def create_events_migration
-        migration_template 'create_kiosk_events.rb.tt',
-                           'db/migrate/create_kiosk_events.rb'
-      end
-
-      def create_pow_spent_migration
-        migration_template 'create_kiosk_pow_spent.rb.tt',
-                           'db/migrate/create_kiosk_pow_spent.rb'
-      end
-
-      def create_revocations_migration
-        migration_template 'create_kiosk_revocations.rb.tt',
-                           'db/migrate/create_kiosk_revocations.rb'
-      end
-
-      def create_visits_migration
-        migration_template 'create_kiosk_visits.rb.tt',
-                           'db/migrate/create_kiosk_visits.rb'
-      end
-
-      def create_refunds_migration
-        migration_template 'create_kiosk_refunds.rb.tt',
-                           'db/migrate/create_kiosk_refunds.rb'
+      def create_migrations
+        MIGRATIONS.each do |name|
+          migration_template "create_kiosk_#{name}.rb.tt", "db/migrate/create_kiosk_#{name}.rb"
+        end
       end
     end
   end

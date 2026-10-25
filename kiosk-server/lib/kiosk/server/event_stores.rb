@@ -114,7 +114,7 @@ module Kiosk
           prune! if due
         end
 
-        def table = %("#{Kiosk.configuration.schema}".events)
+        def table = %("#{Kiosk.configuration.schema}".kiosk_events)
 
         # `connection` raises under `permanent_connection_checkout = :disallowed`.
         def connection = ::ActiveRecord::Base.lease_connection

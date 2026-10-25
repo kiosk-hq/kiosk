@@ -5,7 +5,7 @@ module Kiosk
     # Base for an agent-IdP adapter fronting an external agent-identity issuer
     # (`c.agent_idp`). The engine calls only `verify`: it mints tokens and reads
     # mandate-signing keys through its bundled DefaultAgentIdp. The `agent_id` it
-    # returns must be a uuid: every schema column and `kiosk.current_agent_id()`
+    # returns must be a uuid: every `agent_id` column and `kiosk_current_agent_id()`
     # are typed `uuid`, so map foreign ids. The token comes as
     # `Authorization: DPoP <token>`, and the identity's `claims` carry
     # `cnf: { jkt: }`, the thumbprint of the key that must sign the request's

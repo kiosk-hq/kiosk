@@ -10,8 +10,8 @@ RSpec.describe Kiosk::RLS::DSL do
 
     it 'executes the canonical RLS enable sequence' do
       host.enable_rls_on :rentals do
-        policy :select, using: 'user_id = kiosk.current_user_id()'
-        policy :insert, check: "user_id = kiosk.current_user_id() AND kiosk.current_role() = 'customer'"
+        policy :select, using: 'user_id = kiosk_current_user_id()'
+        policy :insert, check: "user_id = kiosk_current_user_id() AND kiosk_current_role() = 'customer'"
         comment 'Scooter rentals owned by the renting user.'
       end
 
@@ -19,8 +19,8 @@ RSpec.describe Kiosk::RLS::DSL do
                                       %(ALTER TABLE "rentals" ENABLE ROW LEVEL SECURITY),
                                       %(ALTER TABLE "rentals" FORCE ROW LEVEL SECURITY),
                                       %(GRANT SELECT, INSERT, UPDATE, DELETE ON "rentals" TO "app_role"),
-                                      %(CREATE POLICY "rentals_select" ON "rentals" FOR SELECT USING (user_id = kiosk.current_user_id())),
-                                      %(CREATE POLICY "rentals_insert" ON "rentals" FOR INSERT WITH CHECK (user_id = kiosk.current_user_id() AND kiosk.current_role() = 'customer')),
+                                      %(CREATE POLICY "rentals_select" ON "rentals" FOR SELECT USING (user_id = kiosk_current_user_id())),
+                                      %(CREATE POLICY "rentals_insert" ON "rentals" FOR INSERT WITH CHECK (user_id = kiosk_current_user_id() AND kiosk_current_role() = 'customer')),
                                       %(COMMENT ON TABLE "rentals" IS 'Scooter rentals owned by the renting user.')
                                     ])
     end

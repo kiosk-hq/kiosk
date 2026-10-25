@@ -43,7 +43,7 @@ module EventStoresSpec
 
   def backdate(id_below:, hours:)
     ActiveRecord::Base.connection.exec_query(
-      %(UPDATE "#{SCHEMA}".events
+      %(UPDATE "#{SCHEMA}".kiosk_events
            SET created_at = now() - ($1 || ' hours')::interval
          WHERE id < $2),
       'spec backdate', [hours.to_s, id_below]
@@ -62,7 +62,7 @@ RSpec.shared_context 'with a throwaway event store schema' do
     conn = ActiveRecord::Base.connection
     conn.execute(%(DROP SCHEMA IF EXISTS "#{EventStoresSpec::SCHEMA}" CASCADE))
     conn.execute(%(CREATE SCHEMA "#{EventStoresSpec::SCHEMA}"))
-    conn.execute(Kiosk::Server::SchemaDefinitions.events_sql(schema: EventStoresSpec::SCHEMA))
+    KioskTables.create(:events, schema: EventStoresSpec::SCHEMA)
   end
 
   after do

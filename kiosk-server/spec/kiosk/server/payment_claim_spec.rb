@@ -56,11 +56,9 @@ module PaymentClaimSpecHelpers
 
   def self.create_schema
     Kiosk.configure { |c| c.schema = SCHEMA }
-    defs = Kiosk::Server::SchemaDefinitions
     conn = ActiveRecord::Base.connection
-    conn.execute(%(DROP SCHEMA IF EXISTS "#{SCHEMA}" CASCADE))
-    conn.execute(defs.helper_functions_sql(schema: SCHEMA, user_id_type: :uuid))
-    conn.execute(defs.mandates_sql(schema: SCHEMA, user_id_type: :uuid))
+    SpecPostgres.recreate_schema(SCHEMA)
+    KioskTables.create(:mandates, schema: SCHEMA)
     create_payables(conn)
   end
 
@@ -121,7 +119,7 @@ module PaymentClaimSpecHelpers
     agent = SecureRandom.uuid
     checkout = insert_checkout(agent, id)
     conn.execute(<<~SQL.squish)
-      INSERT INTO "#{schema}".settlements (checkout_mandate_id, user_id, agent_id, issuer, psp_reference,
+      INSERT INTO "#{schema}".kiosk_settlements (checkout_mandate_id, user_id, agent_id, issuer, psp_reference,
         settled_amount_cents, currency, settled_at)
       VALUES ('#{checkout}', '#{payer}', '#{agent}', 'i', 'psp', 500, 'EUR', now())
     SQL
@@ -129,7 +127,7 @@ module PaymentClaimSpecHelpers
 
   def insert_checkout(agent, id, reference: SecureRandom.uuid)
     conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{schema}".checkout_mandates (reference, checkout_hash, user_id, agent_id, issuer, line_items,
+      INSERT INTO "#{schema}".kiosk_checkout_mandates (reference, checkout_hash, user_id, agent_id, issuer, line_items,
         total_amount_cents, currency, expires_at, sd_jwt)
       VALUES ('#{reference}', '#{reference}', '#{payer}', '#{agent}', 'i', '[{"booking_id": "#{id}"}]',
         500, 'EUR', now() + interval '1 day', 'j')

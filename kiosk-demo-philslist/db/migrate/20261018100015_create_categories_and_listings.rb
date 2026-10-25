@@ -8,9 +8,9 @@
 # signal that this surface has no payment semantics.
 #
 # RLS is optional and this demo does not use it; isolation is app-layer:
-#   - `post_listing`  Action scopes INSERT owner_id to kiosk.current_user_id()
-#   - `edit_listing` / `close_listing` UPDATE … WHERE owner_id = kiosk.current_user_id()
-#   - `my_listings`   named Query filters WHERE owner_id = kiosk.current_user_id()
+#   - `post_listing`  Action scopes INSERT owner_id to Kiosk.current_user_id
+#   - `edit_listing` / `close_listing` UPDATE … WHERE owner_id = Kiosk.current_user_id
+#   - `my_listings`   named Query filters WHERE owner_id = Kiosk.current_user_id
 #   - `browse_listings` named Query is open-read (cross-owner, no per-user filter)
 class CreateCategoriesAndListings < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def change
@@ -31,7 +31,7 @@ class CreateCategoriesAndListings < ActiveRecord::Migration[ActiveRecord::Migrat
       # price_text: NULLABLE display STRING, deliberately NOT a money type.
       t.string     :price_text
       t.string     :status, null: false, default: "open"
-      # Attribution: which agent (kiosk.agents.id) created the listing, if any.
+      # Attribution: which agent (kiosk_agents.id) created the listing, if any.
       # Nullable — humans posting through the web surface leave it null.
       t.string     :created_by_agent_id
       t.timestamps

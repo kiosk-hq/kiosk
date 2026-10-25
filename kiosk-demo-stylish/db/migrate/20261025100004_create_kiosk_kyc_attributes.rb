@@ -1,0 +1,22 @@
+# frozen_string_literal: true
+
+# The KYC grants and the open verifications, keyed on the person. A grant is
+# one row per anonymized attribute a valid attestation granted (`age_over_18`):
+# only the name, never the document or the value behind it.
+class CreateKioskKycAttributes < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def change
+    create_table :kiosk_kyc_attributes, primary_key: %i[user_id name] do |t|
+      t.references :user, type: :uuid, null: false, index: false, foreign_key: { to_table: :users, on_delete: :cascade }
+      t.text :name, null: false
+      t.timestamptz :granted_at, null: false, default: -> { 'now()' }
+    end
+
+    create_table :kiosk_kyc_requests, id: :text do |t|
+      t.references :user, type: :uuid, null: false, index: false, foreign_key: { to_table: :users, on_delete: :cascade }
+      t.text :nonce, null: false
+      t.timestamptz :approved_at
+      t.timestamptz :created_at, null: false, default: -> { 'now()' }
+      t.index %i[user_id created_at]
+    end
+  end
+end

@@ -60,7 +60,7 @@ RSpec.describe Kiosk::Server::OauthTokenController do
 
     it 'answers invalid_client for an unlinked client' do
       ActiveRecord::Base.connection.exec_query(
-        %(UPDATE "#{OauthClients::SCHEMA}".agents SET revoked_at = now() WHERE id = $1), 'spec', [client.id]
+        %(UPDATE "#{OauthClients::SCHEMA}".kiosk_agents SET revoked_at = now() WHERE id = $1), 'spec', [client.id]
       )
       expect_oauth_error(client_credentials(client.id), 'invalid_client', status: 401)
     end

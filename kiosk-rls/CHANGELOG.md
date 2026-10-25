@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- `bin/rails g kiosk:rls:install` writes the migration that creates `kiosk_current_user_id()`, `kiosk_current_role()`, `kiosk_current_actor()` and `kiosk_current_agent_id()`.
+
 ## [0.6.15] — 2026-10-25
 
 - 2026-10-25: Version 0.6.15, the tree cut that matches skill 0.6.15.

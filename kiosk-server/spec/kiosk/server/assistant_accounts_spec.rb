@@ -16,9 +16,7 @@ RSpec.describe Kiosk::Server::AssistantAccounts do
   let(:assistant) { register_client(OpenSSL::PKey.generate_key('ED25519')) }
 
   before do
-    defs = Kiosk::Server::SchemaDefinitions
-    [defs.mandates_sql(schema:, user_id_type: :uuid), defs.visits_sql(schema:, user_id_type: :uuid), defs.refunds_sql(schema:),
-     %(TRUNCATE "#{schema}".checkout_mandates, "#{schema}".visits CASCADE)].each { conn.execute(it) }
+    conn.execute(%(TRUNCATE "#{schema}".kiosk_checkout_mandates, "#{schema}".kiosk_visits CASCADE))
   end
 
   # The cents that `account` spent in the last `days`.
@@ -29,7 +27,7 @@ RSpec.describe Kiosk::Server::AssistantAccounts do
   def paid_before_binding(cents, at: Time.current - 3600) = settle(cents, at:, account: assistant.user_id, agent: assistant.id)
 
   def visit(cents, account:, at: Time.current - 3600)
-    conn.exec_query(%(INSERT INTO "#{schema}".visits (user_id, value_cents, visited_at) VALUES ($1, $2, $3)), 'spec', [account, cents, at])
+    conn.exec_query(%(INSERT INTO "#{schema}".kiosk_visits (user_id, value_cents, visited_at) VALUES ($1, $2, $3)), 'spec', [account, cents, at])
   end
 
   it "counts what the assistant paid on its assistant account before the binding in the human's spend" do

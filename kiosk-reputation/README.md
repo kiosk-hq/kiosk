@@ -252,7 +252,7 @@ The server gate (`Kiosk::Server::PowGate`) reads these config slots:
 | `reputation_policy` | `Kiosk::Reputation::Policy` instance (or duck type) | `nil` | Policy that decides when and how hard to challenge. `nil` = never challenge (zero overhead). |
 | `pow_secret` | String | required when policy is set | HMAC key for challenge signing. Load from env: `ENV.fetch("KIOSK_POW_SECRET")`. |
 | `pow_ttl` | Integer (seconds) | `300` | Challenge validity window. |
-| `pow_spent_store` | `#claim`/`#release`/`#spent?`/`#mark_spent` | `Kiosk::Server::PowSpentStores::ActiveRecord` (the `kiosk.pow_spent` table) | Tracks spent challenge ids so a proof is accepted once, across every process and deploy. See kiosk-server's README, "Multi-process deployments". |
+| `pow_spent_store` | `#claim`/`#release`/`#spent?`/`#mark_spent` | `Kiosk::Server::PowSpentStores::ActiveRecord` (the `kiosk_pow_spent` table) | Tracks spent challenge ids so a proof is accepted once, across every process and deploy. See kiosk-server's README, "Multi-process deployments". |
 
 ```ruby
 Kiosk.configure do |c|

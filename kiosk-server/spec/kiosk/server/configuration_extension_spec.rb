@@ -120,8 +120,8 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
   end
 
   describe 'database settings' do
-    it "defaults schema to 'kiosk' and guc_namespace to 'app', beside kiosk-core's app_role" do
-      expect(Kiosk.configuration.schema).to        eq('kiosk')
+    it "defaults schema to 'public' and guc_namespace to 'app', beside kiosk-core's app_role" do
+      expect(Kiosk.configuration.schema).to        eq('public')
       expect(Kiosk.configuration.guc_namespace).to eq('app')
       expect(Kiosk.configuration.app_role).to      eq('app_role')
     end

@@ -177,8 +177,8 @@ module Kiosk
         end
 
         INSERT_SQL = <<~SQL.squish
-          INSERT INTO "%<schema>s".refunds (settlement_id, psp_reference, refunded_amount_cents, refunded_at)
-          SELECT id, $1, $2, $3 FROM "%<schema>s".settlements WHERE psp_reference = $4
+          INSERT INTO "%<schema>s".kiosk_refunds (settlement_id, psp_reference, refunded_amount_cents, refunded_at)
+          SELECT id, $1, $2, $3 FROM "%<schema>s".kiosk_settlements WHERE psp_reference = $4
           ON CONFLICT (psp_reference) DO NOTHING
         SQL
       end

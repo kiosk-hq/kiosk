@@ -5,7 +5,7 @@ require 'story_helper'
 RSpec.describe "An assistant's spending cap", type: :story do
   def the_hotel_caps_spending(of:, at:, currency: 'eur')
     ActiveRecord::Base.connection.exec_update(
-      'UPDATE kiosk.agents SET spending_cap_cents = $1, spending_cap_currency = $2 WHERE id = $3',
+      'UPDATE kiosk_agents SET spending_cap_cents = $1, spending_cap_currency = $2 WHERE id = $3',
       'cap', [at, currency, of.principal.agent_id]
     )
   end

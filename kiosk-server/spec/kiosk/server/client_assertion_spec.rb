@@ -39,7 +39,7 @@ RSpec.describe Kiosk::Server::ClientAssertion do
 
   it 'refuses an unlinked client' do
     ActiveRecord::Base.connection.exec_query(
-      %(UPDATE "#{OauthClients::SCHEMA}".agents SET revoked_at = now() WHERE id = $1), 'spec', [client.id]
+      %(UPDATE "#{OauthClients::SCHEMA}".kiosk_agents SET revoked_at = now() WHERE id = $1), 'spec', [client.id]
     )
     expect_refused(/unknown client/) { authenticate }
   end

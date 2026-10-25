@@ -12,17 +12,17 @@ module RevocationStoresSpec
   def self.create_schema
     SpecPostgres.recreate_schema(SCHEMA)
     conn = ActiveRecord::Base.connection
-    conn.execute(%(CREATE TABLE "#{SCHEMA}".agents (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), revoked_at timestamptz)))
-    conn.execute(Kiosk::Server::SchemaDefinitions.revocations_sql(schema: SCHEMA))
+    conn.execute(%(CREATE TABLE "#{SCHEMA}".kiosk_agents (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), revoked_at timestamptz)))
+    KioskTables.create(:revocations, schema: SCHEMA)
   end
 
   def insert_agent
-    ActiveRecord::Base.connection.exec_query(%(INSERT INTO "#{SCHEMA}".agents DEFAULT VALUES RETURNING id)).first.fetch('id')
+    ActiveRecord::Base.connection.exec_query(%(INSERT INTO "#{SCHEMA}".kiosk_agents DEFAULT VALUES RETURNING id)).first.fetch('id')
   end
 
   def unlink(agent_id)
     ActiveRecord::Base.connection.exec_query(
-      %(UPDATE "#{SCHEMA}".agents SET revoked_at = now() WHERE id = $1), 'spec unlink', [agent_id]
+      %(UPDATE "#{SCHEMA}".kiosk_agents SET revoked_at = now() WHERE id = $1), 'spec unlink', [agent_id]
     )
   end
 end

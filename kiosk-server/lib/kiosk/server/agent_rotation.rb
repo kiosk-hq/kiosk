@@ -51,7 +51,7 @@ module Kiosk
         conn = ::ActiveRecord::Base.lease_connection
         conn.transaction do
           conn.exec_query(<<~SQL.squish, 'Kiosk agent key rotation', [pem, agent_id])
-            UPDATE #{Kiosk.configuration.schema}.agents SET public_key = $1 WHERE id = $2
+            UPDATE #{Kiosk.configuration.schema}.kiosk_agents SET public_key = $1 WHERE id = $2
           SQL
           RevocationStores.revoke_issued(agent_id)
         end

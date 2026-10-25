@@ -61,16 +61,11 @@ module ExecutorPersistenceSpec
     # The SHIPPED migration SQL, not a hand-written table: the point of the
     # type assertions below is that the executor agrees with the schema
     # operators actually install.
-    conn.execute(
-      Kiosk::Server::SchemaDefinitions.mandates_sql(
-        schema: PERSIST_SPEC_SCHEMA, user_id_type: :uuid
-      )
-    )
-    conn.execute(Kiosk::Server::SchemaDefinitions.refunds_sql(schema: PERSIST_SPEC_SCHEMA))
+    KioskTables.create(:mandates, :refunds, schema: PERSIST_SPEC_SCHEMA)
   end
 
   module Helpers
-    def table(name) = %("#{PERSIST_SPEC_SCHEMA}".#{name})
+    def table(name) = %("#{PERSIST_SPEC_SCHEMA}".kiosk_#{name})
 
     # Bind-parameterised read helper, so the spec's own queries can never be
     # the thing that proves a type.

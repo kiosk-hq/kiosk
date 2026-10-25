@@ -6,10 +6,10 @@ module Kiosk
   module PaymentProviders
     class Stripe < Base
       # The principal → Stripe Customer mapping, one row per principal, in the
-      # host's `stripe_customers` table (`bin/rails g kiosk:pay_stripe:install`).
+      # host's `kiosk_stripe_customers` table (`bin/rails g kiosk:pay_stripe:install`).
       # The adapter's default resolver and saver.
       class CustomerRecord < ApplicationRecord
-        self.table_name = 'stripe_customers'
+        self.table_name = 'kiosk_stripe_customers'
 
         def self.resolve(user_id) = find_by(user_id: user_id)&.customer_id
 

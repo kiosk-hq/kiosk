@@ -61,7 +61,7 @@ module Kiosk
           window = window_days ? 'AND settled_at >= now() - make_interval(days => $3)' : ''
           <<~SQL.squish
             SELECT COALESCE(SUM(#{SettledSpend.net_cents_sql(schema)}), 0) AS total
-            FROM #{schema}.settlements
+            FROM #{schema}.kiosk_settlements settlements
             WHERE agent_id = $1 AND lower(btrim(currency)) = $2 #{window}
           SQL
         end
@@ -72,10 +72,10 @@ module Kiosk
           schema = Kiosk.configuration.schema
           <<~SQL.squish
             SELECT COALESCE(SUM(c.total_amount_cents), 0) AS total
-            FROM #{schema}.checkout_mandates c
+            FROM #{schema}.kiosk_checkout_mandates c
             WHERE c.agent_id = $1 AND lower(btrim(c.currency)) = $2 AND c.expires_at > now()
               AND c.declined_at IS NULL
-              AND NOT EXISTS (SELECT 1 FROM #{schema}.settlements s WHERE s.checkout_mandate_id = c.id)
+              AND NOT EXISTS (SELECT 1 FROM #{schema}.kiosk_settlements s WHERE s.checkout_mandate_id = c.id)
           SQL
         end
 
@@ -86,7 +86,7 @@ module Kiosk
         end
 
         def checkout_recorded?(checkout)
-          sql = "SELECT 1 FROM #{Kiosk.configuration.schema}.checkout_mandates WHERE user_id = $1 AND reference = $2"
+          sql = "SELECT 1 FROM #{Kiosk.configuration.schema}.kiosk_checkout_mandates WHERE user_id = $1 AND reference = $2"
           connection.exec_query(sql, 'Kiosk checkout mandate recorded', [checkout.user_id, checkout.reference]).any?
         end
 

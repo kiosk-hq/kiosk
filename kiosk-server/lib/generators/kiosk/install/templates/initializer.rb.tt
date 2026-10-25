@@ -16,10 +16,14 @@ Kiosk.configure do |c|
   c.validate_responses = !Rails.env.production?
 
   # GUC namespace for SET LOCAL (and RLS policies). Default "app".
-  # c.guc_namespace = "<%= options[:guc_namespace] %>"
+  # c.guc_namespace = "app"
 
-  # Postgres schema for Kiosk helper functions and tables.
-  # c.schema = "<%= options[:schema] %>"
+  # Postgres schema of Kiosk's kiosk_* tables. Default "public".
+<% if public_schema? -%>
+  # c.schema = "public"
+<% else -%>
+  c.schema = "<%= options[:schema] %>"
+<% end -%>
 
   # Opt-in Postgres RLS: add `gem "kiosk-rls"` and create these database roles yourself.
   # c.app_role        = "app_role"      # runtime role with NOBYPASSRLS

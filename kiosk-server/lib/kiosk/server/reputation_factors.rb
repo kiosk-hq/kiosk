@@ -27,15 +27,15 @@ module Kiosk
         [row.fetch('count').to_i, row.fetch('cents').to_i]
       end
 
-      MERGED_SQL = 'SELECT user_id FROM "%<schema>s".assistant_accounts WHERE merged_into = $1'
+      MERGED_SQL = 'SELECT user_id FROM "%<schema>s".kiosk_assistant_accounts WHERE merged_into = $1'
       RECENT_SPEND_SQL = <<~SQL.squish
         SELECT count(*) AS count, COALESCE(SUM(cents), 0) AS cents FROM (
           SELECT s.settled_amount_cents - COALESCE(SUM(r.refunded_amount_cents), 0) AS cents
-            FROM "%<schema>s".settlements s LEFT JOIN "%<schema>s".refunds r ON r.settlement_id = s.id
+            FROM "%<schema>s".kiosk_settlements s LEFT JOIN "%<schema>s".kiosk_refunds r ON r.settlement_id = s.id
             WHERE (s.user_id = $1 OR s.user_id IN (#{MERGED_SQL})) AND s.settled_at >= $2 GROUP BY s.id
             HAVING s.settled_amount_cents > COALESCE(SUM(r.refunded_amount_cents), 0)
           UNION ALL
-          SELECT value_cents FROM "%<schema>s".visits
+          SELECT value_cents FROM "%<schema>s".kiosk_visits
             WHERE (user_id = $1 OR user_id IN (#{MERGED_SQL})) AND visited_at >= $2
         ) spend
       SQL

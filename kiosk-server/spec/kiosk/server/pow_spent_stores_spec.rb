@@ -11,21 +11,21 @@ module PowSpentStoresSpec
 
   def self.create_schema
     SpecPostgres.recreate_schema(SCHEMA)
-    ActiveRecord::Base.connection.execute(Kiosk::Server::SchemaDefinitions.pow_spent_sql(schema: SCHEMA))
+    KioskTables.create(:pow_spent, schema: SCHEMA)
   end
 
   def expiry_row(id)
     ActiveRecord::Base.connection.exec_query(<<~SQL.squish, 'spec types', [id]).to_a.first
       SELECT pg_typeof(expires_at)::text AS at_type,
              extract(epoch FROM expires_at)::bigint AS at_epoch
-      FROM "#{SCHEMA}".pow_spent
+      FROM "#{SCHEMA}".kiosk_pow_spent
       WHERE id = $1
     SQL
   end
 
   def row_count(id)
     ActiveRecord::Base.connection.exec_query(
-      %(SELECT count(*)::int AS n FROM "#{SCHEMA}".pow_spent WHERE id = $1), 'spec', [id]
+      %(SELECT count(*)::int AS n FROM "#{SCHEMA}".kiosk_pow_spent WHERE id = $1), 'spec', [id]
     ).first.fetch('n')
   end
 end
@@ -183,20 +183,7 @@ RSpec.describe Kiosk::Server::PowSpentStores do
     end
   end
 
-  describe 'Kiosk::Server::SchemaDefinitions.pow_spent_sql' do
-    it 'keys the table on the challenge id, so the PK is the single-use gate' do
-      sql = Kiosk::Server::SchemaDefinitions.pow_spent_sql(schema: 'kiosk')
-
-      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".pow_spent))
-      expect(sql).to include('id         text        PRIMARY KEY')
-      expect(sql).to include('expires_at timestamptz NOT NULL')
-    end
-
-    it 'defaults the schema to the configured one' do
-      Kiosk.configure { |c| c.schema = 'acme' }
-      expect(Kiosk::Server::SchemaDefinitions.pow_spent_sql).to include(%("acme".pow_spent))
-    end
-
+  describe 'the table' do
     it 'is laid down by the install generator' do
       templates = Dir[File.expand_path('../../../lib/generators/kiosk/install/templates/*.tt', __dir__)]
       expect(templates.map { |p| File.basename(p) }).to include('create_kiosk_pow_spent.rb.tt')

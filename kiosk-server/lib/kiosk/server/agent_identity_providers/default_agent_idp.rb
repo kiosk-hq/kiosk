@@ -70,7 +70,7 @@ module Kiosk
         # `columns` is always a literal from this class, never caller input.
         def agent_row(columns, agent_id)
           ::ActiveRecord::Base.lease_connection.exec_query(
-            "SELECT #{columns} FROM #{schema}.agents WHERE id = $1 AND revoked_at IS NULL",
+            "SELECT #{columns} FROM #{schema}.kiosk_agents WHERE id = $1 AND revoked_at IS NULL",
             "Kiosk agent #{columns}",
             [agent_id]
           ).to_a.first

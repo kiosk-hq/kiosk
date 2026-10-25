@@ -1,16 +1,12 @@
 # frozen_string_literal: true
 
-# Migration 008 — create kiosk.pow_spent.
-# The spent proof-of-work challenge ids, so a proof is accepted once across
-# every process and every deploy (PowSpentStores::ActiveRecord, the default).
+# The spent ids of proof-of-work challenges and client assertions. The primary
+# key accepts each id once, in every process and across deploys.
 class CreateKioskPowSpent < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
-  def up
-    execute <<~'SQL'
-<%= ddl(:pow_spent) %>
-    SQL
-  end
-
-  def down
-    execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".pow_spent)
+  def change
+    create_table <%= table :pow_spent %>, id: :text do |t|
+      # The expiry sweep reads it.
+      t.timestamptz :expires_at, null: false, index: true
+    end
   end
 end

@@ -18,8 +18,8 @@ The foundation. Defines:
   - `Kiosk::KycProviders::Base`
 
   An agent-IdP adapter's `agent_id` **must be a UUID string**: `Identity`
-  checks only that it is present, but every `agent_id` column in the canonical
-  Postgres schema and the `kiosk.current_agent_id()` helper are typed `uuid`,
+  checks only that it is present, but every `agent_id` column of the Kiosk tables
+  (and kiosk-rls's `kiosk_current_agent_id()`) is typed `uuid`,
   and there is no `user_id_type`-style knob for it. Map a foreign issuer's
   agent identifier onto a local uuid inside the adapter. `user_id`
   carries no such constraint — it follows `c.user_id_type` (`Kiosk.configuration.user_id_type`).

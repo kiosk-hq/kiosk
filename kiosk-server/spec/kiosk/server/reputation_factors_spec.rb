@@ -11,19 +11,13 @@ module ReputationFactorsSpecHelpers
   def create_tables
     Kiosk.configure { |c| c.schema = schema }
     SpecPostgres.recreate_schema(schema)
-    [%(DROP TABLE IF EXISTS "#{users}" CASCADE), %(CREATE TABLE "#{users}" (id uuid PRIMARY KEY)), *shipped_ddl].each { conn.execute(it) }
-  end
-
-  def shipped_ddl
-    defs = Kiosk::Server::SchemaDefinitions
-    [defs.identity_tables_sql(schema:, user_id_type: :uuid, user_table: users),
-     defs.mandates_sql(schema:, user_id_type: :uuid), defs.visits_sql(schema:, user_id_type: :uuid),
-     defs.refunds_sql(schema:)]
+    [%(DROP TABLE IF EXISTS "#{users}" CASCADE), %(CREATE TABLE "#{users}" (id uuid PRIMARY KEY))].each { conn.execute(it) }
+    KioskTables.create(:identity_tables, :mandates, :visits, :refunds, schema:, user_table: users)
   end
 
   # A new account, and a live assistant on it.
   def account = conn.select_value(%(INSERT INTO "#{users}" (id) VALUES (gen_random_uuid()) RETURNING id))
-  def assistant(account) = conn.select_value(%(INSERT INTO "#{schema}".agents (user_id, issuer) VALUES ('#{account}', 'i') RETURNING id))
+  def assistant(account) = conn.select_value(%(INSERT INTO "#{schema}".kiosk_agents (user_id, issuer) VALUES ('#{account}', 'i') RETURNING id))
 end
 
 # A PSP that refunds every request, as the Stripe adapter answers.

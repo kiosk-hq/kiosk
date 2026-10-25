@@ -31,7 +31,7 @@ module Kiosk
       def self.lookup(condition, value)
         row = ::ActiveRecord::Base.lease_connection.exec_query(<<~SQL.squish, 'Kiosk client lookup', [value, Kiosk.current_issuer]).to_a.first
           SELECT id, user_id, public_key, allowed_roles, extract(epoch FROM created_at)::bigint AS issued_at
-          FROM #{Kiosk.configuration.schema}.agents
+          FROM #{Kiosk.configuration.schema}.kiosk_agents
           WHERE #{condition} AND issuer = $2 AND revoked_at IS NULL
           LIMIT 1
         SQL

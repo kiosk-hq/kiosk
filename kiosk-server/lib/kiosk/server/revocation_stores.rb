@@ -58,7 +58,7 @@ module Kiosk
         private
 
         def connection = ::ActiveRecord::Base.lease_connection
-        def table(name) = %("#{Kiosk.configuration.schema}".#{name})
+        def table(name) = %("#{Kiosk.configuration.schema}".kiosk_#{name})
       end
     end
   end

@@ -9,10 +9,9 @@
 #   lists        — a todo list, OWNED by one account (account_id).
 #   memberships  — the join table: which accounts can reach which lists, and in
 #                  what role (owner|member). This is the load-bearing isolation
-#                  surface: every list/todo query & action gates on
-#                  `EXISTS (SELECT 1 FROM memberships WHERE list_id = :id AND
-#                  account_id = kiosk.current_user_id())` — membership-based,
-#                  not owner-scoped. "Isolation grows up."
+#                  surface: every list/todo query & action gates on a
+#                  membership of `Kiosk.current_user_id` in the list
+#                  (`Membership.own`) — membership-based, not owner-scoped. "Isolation grows up."
 #   todos        — items on a list, attributed to the agent that added them
 #                  (created_by_agent_id) — audit as a product feature.
 #   invites      — single-use, TTL'd, HASHED collaboration codes. An owner mints
@@ -45,7 +44,7 @@ class CreateTuduDomain < ActiveRecord::Migration[ActiveRecord::Migration.current
     add_index :memberships, %i[list_id account_id], unique: true
 
     # A todo item on a list. created_by_agent_id records which agent
-    # (kiosk.agents.id) added it — attribution in a shared space. Nullable:
+    # (kiosk_agents.id) added it — attribution in a shared space. Nullable:
     # humans posting through the web surface leave it null.
     create_table :todos, id: :uuid do |t|
       t.references :list, null: false, foreign_key: true, type: :uuid

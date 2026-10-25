@@ -34,7 +34,7 @@ your own toolchain — `kiosk-demo-getgrocery/mise.toml.example` is the tracked
 template).
 
 - **Ruby 4.0 or newer.** Every gemspec declares it, and CI runs on 4.0.
-- **PostgreSQL.** The kiosk schema and the identity tables are Postgres.
+- **PostgreSQL.** Kiosk's `kiosk_*` tables are Postgres.
   `e2e/run.sh` additionally creates a group role, so
   running the harness needs the privilege to `CREATE ROLE` — managed Postgres
   and shared dev servers refuse it.

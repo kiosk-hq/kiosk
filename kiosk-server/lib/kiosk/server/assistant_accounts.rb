@@ -13,7 +13,7 @@ module Kiosk
       # Records `user_id` as the account of a new assistant. An account that
       # `assistant_creation` gave to an earlier key is recorded once.
       def record!(user_id)
-        connection.exec_query(%(INSERT INTO "#{schema}".assistant_accounts (user_id) VALUES ($1) ON CONFLICT DO NOTHING),
+        connection.exec_query(%(INSERT INTO "#{schema}".kiosk_assistant_accounts (user_id) VALUES ($1) ON CONFLICT DO NOTHING),
                               'Kiosk assistant account', [user_id])
         nil
       end
@@ -25,7 +25,7 @@ module Kiosk
       # another, and merges do not form chains.
       def merge!(from:, into:)
         connection.exec_query(<<~SQL.squish, 'Kiosk assistant account merge', [from, into])
-          UPDATE "#{schema}".assistant_accounts SET merged_into = $2, merged_at = now()
+          UPDATE "#{schema}".kiosk_assistant_accounts SET merged_into = $2, merged_at = now()
           WHERE user_id = $1 AND merged_into IS NULL
         SQL
         nil

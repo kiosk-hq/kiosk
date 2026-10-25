@@ -10,7 +10,7 @@
 #
 # It is a TRANSPORT, not a record: rows are fan-out messages that
 # `message_retention` sweeps. The durable per-identity event tail an assistant
-# resumes from with `since` is `kiosk.events`, which is a different table with
+# resumes from with `since` is `kiosk_events`, which is a different table with
 # a different lifetime.
 class CreateSolidCableMessages < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def change

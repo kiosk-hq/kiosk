@@ -84,7 +84,7 @@ module ExecutorSpecReplayHelpers
   # The shipped schema's unique keys: `(user_id, reference)` on both mandate
   # tables, one live checkout mandate per checkout, one settlement per checkout mandate.
   def record_insert(sql, binds)
-    table = sql[/INSERT INTO \S+\.(\w+)/, 1]
+    table = sql[/INSERT INTO \S+\.kiosk_(\w+)/, 1]
     row   = ExecutorSpecHelpers::INSERT_COLUMNS.fetch(table).zip(binds).to_h
     raise ActiveRecord::RecordNotUnique, 'duplicate key value violates unique constraint' if duplicate?(table, row)
 
@@ -238,7 +238,7 @@ RSpec.shared_context 'with pay-path persistence (bind parameters)' do
 
   let(:expires_at) { Time.at(1_800_000_071).utc }
 
-  before { Kiosk.configure { |c| c.schema = 'kiosk' } }
+  before { Kiosk.configure { |c| c.schema = 'public' } }
 end
 
 # The real verifier over really signed mandates, so the answer is read end to end.

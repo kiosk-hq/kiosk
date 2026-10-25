@@ -34,7 +34,7 @@ module Kiosk
 
         def settings_sql(assignments, bind_count)
           <<~SQL.squish
-            UPDATE #{Kiosk.configuration.schema}.agents
+            UPDATE #{Kiosk.configuration.schema}.kiosk_agents
             SET #{assignments.join(', ')}
             WHERE id = $#{bind_count - 2}
               AND user_id = $#{bind_count - 1}
@@ -48,7 +48,7 @@ module Kiosk
         def agents_sql
           <<~SQL.squish
             SELECT id, public_key, bound_at, human_label, spending_cap_cents, spending_cap_currency
-            FROM #{Kiosk.configuration.schema}.agents
+            FROM #{Kiosk.configuration.schema}.kiosk_agents
             WHERE user_id = $1 AND issuer = $2 AND revoked_at IS NULL
             ORDER BY created_at
           SQL
@@ -78,8 +78,8 @@ module Kiosk
           <<~SQL.squish
             SELECT settlements.agent_id, lower(btrim(settlements.currency)) AS currency,
                    SUM(#{SettledSpend.net_cents_sql(schema)}) AS cents
-            FROM #{schema}.settlements
-            JOIN #{schema}.agents ON agents.id = settlements.agent_id
+            FROM #{schema}.kiosk_settlements settlements
+            JOIN #{schema}.kiosk_agents agents ON agents.id = settlements.agent_id
             WHERE agents.user_id = $1 AND agents.issuer = $2 AND agents.revoked_at IS NULL #{window}
             GROUP BY 1, 2 ORDER BY 2
           SQL

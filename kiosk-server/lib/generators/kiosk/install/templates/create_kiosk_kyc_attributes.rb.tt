@@ -1,20 +1,22 @@
 # frozen_string_literal: true
 
-# Migration 006 — create kiosk.kyc_attributes.
-# ONE ROW per NAMED ANONYMIZED boolean attribute a valid KYC attestation
-# granted an agent (e.g. age_over_18, licence_a). Only the NAMES are stored —
-# never the DOB, licence number, or any underlying document.
-# There is no value column: the grant IS the row, so every gate is an EXISTS
-# and no reader has to decide which spelling of `true` counts.
-# Additive/opt-in: needed only if an Action gates on specific KYC attributes.
+# The KYC grants and the open verifications, keyed on the person. A grant is
+# one row per anonymized attribute a valid attestation granted (`age_over_18`):
+# only the name, never the document or the value behind it.
 class CreateKioskKycAttributes < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
-  def up
-    execute <<~'SQL'
-<%= ddl(:kyc_attributes, user_id_type: user_id_type, user_table: options[:user_table]) %>
-    SQL
-  end
+  def change
+    create_table <%= table :kyc_attributes %>, primary_key: %i[user_id name] do |t|
+      t.references :user, type: <%= user_id_type %>, null: false, index: false, foreign_key: <%= users_key %>
+      t.text :name, null: false
+      t.timestamptz :granted_at, null: false, default: -> { 'now()' }
+    end
 
-  def down
-    execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".kyc_attributes)
+    create_table <%= table :kyc_requests %>, id: :text do |t|
+      t.references :user, type: <%= user_id_type %>, null: false, index: false, foreign_key: <%= users_key %>
+      t.text :nonce, null: false
+      t.timestamptz :approved_at
+      t.timestamptz :created_at, null: false, default: -> { 'now()' }
+      t.index %i[user_id created_at]
+    end
   end
 end

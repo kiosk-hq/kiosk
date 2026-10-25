@@ -43,11 +43,6 @@ module InstallGeneratorSpecHelpers
     Dir[File.join(destination, 'db/migrate/*.rb')]
   end
 
-  # The SQL a generated migration executes in `up`, as its heredoc yields it.
-  def ddl_of(path)
-    File.read(path)[/<<~'SQL'\n(.*?)^    SQL$/m, 1].gsub(/^ {6}/, '')
-  end
-
   def routes_code
     read('config/routes.rb').lines.map(&:strip).reject { |l| l.empty? || l.start_with?('#') }
   end
@@ -103,13 +98,6 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
     it 'honours --user-id-type' do
       invoke!(%w[--user-id-type=bigint])
       expect(read('config/initializers/kiosk.rb')).to include('c.user_id_type   = :bigint')
-    end
-
-    it 'comments overrideable Postgres settings with the chosen defaults' do
-      invoke!(%w[--schema=ksk --guc-namespace=kiosk-all])
-      body = read('config/initializers/kiosk.rb')
-      expect(body).to include('# c.guc_namespace = "kiosk-all"')
-      expect(body).to include('# c.schema = "ksk"')
     end
 
     it 'documents pluggable IdP adapters' do
@@ -183,263 +171,121 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   describe 'config/application.rb' do
     include_context 'with a freshly generated host app'
 
-    it 'dumps every schema, so schema.rb carries the kiosk tables' do
+    it 'leaves the schema dump alone when the tables are in public' do
       invoke!
-      expect(read('config/application.rb')).to include(%(config.active_record.dump_schemas = "public,kiosk"))
+      expect(read('config/application.rb')).not_to include('dump_schemas')
+    end
+
+    it 'dumps a schema of its own, so schema.rb carries the Kiosk tables' do
+      invoke!(%w[--schema=ksk])
+      expect(read('config/application.rb')).to include(%(config.active_record.dump_schemas = "public,ksk"))
+    end
+  end
+
+  describe 'the schema setting in the initializer' do
+    include_context 'with a freshly generated host app'
+
+    it 'comments the default' do
+      invoke!
+      expect(read('config/initializers/kiosk.rb')).to include('# c.schema = "public"')
+    end
+
+    it 'sets a schema of its own, which the migrations created the tables in' do
+      invoke!(%w[--schema=ksk])
+      expect(read('config/initializers/kiosk.rb')).to match(/^  c\.schema = "ksk"$/)
     end
   end
 
   describe 'migrations' do
     include_context 'with a freshly generated host app'
 
-    it 'creates exactly the ten canonical migrations' do
+    let(:bodies) { migrations.sort.map { File.read(it) } }
+
+    it 'writes the nine create_kiosk_ migrations in ascending order' do
       invoke!
-      expect(migrations.size).to eq(10)
-      basenames = migrations.map { |p| File.basename(p) }
-      expect(basenames).to include(
-        a_string_ending_with('_create_kiosk_schema.rb'),
-        a_string_ending_with('_create_kiosk_identity_tables.rb'),
-        a_string_ending_with('_create_kiosk_device_authorizations.rb'),
-        a_string_ending_with('_create_kiosk_mandates.rb'),
-        a_string_ending_with('_create_kiosk_kyc_attributes.rb'),
-        a_string_ending_with('_create_kiosk_events.rb'),
-        a_string_ending_with('_create_kiosk_pow_spent.rb'),
-        a_string_ending_with('_create_kiosk_revocations.rb'),
-        a_string_ending_with('_create_kiosk_visits.rb'),
-        a_string_ending_with('_create_kiosk_refunds.rb')
-      )
-    end
-  end
-
-  describe 'migrations shape and order' do
-    include_context 'with a freshly generated host app'
-
-    # The shape, not merely the count: every canonical migration creates its
-    # tables in their final shape, so a fresh install replays no history.
-    it 'emits nothing but `create_` migrations — no rebuilds, no amendments' do
-      invoke!
-      basenames = migrations.map { |p| File.basename(p).sub(/\A\d+_/, '') }
-      expect(basenames).to all(start_with('create_kiosk_'))
-      expect(basenames).not_to include(a_string_starting_with('rebuild_'), a_string_starting_with('add_'))
-    end
-
-    it 'orders the migration timestamps in 001 → 012 sequence' do
-      invoke!
-      timestamps = migrations.map { |p| File.basename(p).split('_').first.to_i }
-      expect(timestamps).to eq(timestamps.sort)
-      expect(timestamps.uniq.size).to eq(10) # strictly ascending, no collisions
-    end
-  end
-
-  describe 'migrations 012 create_kiosk_refunds' do
-    include_context 'with a freshly generated host app'
-
-    let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_refunds.rb') } }
-
-    it "writes refunds_sql's DDL for the configured schema" do
-      invoke!(%w[--schema=ksk])
-      expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.refunds_sql(schema: 'ksk')}\n")
-    end
-
-    it 'drops the table on down' do
-      invoke!(%w[--schema=ksk])
-      expect(File.read(file)).to include(%(DROP TABLE IF EXISTS "ksk".refunds))
-    end
-  end
-
-  describe 'migrations 011 create_kiosk_visits' do
-    include_context 'with a freshly generated host app'
-
-    let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_visits.rb') } }
-
-    it "writes visits_sql's DDL for the configured schema and user id type" do
-      invoke!(%w[--schema=ksk --user_id_type=bigint])
-      expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.visits_sql(schema: 'ksk', user_id_type: :bigint)}\n")
-    end
-
-    it 'drops the table on down' do
-      invoke!(%w[--schema=ksk])
-      expect(File.read(file)).to include(%(DROP TABLE IF EXISTS "ksk".visits))
-    end
-  end
-
-  describe 'migrations 009 create_kiosk_revocations' do
-    include_context 'with a freshly generated host app'
-
-    let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_revocations.rb') } }
-
-    it "writes revocations_sql's DDL for the configured schema" do
-      invoke!(%w[--schema=ksk])
-      expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.revocations_sql(schema: 'ksk')}\n")
-    end
-  end
-
-  describe 'migrations 008 create_kiosk_pow_spent' do
-    include_context 'with a freshly generated host app'
-
-    let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_pow_spent.rb') } }
-
-    it "writes pow_spent_sql's DDL for the configured schema" do
-      invoke!(%w[--schema=ksk])
-      expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.pow_spent_sql(schema: 'ksk')}\n")
-    end
-
-    it 'drops the table on down' do
-      invoke!(%w[--schema=ksk])
-      expect(File.read(file)).to include(%(DROP TABLE IF EXISTS "ksk".pow_spent))
-    end
-  end
-
-  describe 'migrations 007 create_kiosk_events' do
-    include_context 'with a freshly generated host app'
-
-    let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_events.rb') } }
-
-    it 'is generated' do
-      invoke!
-      expect(file).not_to be_nil
-    end
-
-    it "writes events_sql's DDL for the configured schema" do
-      invoke!(%w[--schema=ksk])
-      expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.events_sql(schema: 'ksk')}\n")
-    end
-
-    it 'drops the table on down' do
-      invoke!(%w[--schema=ksk])
-      expect(File.read(file)).to include(%(DROP TABLE IF EXISTS "ksk".events))
-    end
-  end
-
-  describe 'migrations 001 create_kiosk_schema' do
-    include_context 'with a freshly generated host app'
-
-    let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_schema.rb') } }
-
-    it 'is generated' do
-      invoke!
-      expect(file).not_to be_nil
-    end
-
-    it "writes helper_functions_sql's DDL for the configured args" do
-      invoke!(%w[--schema=ksk --guc-namespace=kiosk-all --user-id-type=bigint])
-      expected = Kiosk::Server::SchemaDefinitions.helper_functions_sql(schema: 'ksk', guc_namespace: 'kiosk-all', user_id_type: :bigint)
-      expect(ddl_of(file)).to eq("#{expected}\n")
-    end
-
-    it 'is reversible — drops the schema CASCADE' do
-      invoke!(%w[--schema=ksk])
-      expect(File.read(file)).to include('DROP SCHEMA IF EXISTS "ksk" CASCADE')
+      names = migrations.sort.map { File.basename(it).sub(/\A\d+_/, '').delete_suffix('.rb') }
+      expect(names).to eq(described_class::MIGRATIONS.map { "create_kiosk_#{it}" })
     end
 
     it "subclasses ActiveRecord::Migration with the host's current version" do
       invoke!
-      expect(File.read(file))
-        .to include('ActiveRecord::Migration[ActiveRecord::Migration.current_version]')
-    end
-  end
-
-  describe 'migrations 002 create_kiosk_identity_tables' do
-    include_context 'with a freshly generated host app'
-
-    let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_identity_tables.rb') } }
-
-    it "writes identity_tables_sql's DDL for schema, user_id_type, user_table" do
-      invoke!(%w[--user-table=members --user-id-type=bigint --schema=ksk])
-      expected = Kiosk::Server::SchemaDefinitions.identity_tables_sql(schema: 'ksk', user_id_type: :bigint, user_table: 'members')
-      expect(ddl_of(file)).to eq("#{expected}\n")
+      expect(bodies).to all(include('ActiveRecord::Migration[ActiveRecord::Migration.current_version]'))
     end
 
-    it 'drops the three tables in reverse-FK order in #down' do
-      invoke!(%w[--schema=ksk])
-      body = File.read(file)
-      mappings_idx = body.index('DROP TABLE IF EXISTS "ksk".agent_mappings')
-      tokens_idx   = body.index('DROP TABLE IF EXISTS "ksk".agent_tokens')
-      agents_idx   = body.index('DROP TABLE IF EXISTS "ksk".agents')
-      expect(mappings_idx).to be < tokens_idx
-      expect(tokens_idx).to be < agents_idx
-    end
-  end
-
-  describe 'migrations 004 create_kiosk_device_authorizations' do
-    include_context 'with a freshly generated host app'
-
-    let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_device_authorizations.rb') } }
-
-    it "writes device_authorizations_sql's DDL for the configured args" do
-      invoke!(%w[--schema=ksk --user-id-type=bigint])
-      expected = Kiosk::Server::SchemaDefinitions.device_authorizations_sql(schema: 'ksk', user_id_type: :bigint)
-      expect(ddl_of(file)).to eq("#{expected}\n")
-    end
-
-    it 'drops the device_authorizations table in #down' do
-      invoke!(%w[--schema=ksk])
-      expect(File.read(file)).to include('DROP TABLE IF EXISTS "ksk".device_authorizations')
-    end
-  end
-
-  describe 'migrations 005 create_kiosk_mandates' do
-    include_context 'with a freshly generated host app'
-
-    let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_mandates.rb') } }
-
-    it "writes mandates_sql's DDL for the configured args" do
-      invoke!(%w[--schema=ksk --user-id-type=bigint])
-      expected = Kiosk::Server::SchemaDefinitions.mandates_sql(schema: 'ksk', user_id_type: :bigint)
-      expect(ddl_of(file)).to eq("#{expected}\n")
-    end
-
-    it 'drops all three mandate tables — including settlements — in reverse-FK order in #down' do
-      invoke!(%w[--schema=ksk])
-      body = File.read(file)
-      payment_idx     = body.index('DROP TABLE IF EXISTS "ksk".payment_mandates')
-      settlements_idx = body.index('DROP TABLE IF EXISTS "ksk".settlements')
-      checkout_idx    = body.index('DROP TABLE IF EXISTS "ksk".checkout_mandates')
-      # settlements is created by mandates_sql with a FK to checkout_mandates, so
-      # a down that never drops it — or drops checkout_mandates first — fails on
-      # the FK dependency during db:rollback.
-      expect(settlements_idx).not_to be_nil
-      expect(payment_idx).to be < checkout_idx
-      expect(settlements_idx).to be < checkout_idx
-    end
-  end
-
-  describe 'migrations 006 create_kiosk_kyc_attributes' do
-    include_context 'with a freshly generated host app'
-
-    let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_kyc_attributes.rb') } }
-
-    it "writes kyc_attributes_sql's DDL for schema, user_id_type, user_table" do
-      invoke!(%w[--schema=ksk --user-id-type=bigint --user-table=members])
-      expected = Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(schema: 'ksk', user_id_type: :bigint, user_table: 'members')
-      expect(ddl_of(file)).to eq("#{expected}\n")
-    end
-
-    it 'sorts after 002 (the agents table its rows reference)' do
+    it 'writes Rails migration methods and no SQL statement' do
       invoke!
-      identity_idx   = migrations.index { |p| p.end_with?('_create_kiosk_identity_tables.rb') }
-      attributes_idx = migrations.index { |p| p.end_with?('_create_kiosk_kyc_attributes.rb') }
-      expect(attributes_idx).to be > identity_idx
+      expect(bodies.join).not_to match(/\bexecute\b|CREATE |DROP /)
     end
 
-    it 'drops the TABLE in #down' do
+    it 'names every table kiosk_*, in public by default' do
+      invoke!
+      tables = bodies.join.scan(/create_table (\S+),/).flatten
+      expect(tables).to all(match(/\A:kiosk_[a-z_]+\z/))
+    end
+
+    it 'puts every table in a schema of its own when one is given, and creates the schema' do
       invoke!(%w[--schema=ksk])
-      expect(File.read(file)).to include('DROP TABLE IF EXISTS "ksk".kyc_attributes')
+      tables = bodies.join.scan(/create_table (\S+),/).flatten
+      expect(tables).to all(match(/\A"ksk\.kiosk_[a-z_]+"\z/))
+      expect(bodies.first).to include('create_schema "ksk", if_not_exists: true')
+    end
+
+    it "references the operator's user table with the given id type" do
+      invoke!(%w[--user-table=members --user-id-type=bigint])
+      expect(bodies.join).to include('t.references :user, type: :bigint', 'to_table: :members')
+      expect(bodies.join).not_to include(':uuid, null: false, foreign_key: { to_table: :members')
     end
   end
 
-  describe 'default options' do
+  # The generated migrations, run up and down against Postgres, for each id type.
+  describe 'migrations against Postgres' do
     include_context 'with a freshly generated host app'
 
-    it "uses :uuid, schema 'kiosk', guc 'app', table 'users' when no flags are passed" do
-      invoke!
-      expected = Kiosk::Server::SchemaDefinitions.identity_tables_sql(schema: 'kiosk', user_id_type: :uuid, user_table: 'users')
-      expect(ddl_of(migrations.find { |p| p.end_with?('_create_kiosk_identity_tables.rb') })).to eq("#{expected}\n")
+    let(:conn) { ActiveRecord::Base.connection }
+    let(:migration_classes) do
+      migrations.sort.map do |path|
+        mod = Module.new.tap { load(path, it) }
+        mod.const_get(mod.constants.fetch(0))
+      end
     end
 
-    it "calls nothing at migrate time: every migration's DDL is written into it" do
-      invoke!
-      expect(migrations.map { |p| File.read(p) }).to all(satisfy { |body| body.exclude?('SchemaDefinitions') })
+    before do
+      skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
+      conn.execute('DROP SCHEMA IF EXISTS ksk CASCADE')
+    end
+
+    after do
+      next if SpecPostgres.error
+
+      conn.execute('DROP SCHEMA IF EXISTS ksk CASCADE')
+      conn.execute('DROP TABLE IF EXISTS spec_people CASCADE')
+    end
+
+    def tables = conn.select_values("SELECT schemaname || '.' || tablename FROM pg_tables WHERE schemaname = 'ksk'")
+
+    def migrate(direction)
+      list = direction == :up ? migration_classes : migration_classes.reverse
+      ActiveRecord::Migration.suppress_messages { list.each { it.migrate(direction) } }
+    end
+
+    %w[uuid bigint integer text].each do |type|
+      it "creates the fourteen tables for #{type} user ids and drops them all" do
+        conn.execute("DROP TABLE IF EXISTS spec_people CASCADE; CREATE TABLE spec_people (id #{type} PRIMARY KEY)")
+        invoke!(%W[--schema=ksk --user-table=spec_people --user-id-type=#{type}])
+        migrate(:up)
+        expect(tables.size).to eq(14)
+        expect(tables).to all(start_with('ksk.kiosk_'))
+        migrate(:down)
+        expect(tables).to be_empty
+      end
+    end
+
+    it 'keeps a KYC grant as a row keyed on the person, with no value column' do
+      conn.execute('DROP TABLE IF EXISTS spec_people CASCADE; CREATE TABLE spec_people (id text PRIMARY KEY)')
+      invoke!(%w[--schema=ksk --user-table=spec_people --user-id-type=text])
+      migrate(:up)
+      expect(conn.columns('ksk.kiosk_kyc_attributes').map(&:name)).to eq(%w[user_id name granted_at])
+      expect(conn.primary_keys('ksk.kiosk_kyc_attributes')).to eq(%w[user_id name])
     end
   end
 end

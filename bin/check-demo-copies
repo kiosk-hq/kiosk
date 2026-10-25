@@ -689,67 +689,40 @@ COPIES = {
       'tudu' => "adds display_name, the name a shared list's roster shows."
     }
   },
-  'db/migrate/20261018100002_create_kiosk_schema.rb' => {
-    rule: :identical, why: 'kiosk:install — the schema and the four current_*() helpers.'
+  'db/migrate/20261025100001_create_kiosk_identity_tables.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk_agents, kiosk_tolled_calls, kiosk_assistant_accounts.'
   },
-  'db/migrate/20261018100003_create_kiosk_identity_tables.rb' => {
-    rule: :identical, why: 'kiosk:install — agents, agent_tokens, agent_mappings.'
+  'db/migrate/20261025100002_create_kiosk_device_authorizations.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk_device_authorizations, the account-binding requests.'
   },
-  'db/migrate/20261018100004_create_kiosk_device_authorizations.rb' => {
-    rule: :identical, why: 'kiosk:install — device_authorizations, the account-binding state.'
+  'db/migrate/20261025100003_create_kiosk_mandates.rb' => {
+    rule: :identical, why: 'kiosk:install — the AP2 mandate trail and its settlements.'
   },
-  'db/migrate/20261018100005_create_kiosk_mandates.rb' => {
-    rule: :identical, why: 'kiosk:install — the AP2 mandate trail.'
+  'db/migrate/20261025100004_create_kiosk_kyc_attributes.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk_kyc_attributes and kiosk_kyc_requests.'
   },
-  'db/migrate/20261018100006_create_kiosk_kyc_attributes.rb' => {
-    rule: :identical, why: 'kiosk:install — kiosk.kyc_attributes and kiosk.kyc_requests.'
+  'db/migrate/20261025100005_create_kiosk_events.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk_events, the per-identity event tail.'
   },
-  'db/migrate/20261018100007_create_kiosk_events.rb' => {
-    rule: :identical, why: 'kiosk:install — kiosk.events, the per-identity event tail.'
+  'db/migrate/20261025100006_create_kiosk_pow_spent.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk_pow_spent, the spent proof-of-work ids.'
   },
-  'db/migrate/20261018100011_create_kiosk_visits.rb' => {
-    rule: :identical, why: 'kiosk:install — kiosk.visits, the fulfilled visits that lower the toll.'
+  'db/migrate/20261025100007_create_kiosk_revocations.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk_revocations, the token revocation watermarks.'
   },
-  'db/migrate/20261018100016_create_kiosk_refunds.rb' => {
-    rule: :identical, why: 'kiosk:install — kiosk.refunds, the refunds that recent spend leaves out.'
+  'db/migrate/20261025100008_create_kiosk_visits.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk_visits, the fulfilled visits that lower the toll.'
   },
-  'db/migrate/20261020100018_add_spending_cap_currency_to_kiosk_agents.rb' => {
-    rule: :identical, why: "Gives agents.spending_cap_cents its currency, as kiosk:install's agents table has it."
-  },
-  'db/migrate/20261021100020_reshape_kiosk_mandates_for_ap2_v02.rb' => {
-    rule: :identical, why: "Moves the mandate trail to AP2 v0.2's checkout and payment mandates, as kiosk:install's has it."
-  },
-  'db/migrate/20261021100021_add_network_confirmation_id_to_kiosk_settlements.rb' => {
-    rule: :identical, why: "Gives settlements the network id the payment receipt names, as kiosk:install's has it."
-  },
-  'db/migrate/20261021100022_drop_kiosk_auth_challenges.rb' => {
-    rule: :identical, why: 'Drops kiosk.auth_challenges, which kiosk:install does not make, from a database that has it.'
-  },
-  'db/migrate/20261022100023_add_calls_since_proof_to_kiosk_agents.rb' => {
-    rule: :identical, why: "Gives agents the count of tolled calls since the last proof, as kiosk:install's agents table has it."
-  },
-  'db/migrate/20261022100024_move_kiosk_tolled_calls_to_accounts.rb' => {
-    rule: :identical, why: "Moves the count of tolled calls from the assistant to its account, as kiosk:install's tolled_calls table has it."
-  },
-  'db/migrate/20261022100025_create_kiosk_assistant_accounts.rb' => {
-    rule: :identical, why: "Records the assistant accounts and their merges, as kiosk:install's assistant_accounts table has it."
-  },
-  'db/migrate/20261024100026_add_bound_at_to_kiosk_agents.rb' => {
-    rule: :identical, why: "Gives agents the time of their binding, as kiosk:install's agents table has it."
+  'db/migrate/20261025100009_create_kiosk_refunds.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk_refunds, the refunds that recent spend leaves out.'
   },
   'db/migrate/20261018100012_create_solid_cable_messages.rb' => {
     rule: :identical, why: "Action Cable's pubsub queue, on the primary database."
   },
-  'db/migrate/20261018100008_create_kiosk_pow_spent.rb' => {
-    rule: :identical, why: 'kiosk:install — kiosk.pow_spent, the spent proof-of-work ids.'
-  },
-  'db/migrate/20261018100009_create_kiosk_revocations.rb' => {
-    rule: :identical, why: 'kiosk:install — kiosk.revocations, the token revocation watermarks.'
-  },
-  'db/migrate/20261018100013_create_kiosk_pay_stripe_customers.rb' => {
+  'db/migrate/20261025100010_create_kiosk_pay_stripe_customers.rb' => {
     rule: :identical,
     ships: %w[getgrocery hoteling skooti],
-    why: 'kiosk:pay_stripe:install — the stripe_customers table, in the three demos that take money.'
+    why: 'kiosk:pay_stripe:install — the kiosk_stripe_customers table, in the three demos that take money.'
   },
   'db/migrate/20261018100014_create_solid_queue_tables.rb' => {
     rule: :identical,
@@ -795,7 +768,6 @@ NON_OPERATOR_DEMOS = %w[kiosk-demo-prove].freeze
 
 GENERATOR_TEMPLATES = {
   'initializer.rb.tt' => { not_compared: 'emits config/initializers/kiosk.rb, per-demo by design.' },
-  'create_kiosk_schema.rb.tt' => { emits: 'create_kiosk_schema.rb' },
   'create_kiosk_identity_tables.rb.tt' => { emits: 'create_kiosk_identity_tables.rb' },
   'create_kiosk_device_authorizations.rb.tt' => { emits: 'create_kiosk_device_authorizations.rb' },
   'create_kiosk_mandates.rb.tt' => { emits: 'create_kiosk_mandates.rb' },

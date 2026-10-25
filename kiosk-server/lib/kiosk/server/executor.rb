@@ -280,9 +280,9 @@ module Kiosk
           SELECT c.id AS checkout_row, c.declined_at,
                  s.id AS settlement_id, s.psp_reference, s.settled_amount_cents, s.currency,
                  s.network_confirmation_id
-          FROM %<schema>s.checkout_mandates c
-          JOIN %<schema>s.payment_mandates p ON p.checkout_mandate_id = c.id
-          LEFT JOIN %<schema>s.settlements s ON s.checkout_mandate_id = c.id
+          FROM %<schema>s.kiosk_checkout_mandates c
+          JOIN %<schema>s.kiosk_payment_mandates p ON p.checkout_mandate_id = c.id
+          LEFT JOIN %<schema>s.kiosk_settlements s ON s.checkout_mandate_id = c.id
           WHERE c.user_id = $1 AND p.user_id = $1
             AND c.reference = $2
             AND c.sd_jwt = $3
@@ -292,7 +292,7 @@ module Kiosk
 
         # `line_items` arrives as JSON text; the cast stores a jsonb array rather than a string.
         CHECKOUT_INSERT_SQL = <<~SQL.squish
-          INSERT INTO %<schema>s.checkout_mandates
+          INSERT INTO %<schema>s.kiosk_checkout_mandates
             (reference, checkout_hash, user_id, agent_id, issuer, line_items,
              total_amount_cents, currency, expires_at, created_at, sd_jwt)
           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, now(), $10)
@@ -300,7 +300,7 @@ module Kiosk
         SQL
 
         PAYMENT_INSERT_SQL = <<~SQL.squish
-          INSERT INTO %<schema>s.payment_mandates
+          INSERT INTO %<schema>s.kiosk_payment_mandates
             (reference, checkout_mandate_id, user_id, agent_id, issuer,
              payment_instrument, amount_cents, currency, expires_at, created_at, sd_jwt)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10)
@@ -309,7 +309,7 @@ module Kiosk
 
         # Nobody signs a settlement; `UNIQUE (checkout_mandate_id)` keeps it single.
         SETTLEMENT_INSERT_SQL = <<~SQL.squish
-          INSERT INTO %<schema>s.settlements
+          INSERT INTO %<schema>s.kiosk_settlements
             (checkout_mandate_id, user_id, agent_id, issuer, psp_reference,
              settled_amount_cents, currency, network_confirmation_id, settled_at)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
@@ -317,7 +317,7 @@ module Kiosk
         SQL
 
         DECLINE_SQL = <<~SQL.squish
-          UPDATE %<schema>s.checkout_mandates SET declined_at = now() WHERE id = $1 AND declined_at IS NULL
+          UPDATE %<schema>s.kiosk_checkout_mandates SET declined_at = now() WHERE id = $1 AND declined_at IS NULL
         SQL
 
         private

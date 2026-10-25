@@ -5,8 +5,6 @@ module Kiosk
   class Settlement < Server::ApplicationRecord
     include Kiosk::Owned
 
-    def self.table_name = "#{Kiosk.configuration.schema}.settlements"
-
     belongs_to :checkout_mandate, class_name: 'Kiosk::CheckoutMandate', inverse_of: :settlements
   end
 end

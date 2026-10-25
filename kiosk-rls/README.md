@@ -4,11 +4,11 @@ Optional DB-layer defense-in-depth for [Kiosk](https://kiosk.tech) providers.
 
 ## Security model overview
 
-**RLS is not Kiosk's primary security model.** Kiosk's isolation comes from the sanctioned verb surface: agents never send raw SQL, named queries enforce app-layer authz, and `kiosk.current_user_id()` GUCs scope per-user reads in Ruby. That surface is sufficient.
+**RLS is not Kiosk's primary security model.** Kiosk's isolation comes from the sanctioned verb surface: agents never send raw SQL, named queries enforce app-layer authz, and `Kiosk.current_user_id` scopes per-user reads in Ruby. That surface is sufficient.
 
 `kiosk-rls` is an **optional** companion for providers who want an additional DB-level row enforcement layer — belt-and-suspenders hardening. Calling `enable_rls_on` is opt-in; not calling it is the default and fully correct.
 
-Policies and the `kiosk.current_*()` functions they call are not representable in `db/schema.rb`; an app that uses this gem needs `config.active_record.schema_format = :sql`.
+Policies and the `kiosk_current_*()` functions they call are not representable in `db/schema.rb`; an app that uses this gem needs `config.active_record.schema_format = :sql`.
 
 ## What it does
 
@@ -32,8 +32,8 @@ class CreateRentals < ActiveRecord::Migration[8.1]
     end
 
     enable_rls_on :rentals do
-      policy :select, using: "user_id = kiosk.current_user_id()"
-      policy :insert, check: "user_id = kiosk.current_user_id() AND kiosk.current_role() = 'customer'"
+      policy :select, using: "user_id = kiosk_current_user_id()"
+      policy :insert, check: "user_id = kiosk_current_user_id() AND kiosk_current_role() = 'customer'"
       comment "Scooter rentals owned by the renting user. Mutations after creation go through Actions."
     end
   end
@@ -46,8 +46,8 @@ Compiles to:
 ALTER TABLE "rentals" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "rentals" FORCE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE, DELETE ON "rentals" TO "app_role";
-CREATE POLICY "rentals_select" ON "rentals" FOR SELECT USING (user_id = kiosk.current_user_id());
-CREATE POLICY "rentals_insert" ON "rentals" FOR INSERT WITH CHECK (user_id = kiosk.current_user_id() AND kiosk.current_role() = 'customer');
+CREATE POLICY "rentals_select" ON "rentals" FOR SELECT USING (user_id = kiosk_current_user_id());
+CREATE POLICY "rentals_insert" ON "rentals" FOR INSERT WITH CHECK (user_id = kiosk_current_user_id() AND kiosk_current_role() = 'customer');
 COMMENT ON TABLE "rentals" IS 'Scooter rentals owned by the renting user. ...';
 ```
 
@@ -67,6 +67,18 @@ means adding the gem yourself:
 
 ```ruby
 gem "kiosk-rls"
+```
+
+A policy reads the principal of the request through four functions:
+`kiosk_current_user_id()`, `kiosk_current_role()`, `kiosk_current_actor()` and
+`kiosk_current_agent_id()`. Each reads a GUC that kiosk-server sets with
+`SET LOCAL` in the request transaction. The install generator writes the
+migration that creates them. Give it the `--user-id-type` that you gave
+`kiosk:install`. If you set `c.guc_namespace`, give it as `--guc-namespace`:
+
+```sh
+bin/rails generate kiosk:rls:install --user-id-type=uuid
+bin/rails db:migrate
 ```
 
 ## Rails integration

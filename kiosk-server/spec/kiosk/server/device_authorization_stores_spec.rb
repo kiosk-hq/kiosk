@@ -2,7 +2,7 @@
 
 # Store-contract spec: the SAME shared examples run against both shipped
 # adapters — InMemory always, and the durable ActiveRecord adapter against a
-# real Postgres (schema created via SchemaDefinitions migration 004) when one
+# real Postgres (its table created by the generated migration) when one
 # is reachable. Without a local Postgres the ActiveRecord context SKIPS
 # rather than fails, so the suite stays green on DB-less machines; CI's gems
 # matrix provides a Postgres service, so the contract is enforced there.
@@ -276,11 +276,7 @@ RSpec.shared_context 'with a device authorization Postgres schema' do
     conn = ActiveRecord::Base.connection
     conn.execute(%(DROP SCHEMA IF EXISTS "#{schema}" CASCADE))
     conn.execute(%(CREATE SCHEMA "#{schema}"))
-    conn.execute(
-      Kiosk::Server::SchemaDefinitions.device_authorizations_sql(
-        schema: schema, user_id_type: :uuid
-      )
-    )
+    KioskTables.create(:device_authorizations, schema:)
     Kiosk.configure { |c| c.schema = schema }
   end
 
@@ -353,7 +349,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores do
                  pg_typeof(user_id)::text     AS user_type,
                  pg_typeof(expires_at)::text  AS at_type,
                  extract(epoch FROM expires_at)::bigint AS at_epoch
-          FROM "#{DeviceAuthorizationStoresSpec::SPEC_SCHEMA}".device_authorizations
+          FROM "#{DeviceAuthorizationStoresSpec::SPEC_SCHEMA}".kiosk_device_authorizations
           WHERE id = $1
         SQL
         expect(row.values_at('id_type', 'user_type', 'at_type'))

@@ -47,7 +47,7 @@ RSpec.describe 'A hold', type: :story do
         expect(ada.hears(:booking_confirmation, about: held['booking_id']))
           .to eq('booking_id' => held['booking_id'], 'status' => 'cancelled', 'reason' => 'hold_lapsed')
         expect(Booking.find(held['booking_id'])).to be_cancelled
-        notices = "SELECT count(*) FROM kiosk.events WHERE subject = #{Booking.connection.quote(held['booking_id'])}"
+        notices = "SELECT count(*) FROM kiosk_events WHERE subject = #{Booking.connection.quote(held['booking_id'])}"
         expect(Booking.connection.select_value(notices)).to eq(1)
       end
     end

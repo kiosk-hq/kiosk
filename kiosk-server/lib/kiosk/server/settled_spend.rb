@@ -12,7 +12,7 @@ module Kiosk
       def net_cents_sql(schema)
         <<~SQL.squish
           GREATEST(settlements.settled_amount_cents - (
-            SELECT COALESCE(SUM(r.refunded_amount_cents), 0) FROM #{schema}.refunds r WHERE r.settlement_id = settlements.id
+            SELECT COALESCE(SUM(r.refunded_amount_cents), 0) FROM #{schema}.kiosk_refunds r WHERE r.settlement_id = settlements.id
           ), 0)
         SQL
       end

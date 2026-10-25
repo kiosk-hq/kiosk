@@ -45,7 +45,7 @@ RSpec.shared_context 'with a live Stripe test key' do
     skip 'set STRIPE_SECRET_KEY (sk_test_…) to run' unless ENV['STRIPE_SECRET_KEY']
   end
 
-  # In-memory principal→customer store (replaces the app's stripe_customers table).
+  # In-memory principal→customer store (replaces the app's kiosk_stripe_customers table).
   let(:customer_store) { {} }
 
   # The test-mode API the examples set the scene on.

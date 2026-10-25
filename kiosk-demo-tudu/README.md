@@ -11,8 +11,7 @@ Demonstrates:
 
 - **Membership-based isolation** — not "my rows" but "rows of lists I'm a member
   of". Every list/todo query & action gates on
-  `EXISTS (SELECT 1 FROM memberships WHERE list_id = :id AND account_id =
-  kiosk.current_user_id())`; a non-member gets `403`, not `404`, so probing
+  a membership of `Kiosk.current_user_id` (`Membership.own`); a non-member gets `403`, not `404`, so probing
   can't enumerate ids.
 - **AI-assistant→AI-assistant invites, pure app-layer** — an owner mints a single-use, TTL'd,
   hashed collaboration code (`invite`); the recipient's assistant redeems it

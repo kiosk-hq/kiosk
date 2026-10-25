@@ -60,10 +60,9 @@ ALICE="00000000-0000-0000-0000-000000000001"
 # the results here.
 #
 # The agent id is a UUID by construction rather than by convention, because
-# `/oauth/register` minted it as the client_id: `kiosk.agents.id`, every
-# `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
-# `uuid` in the canonical schema, so a caller cannot choose a shape the shipped
-# tables cannot store.
+# `/oauth/register` minted it as the client_id: `kiosk_agents.id` and every
+# `kiosk_*_mandates.agent_id` are typed `uuid`, so a caller cannot choose a
+# shape the shipped tables cannot store.
 ALICE_AGENT="${ALICE_AGENT:?run.sh must export ALICE_AGENT from the binding ceremony}"
 ALICE_AGENT_TOKEN="${ALICE_AGENT_TOKEN:?run.sh must export ALICE_AGENT_TOKEN}"
 BOB_AGENT_TOKEN="${BOB_AGENT_TOKEN:?run.sh must export BOB_AGENT_TOKEN}"
@@ -1232,10 +1231,10 @@ assert "…holding the pay answer and the two mandates" \
   "$(jq -r '[.response.payment_receipt, .checkout_mandate, .payment_mandate] | map(length > 0) | all' "$PAYER_DIR/receipts/$receipt_files")" "true"
 
 # The AP2 trail landed in Postgres — one row each, no human anywhere.
-assert "db: 1 checkout_mandate"       "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.checkout_mandates')" "1"
-assert "db: 1 payment_mandate"        "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates')"  "1"
-assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT settled_amount_cents FROM kiosk.settlements LIMIT 1')" "1599"
-assert "db: settlement is the charge" "$(psql -X -d "$DB_NAME" -tAc 'SELECT psp_reference FROM kiosk.settlements LIMIT 1')" "$(echo "$pay_out" | jq -r '.response.psp_reference')"
+assert "db: 1 checkout_mandate"       "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk_checkout_mandates')" "1"
+assert "db: 1 payment_mandate"        "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk_payment_mandates')"  "1"
+assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT settled_amount_cents FROM kiosk_settlements LIMIT 1')" "1599"
+assert "db: settlement is the charge" "$(psql -X -d "$DB_NAME" -tAc 'SELECT psp_reference FROM kiosk_settlements LIMIT 1')" "$(echo "$pay_out" | jq -r '.response.psp_reference')"
 
 # ─── the audit sink, read back off a booted origin ──────────────────────
 #
@@ -1342,12 +1341,12 @@ assert "audit: …and the sink that raised emitted nothing" \
 
 # 10. NO ENGINE-OWNED LOG TABLE. This origin was built by `rails g
 #     kiosk:install` and migrated from scratch minutes ago, so this is the
-#     canonical migration set speaking: it creates neither `kiosk.actions` nor
-#     `kiosk.action_log`, and an operator who wants a trail sets `c.audit_sink`.
-assert "audit: kiosk.action_log does not exist in a freshly migrated origin" \
-  "$(psql -X -d "$DB_NAME" -tAc "SELECT to_regclass('kiosk.action_log') IS NULL")" "t"
-assert "audit: …and neither does kiosk.actions" \
-  "$(psql -X -d "$DB_NAME" -tAc "SELECT to_regclass('kiosk.actions') IS NULL")" "t"
+#     canonical migration set speaking: it creates neither `kiosk_actions` nor
+#     `kiosk_action_log`, and an operator who wants a trail sets `c.audit_sink`.
+assert "audit: kiosk_action_log does not exist in a freshly migrated origin" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT to_regclass('kiosk_action_log') IS NULL")" "t"
+assert "audit: …and neither does kiosk_actions" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT to_regclass('kiosk_actions') IS NULL")" "t"
 
 # ─── the event stream, driven by the PINNED listener ────────────────────
 #
@@ -1525,7 +1524,7 @@ assert "…and nothing at or below the cursor replayed with it" \
 # saw everything, and says so on the subscription rather than silently handing
 # over a hole. Pruned here directly, because the real trigger is a 24-hour
 # clock this harness does not have.
-psql -X -d "$DB_NAME" -q -c "DELETE FROM kiosk.events WHERE id <= 2" >/dev/null
+psql -X -d "$DB_NAME" -q -c "DELETE FROM kiosk_events WHERE id <= 2" >/dev/null
 EV_TRUNC="$ALICE_DIR/listener-truncated.jsonl"
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --since 1 --max-seconds 5 >"$EV_TRUNC" 2>&1 || true

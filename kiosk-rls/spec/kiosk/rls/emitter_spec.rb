@@ -112,8 +112,8 @@ RSpec.describe Kiosk::RLS::Emitter do
   describe '.statements_for(table)' do
     it 'emits the canonical RLS enable sequence (no sequences case)' do
       table = Kiosk::RLS::Table.new(:rentals)
-      table.policy(:select, using: 'user_id = kiosk.current_user_id()')
-      table.policy(:insert, check: 'user_id = kiosk.current_user_id()')
+      table.policy(:select, using: 'user_id = kiosk_current_user_id()')
+      table.policy(:insert, check: 'user_id = kiosk_current_user_id()')
       table.comment('Rentals.')
 
       stmts = described_class.statements_for(table)
@@ -122,8 +122,8 @@ RSpec.describe Kiosk::RLS::Emitter do
                             %(ALTER TABLE "rentals" ENABLE ROW LEVEL SECURITY),
                             %(ALTER TABLE "rentals" FORCE ROW LEVEL SECURITY),
                             %(GRANT SELECT, INSERT, UPDATE, DELETE ON "rentals" TO "app_role"),
-                            %(CREATE POLICY "rentals_select" ON "rentals" FOR SELECT USING (user_id = kiosk.current_user_id())),
-                            %(CREATE POLICY "rentals_insert" ON "rentals" FOR INSERT WITH CHECK (user_id = kiosk.current_user_id())),
+                            %(CREATE POLICY "rentals_select" ON "rentals" FOR SELECT USING (user_id = kiosk_current_user_id())),
+                            %(CREATE POLICY "rentals_insert" ON "rentals" FOR INSERT WITH CHECK (user_id = kiosk_current_user_id())),
                             %(COMMENT ON TABLE "rentals" IS 'Rentals.')
                           ])
     end

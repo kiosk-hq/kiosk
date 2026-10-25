@@ -465,9 +465,9 @@ RSpec.describe Kiosk::Server::WireController do
         # grant set is still WRITTEN — the reset runs even when nothing is
         # granted, so a later bare attestation takes earlier grants away.
         reset, grant = executed_sql
-        expect(reset.first).to include('DELETE FROM kiosk.kyc_attributes WHERE user_id = $1')
+        expect(reset.first).to include('DELETE FROM public.kiosk_kyc_attributes WHERE user_id = $1')
         expect(reset.last).to eq(['u-kyc'])
-        expect(grant.first).to include('INSERT INTO kiosk.kyc_attributes')
+        expect(grant.first).to include('INSERT INTO public.kiosk_kyc_attributes')
         expect(grant.last).to eq(['{}', 'u-kyc'])
       end
     end
@@ -491,7 +491,7 @@ RSpec.describe Kiosk::Server::WireController do
         # The payload arrives as a BIND (K-782), so it is in the binds and NOT in
         # the statement text.
         sql, binds = executed_sql.last
-        expect(sql).to include('INSERT INTO kiosk.kyc_attributes (user_id, name)')
+        expect(sql).to include('INSERT INTO public.kiosk_kyc_attributes (user_id, name)')
         expect(sql).to include("FROM jsonb_each($1::jsonb) WHERE value = 'true'::jsonb")
         expect(sql).not_to include('age_over_18')
         expect(binds.first).to eq(JSON.generate('age_over_18' => true, 'licence_a' => true))

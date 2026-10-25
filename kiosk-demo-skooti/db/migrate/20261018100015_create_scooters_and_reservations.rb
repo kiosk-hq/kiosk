@@ -2,7 +2,7 @@
 
 # A micromobility operator: a fleet of vehicles, and reservations of one by a
 # rider. Isolation is app-layer: every verb scopes by
-# `user_id = kiosk.current_user_id()`.
+# `user_id = Kiosk.current_user_id`.
 class CreateScootersAndReservations < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def change
     enable_extension "btree_gist"

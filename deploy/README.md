@@ -252,8 +252,8 @@ for app in getgrocery atablefor hoteling skooti stylish philslist tudu; do
   set -a; . /etc/kiosk-demo/$app.env; set +a
   RAILS_ENV=production bin/rails assets:precompile db:prepare
 done
-#    db:prepare creates the schema, runs migrations (incl. the kiosk schema +
-#    opt-in RLS), and seeds the shared catalog on first run.
+#    db:prepare creates the schema, runs migrations (incl. the kiosk_* tables),
+#    and seeds the shared catalog on first run.
 
 # 2b. The KYC broker (kiosk-demo-prove; serves kyc.demo.kiosk.tech). It is
 #     an ISSUER, not a Kiosk operator — no kiosk gem, no assets manifest — so

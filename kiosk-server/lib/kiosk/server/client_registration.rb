@@ -83,7 +83,7 @@ module Kiosk
       def insert_agent(conn, config, binds, role)
         allowed_roles_sql, role_binds = role ? ['ARRAY[$4]::text[]', [role]] : ["'{}'::text[]", []]
         conn.exec_query(<<~SQL.squish, 'Kiosk agent insert', [*binds, Kiosk.current_issuer, *role_binds])
-          INSERT INTO #{config.schema}.agents (user_id, public_key, issuer, allowed_roles)
+          INSERT INTO #{config.schema}.kiosk_agents (user_id, public_key, issuer, allowed_roles)
           VALUES ($1, $2, $3, #{allowed_roles_sql})
         SQL
       end

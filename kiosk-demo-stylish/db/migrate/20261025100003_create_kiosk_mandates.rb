@@ -1,0 +1,56 @@
+# frozen_string_literal: true
+
+# The AP2 trail of a `pay`: the checkout mandate, the payment mandate and the
+# settlement. `reference` is the hash of the presented SD-JWT, unique per user.
+# A checkout has one live checkout mandate: `declined_at` records a charge
+# refused with no money moved, and frees the checkout.
+class CreateKioskMandates < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def change
+    create_table :kiosk_checkout_mandates, id: :uuid do |t|
+      t.text :reference, null: false
+      t.text :checkout_hash, null: false
+      t.column :user_id, :uuid, null: false
+      t.uuid :agent_id, null: false
+      t.text :issuer, null: false
+      t.jsonb :line_items, null: false
+      t.bigint :total_amount_cents, null: false
+      t.text :currency, null: false
+      t.timestamptz :expires_at, null: false
+      t.timestamptz :created_at, null: false, default: -> { 'now()' }
+      t.text :sd_jwt, null: false
+      t.timestamptz :declined_at
+      t.index %i[user_id reference], unique: true
+      t.index %i[user_id checkout_hash], unique: true, where: 'declined_at IS NULL'
+    end
+
+    create_table :kiosk_payment_mandates, id: :uuid do |t|
+      t.text :reference, null: false
+      t.references :checkout_mandate, type: :uuid, null: false,
+                                      foreign_key: { to_table: :kiosk_checkout_mandates, on_delete: :cascade }
+      t.column :user_id, :uuid, null: false
+      t.uuid :agent_id, null: false
+      t.text :issuer, null: false
+      t.text :payment_instrument, null: false
+      t.bigint :amount_cents, null: false
+      t.text :currency, null: false
+      t.timestamptz :expires_at
+      t.timestamptz :created_at, null: false, default: -> { 'now()' }
+      t.text :sd_jwt, null: false
+      t.index %i[user_id reference], unique: true
+    end
+
+    # The server writes a settlement; nobody signs it. One per checkout mandate.
+    create_table :kiosk_settlements, id: :uuid do |t|
+      t.references :checkout_mandate, type: :uuid, null: false, index: { unique: true },
+                                      foreign_key: { to_table: :kiosk_checkout_mandates, on_delete: :cascade }
+      t.column :user_id, :uuid, null: false, index: true
+      t.uuid :agent_id, null: false
+      t.text :issuer, null: false
+      t.text :psp_reference, null: false
+      t.bigint :settled_amount_cents, null: false
+      t.text :currency, null: false
+      t.text :network_confirmation_id
+      t.timestamptz :settled_at, null: false
+    end
+  end
+end

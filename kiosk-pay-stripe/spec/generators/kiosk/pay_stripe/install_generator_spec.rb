@@ -30,7 +30,7 @@ RSpec.describe Kiosk::PayStripe::Generators::InstallGenerator do
   it 'keeps one row per principal' do
     StripeCustomersTable.migrate(:up)
 
-    expect(ActiveRecord::Base.connection.indexes(:stripe_customers).map { [it.columns, it.unique] })
+    expect(ActiveRecord::Base.connection.indexes(:kiosk_stripe_customers).map { [it.columns, it.unique] })
       .to eq([[%w[user_id], true]])
   end
 end

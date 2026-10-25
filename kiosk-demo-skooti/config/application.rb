@@ -23,7 +23,5 @@ module KioskDemoSkooti
     # Jobs wait in the database and run beside Puma (config/puma.rb); a finished one is deleted.
     config.active_job.queue_adapter = :solid_queue
     config.solid_queue.preserve_finished_jobs = false
-    # public first: the kiosk tables reference public.users.
-    config.active_record.dump_schemas = 'public,kiosk'
   end
 end

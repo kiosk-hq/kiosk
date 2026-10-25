@@ -67,7 +67,7 @@ RSpec.describe Kiosk::RLS::Railtie do
     it "emits the RLS DDL through the migration's own #execute" do
       migration = RailtieSpecSupport.recording_migration
       migration.enable_rls_on :orders, app_role: 'app_role' do
-        policy :select, using: 'user_id = kiosk.current_user_id()'
+        policy :select, using: 'user_id = kiosk_current_user_id()'
         comment 'Orders owned by the placing user.'
       end
 

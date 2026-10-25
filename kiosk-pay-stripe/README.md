@@ -30,7 +30,7 @@ account as a Customer + PaymentMethod (keyed to the synthetic principal /
 (merchant-initiated) against that saved card — the assistant authorizes,
 never presents a card.
 
-The `principal → Stripe Customer` mapping lives in the host's `stripe_customers`
+The `principal → Stripe Customer` mapping lives in the host's `kiosk_stripe_customers`
 table, through `Kiosk::PaymentProviders::Stripe::CustomerRecord`. The install
 generator writes the migration that creates this table. Give it the same
 `--user-id-type` that you gave `kiosk:install`:

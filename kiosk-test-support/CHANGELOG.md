@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- `SeededDatabase` empties every table on the search path but Rails' own two.
+
 ## [0.6.15] — 2026-10-25
 
 - 2026-10-25: Version 0.6.15, the tree cut that matches skill 0.6.15.

@@ -18,7 +18,5 @@ module KioskDemoPhilslist
     config.autoload_lib(ignore: %w[assets tasks])
 
     config.api_only = false
-    # public first: the kiosk tables reference public.users.
-    config.active_record.dump_schemas = 'public,kiosk'
   end
 end

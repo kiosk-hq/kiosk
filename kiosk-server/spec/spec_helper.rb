@@ -46,6 +46,7 @@ require_relative 'support/checkout_payment'
 require_relative 'support/settlement_rows'
 require_relative 'support/dpop_agent'
 require_relative 'support/postgres'
+require_relative 'support/kiosk_tables'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |c|

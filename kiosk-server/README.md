@@ -18,8 +18,7 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
 - **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
 - **`IssuerMiddleware`** — answers `Kiosk.current_issuer` for each request: its origin when that is `c.issuer` or one of `c.additional_origins`, else `c.issuer`. Every origin served is its own operator.
-- **The audit sink** — `c.audit_sink` receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike. The default is no sink, so no `ActionEvent` goes anywhere. The engine keeps its own state in the `kiosk` schema (agents, mandates, settlements, refunds, events, visits), but it writes no audit record there. See [The audit sink](#the-audit-sink).
-- **`Kiosk::Server::SchemaDefinitions`** — SQL generators for every table and helper that `bin/rails g kiosk:install` creates.
+- **The audit sink** — `c.audit_sink` receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike. The default is no sink, so no `ActionEvent` goes anywhere. The engine keeps its own state in its `kiosk_*` tables (agents, mandates, settlements, refunds, events, visits), but it writes no audit record there. See [The audit sink](#the-audit-sink).
 - **`Kiosk::Server::Engine`** — the Rails engine: `kiosk` in `config/routes.rb` mounts it, drawing the full mount-prefixed PROTOCOL surface (the reserved endpoints, auth, JWKS, KYC, account binding), then one route per verb its block names — installs the root discovery routes when mounted, and auto-injects the headers and issuer middleware (see [Draw the routes](#draw-the-routes)).
 - **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `owner` (and the reputation/PoW slots) to `Kiosk::Configuration`.
 - **`bin/rails g kiosk:install`** — the install generator lays down the initializer, the migrations and the `kiosk` block in `config/routes.rb` that mounts the engine.
@@ -40,8 +39,8 @@ here, so they are not claimed; widening the floor means adding a CI leg first.
 
 **Ruby `>= 4.0`**, which every Kiosk gemspec declares and CI runs.
 
-**PostgreSQL.** The kiosk schema, the identity tables and the optional RLS
-backstop are Postgres; no other database is supported.
+**PostgreSQL.** Kiosk's `kiosk_*` tables and the optional RLS backstop are
+Postgres; no other database is supported.
 
 ### The line
 
@@ -160,7 +159,7 @@ When the capture returns, the engine pushes `{"order_id": "…", "payment_state"
 "paid"}` to the row's owner on the `payment` topic. Refund through the claim,
 `refund(psp_reference:, amount_cents:, key:)`: `key` names this refund among
 the refunds of the charge, so a retry with the same key refunds once. It
-records the refund in `kiosk.refunds`, and recent spend leaves the refunded
+records the refund in `kiosk_refunds`, and recent spend leaves the refunded
 cents out. The spending cap gets the refunded amount back. When the refund
 returns the whole charge, set the row's status column to `refunded`, which is
 where `payment_state` reads it. Then call `announce(id, "refunded")` on the
@@ -226,20 +225,23 @@ c.previous_signing_key = Base64.decode64(ENV.fetch("KIOSK_PREVIOUS_SIGNING_KEY_B
 
 ## Upgrading
 
-### The schema
+### The tables
 
 `rails generate kiosk:install` emits the **genesis** — the whole current shape,
-as migrations. That is the fresh-install path. Migrations already in
+as migrations. That is the fresh-install path. The migrations create Kiosk's
+tables as `kiosk_*` tables in the schema `--schema` names, `public` by default;
+`c.schema` names the same schema at run time. From 1.0, migrations already in
 `db/migrate/` are never re-emitted and never edited: a change to the Kiosk
-schema arrives as a new file you copy in and migrate, so `db:migrate` on your
-existing database transfers only what it has not run.
+tables arrives as a new file you copy in and migrate, so `db:migrate` on your
+existing database transfers only what it has not run. Before 1.0 a release may
+replace the genesis; its changelog entry says so.
 
 Each MAJOR publishes its own genesis and drops the previous major's chain, so
 **an upgrade crossing a major stops at it.** Install that major, `bin/rails
 db:migrate`, then move on — one major at a time. A fresh install at any major
 gets that major's genesis and replays no history at all.
 
-MINOR and PATCH releases only ever add files to the chain.
+From 1.0, MINOR and PATCH releases only ever add files to the chain.
 
 ### The configuration
 
@@ -275,7 +277,7 @@ its message tells you how to make the new digest.
 ## Multi-process deployments
 
 The toll keeps spent challenge ids in `c.pow_spent_store`, by default
-`Kiosk::Server::PowSpentStores::ActiveRecord`: the `kiosk.pow_spent` table that
+`Kiosk::Server::PowSpentStores::ActiveRecord`: the `kiosk_pow_spent` table that
 `bin/rails g kiosk:install` lays down. Every process and every deploy shares it,
 so a proof is accepted once (kiosk.tech `protocol.md` §15.2). The token
 endpoint keeps the `jti` of each client assertion in the same store, so an
@@ -287,7 +289,7 @@ atomic operation (Redis `SET … NX EX`, or SQL `INSERT … ON CONFLICT`). A
 read-then-write reintroduces exactly the replay race the gate closes.
 
 Token revocation lives in `c.revocation_store`, by default
-`Kiosk::Server::RevocationStores::ActiveRecord`: the `kiosk.revocations` table,
+`Kiosk::Server::RevocationStores::ActiveRecord`: the `kiosk_revocations` table,
 which `bin/rails g kiosk:install` lays down too. A key rotation, a rebind or an unlink
 stops the agent's older tokens in every process and after a restart, and a
 token of an unlinked agent stops at once. The contract is
@@ -295,7 +297,7 @@ token of an unlinked agent stops at once. The contract is
 `revoked?(agent_id:, iat:)`.
 
 Events live in `c.event_store`, by default `Kiosk::Server::EventStores::ActiveRecord`:
-the `kiosk.events` table from `bin/rails g kiosk:install`. The event stream runs
+the `kiosk_events` table from `bin/rails g kiosk:install`. The event stream runs
 on the Action Cable adapter that `config/cable.yml` names for the environment. In
 production that adapter must be one every process shares, such as `solid_cable`
 in the host's Gemfile;

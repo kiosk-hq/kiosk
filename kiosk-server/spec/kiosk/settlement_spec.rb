@@ -11,9 +11,7 @@ module SettlementSpecHelpers
   def self.create_schema
     Kiosk.configure { |c| c.schema = SCHEMA }
     SpecPostgres.recreate_schema(SCHEMA)
-    ActiveRecord::Base.connection.execute(
-      Kiosk::Server::SchemaDefinitions.mandates_sql(schema: SCHEMA, user_id_type: :uuid)
-    )
+    KioskTables.create(:mandates, schema: SCHEMA)
   end
 
   def conn
@@ -28,7 +26,7 @@ module SettlementSpecHelpers
   def insert_checkout(user_id, agent, line_items)
     reference = SecureRandom.uuid
     conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{SCHEMA}".checkout_mandates (reference, checkout_hash, user_id, agent_id, issuer, line_items,
+      INSERT INTO "#{SCHEMA}".kiosk_checkout_mandates (reference, checkout_hash, user_id, agent_id, issuer, line_items,
         total_amount_cents, currency, expires_at, sd_jwt)
       VALUES ('#{reference}', '#{reference}', '#{user_id}', '#{agent}', 'i', '#{line_items.to_json}',
         500, 'EUR', now() + interval '1 day', 'j')
@@ -38,7 +36,7 @@ module SettlementSpecHelpers
 
   def insert_settlement(user_id, agent, checkout)
     conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{SCHEMA}".settlements (checkout_mandate_id, user_id, agent_id, issuer, psp_reference,
+      INSERT INTO "#{SCHEMA}".kiosk_settlements (checkout_mandate_id, user_id, agent_id, issuer, psp_reference,
         settled_amount_cents, currency, settled_at)
       VALUES ('#{checkout}', '#{user_id}', '#{agent}', 'i', 'psp', 500, 'EUR', now())
       RETURNING id

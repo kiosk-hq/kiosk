@@ -45,12 +45,12 @@ RSpec.describe Kiosk::RLS::Table do
     subject(:table) { described_class.new(:rentals) }
 
     it 'adds a policy with a default name `<table>_<action>`' do
-      table.policy(:select, using: 'user_id = kiosk.current_user_id()')
+      table.policy(:select, using: 'user_id = kiosk_current_user_id()')
       policy = table.policies.first
 
       expect(policy.name).to   eq('rentals_select')
       expect(policy.action).to eq(:select)
-      expect(policy.using).to  eq('user_id = kiosk.current_user_id()')
+      expect(policy.using).to  eq('user_id = kiosk_current_user_id()')
     end
 
     it 'respects an explicit name override' do

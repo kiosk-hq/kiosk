@@ -6,7 +6,7 @@ RSpec.shared_context 'with a column spending cap seam' do
   let(:conn) { FakeConnection.new }
 
   before do
-    Kiosk.configure { |c| c.schema = 'kiosk' }
+    Kiosk.configure { |c| c.schema = 'public' }
     allow(ActiveRecord::Base).to receive(:lease_connection).and_return(conn)
   end
 end
@@ -20,7 +20,7 @@ RSpec.describe Kiosk::Server::ColumnSpendingCap do
       expect(seam.call(agent_id: 'a-1')).to eq(amount_cents: 2500, currency: 'eur')
       sql, binds = conn.bound(/SELECT/i).first
       expect(sql).to include('spending_cap_cents, spending_cap_currency')
-      expect(sql).to include('"kiosk".agents')
+      expect(sql).to include('"public".kiosk_agents')
       expect(sql).to include('revoked_at IS NULL')
       # The agent id is `$1`, not a quoted literal. Only the SCHEMA is
       # interpolated — an operator-set identifier Postgres cannot bind.

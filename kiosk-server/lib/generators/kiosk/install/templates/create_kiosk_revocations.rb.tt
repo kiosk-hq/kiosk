@@ -1,16 +1,12 @@
 # frozen_string_literal: true
 
-# Migration 009 — create kiosk.revocations.
-# Each agent's token revocation watermark, so a revoke or an unlink holds in
-# every process and across restarts (RevocationStores::ActiveRecord, the default).
+# Each agent's revocation watermark: a token issued before it stops verifying,
+# in every process and after a restart.
 class CreateKioskRevocations < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
-  def up
-    execute <<~'SQL'
-<%= ddl(:revocations) %>
-    SQL
-  end
-
-  def down
-    execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".revocations)
+  def change
+    create_table <%= table :revocations %>, primary_key: :agent_id, id: :uuid, default: nil do |t|
+      t.timestamptz :revoked_before, null: false
+      t.foreign_key <%= table :agents %>, column: :agent_id, on_delete: :cascade
+    end
   end
 end

@@ -5,8 +5,6 @@ module Kiosk
   # items of the operator's checkout that the assistant agreed to pay for.
   # Read-only for the operator.
   class CheckoutMandate < Server::ApplicationRecord
-    def self.table_name = "#{Kiosk.configuration.schema}.checkout_mandates"
-
     has_many :settlements, class_name: 'Kiosk::Settlement', dependent: nil, inverse_of: :checkout_mandate
 
     # Checkout mandates with a line item carrying these attributes, by jsonb

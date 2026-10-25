@@ -116,11 +116,11 @@ module Kiosk
 
       # The database settings: where Kiosk's tables live and how a request reaches them.
       module Database
-        # Postgres schema for Kiosk's own tables and functions. Default 'kiosk'.
+        # The Postgres schema of Kiosk's `kiosk_*` tables. Default 'public'.
         attr_writer :schema
 
         def schema
-          @schema ||= 'kiosk'
+          @schema ||= 'public'
         end
 
         # Prefix of the session GUCs a request sets, e.g. `app.user_id`. Default 'app'.

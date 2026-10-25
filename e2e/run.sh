@@ -379,7 +379,7 @@ ok "schema + seeds applied"
 # Prove the partial UNIQUE index ((issuer, public_key) WHERE revoked_at IS NULL)
 # rejects a SECOND live agent row for one key on one origin at the DB level —
 # not via a TOCTOU SELECT-then-INSERT. A revoked row for the same key is allowed.
-log "assert DB-level uniqueness on kiosk.agents.public_key (live rows)"
+log "assert DB-level uniqueness on kiosk_agents.public_key (live rows)"
 REGISTER_DUP_KEY="register-dup-$$"
 REGISTER_DUP_ISSUER="http://127.0.0.1:0"
 # STDOUT only. `-qtA` prints row counts nobody reads, but ON_ERROR_STOP reports
@@ -388,7 +388,7 @@ REGISTER_DUP_ISSUER="http://127.0.0.1:0"
 # is let through. Costs no noise on the success path: there is none.
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null <<SQL || fail "live-key uniqueness setup insert failed"
   INSERT INTO users (id, created_at, updated_at) VALUES (gen_random_uuid(), now(), now());
-  INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, issuer)
+  INSERT INTO kiosk_agents (user_id, allowed_roles, public_key, issuer)
     SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY', '$REGISTER_DUP_ISSUER' FROM users LIMIT 1;
 SQL
 # Second LIVE insert of the same key must be REJECTED by the unique index.
@@ -397,7 +397,7 @@ SQL
 # printing it would make a passing run read as broken. Do not "fix" this line to
 # match the two around it, which discard a diagnostic instead of an expectation.
 if psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL
-  INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, issuer)
+  INSERT INTO kiosk_agents (user_id, allowed_roles, public_key, issuer)
     SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY', '$REGISTER_DUP_ISSUER' FROM users LIMIT 1;
 SQL
 then
@@ -407,11 +407,11 @@ fi
 # stderr let through for the same reason as the setup insert above: if
 # the partial index is wrong, Postgres NAMES it and "wrongly rejected" does not.
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null <<SQL || fail "revoked-key re-insert wrongly rejected"
-  INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, issuer, revoked_at)
+  INSERT INTO kiosk_agents (user_id, allowed_roles, public_key, issuer, revoked_at)
     SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY', '$REGISTER_DUP_ISSUER', now() FROM users LIMIT 1;
 SQL
 psql -d "$DB_NAME" -qtA >/dev/null 2>&1 <<SQL || true
-  DELETE FROM kiosk.agents WHERE public_key = '$REGISTER_DUP_KEY';
+  DELETE FROM kiosk_agents WHERE public_key = '$REGISTER_DUP_KEY';
 SQL
 ok "live-key uniqueness enforced at the DB; revoked key may re-register"
 
@@ -588,7 +588,7 @@ unset KIOSK_AUDIT_SINK_FILE KIOSK_AUDIT_SINK_REDACTED_FILE
 
 events_before=$(wc -l < "$AUDIT_EVENTS" | tr -d ' ')
 redacted_before=$(wc -l < "$AUDIT_EVENTS_REDACTED" | tr -d ' ')
-# Every row in every table of the kiosk schema, counted through query_to_xml so
+# Every row in every kiosk_* table, counted through query_to_xml so
 # the assertion needs no table list and cannot go stale when one is added.
 kiosk_rows() {
   psql -X -d "$DB_NAME" -tAc "
@@ -596,7 +596,7 @@ kiosk_rows() {
       SELECT (xpath('/row/cnt/text()',
                     query_to_xml(format('SELECT count(*) AS cnt FROM %I.%I', schemaname, relname),
                                  false, true, '')))[1]::text::bigint AS cnt
-      FROM pg_stat_user_tables WHERE schemaname = 'kiosk'
+      FROM pg_stat_user_tables WHERE relname LIKE 'kiosk\_%'
     ) t"
 }
 rows_before=$(kiosk_rows)
@@ -639,10 +639,10 @@ sinkless_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SINKLESS_BOOK"
   || fail "an origin with NO audit sink still wrote to the sink's file"
 [ "$(wc -l < "$AUDIT_EVENTS_REDACTED" | tr -d ' ')" = "$redacted_before" ] \
   || fail "an origin with NO audit sink still wrote to the redacted file"
-# The action itself wrote an appointment, in `public`. The kiosk schema must be
+# The action itself wrote an appointment. The kiosk_* tables must be
 # untouched: no audit row, because there is nowhere for one to go.
 [ "$(kiosk_rows)" = "$rows_before" ] \
-  || fail "an origin with NO audit sink wrote $(( $(kiosk_rows) - rows_before )) row(s) into the kiosk schema"
+  || fail "an origin with NO audit sink wrote $(( $(kiosk_rows) - rows_before )) row(s) into the kiosk_* tables"
 ok "no sink configured ⇒ nothing emitted, nothing written to any kiosk table"
 
 log "✅ kiosk-oss e2e green"

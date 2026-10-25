@@ -6,8 +6,6 @@ module Kiosk
   #   "agent"   — an AI assistant with an access token. kiosk-server makes it.
   #   "human"   — a person signed in on the site of the operator. The `user_idp`
   #               adapter makes it, for example kiosk-user-idp-devise.
-  #   "service" — a program of the operator, for an adapter that the operator
-  #               writes. No Kiosk gem makes it.
   # The audit sink receives the actor of each action, and an RLS policy reads
   # it with `kiosk_current_actor()` (kiosk-rls).
   # `agent_id` is the UUID of the assistant: present for an agent, nil otherwise.
@@ -15,7 +13,7 @@ module Kiosk
 
   # Validates user_id, actor and agent_id on construction.
   class Identity
-    VALID_ACTORS = %w[agent human service].freeze
+    VALID_ACTORS = %w[agent human].freeze
 
     def initialize(user_id:, role:, actor:, agent_id: nil, claims: {})
       actor = actor.to_s

@@ -85,7 +85,7 @@ RSpec.describe Kiosk::Server::SessionContext do
       expect(connection.executed_sql).to be_empty
     end
 
-    it 'skips the agent_id GUC for human/service actors (agent_id nil)' do
+    it 'skips the agent_id GUC for a human actor (agent_id nil)' do
       open_session(build_identity(actor: 'human', agent_id: nil))
 
       expect(guc_names).to eq(%w[app.current_user_id app.current_role app.current_actor])

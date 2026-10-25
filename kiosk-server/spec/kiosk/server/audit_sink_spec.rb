@@ -157,14 +157,14 @@ RSpec.describe Kiosk::Server::AuditSink do
     end
 
     it "keeps a role-less principal's role nil — there is no column to satisfy" do
-      service = described_class.build(
-        identity: build_identity(actor: 'service', role: nil, agent_id: nil),
+      human = described_class.build(
+        identity: build_identity(actor: 'human', role: nil, agent_id: nil),
         name: 'place_order', args: {}, status: described_class::OK
       )
 
-      expect(service.role).to be_nil
-      expect(service.actor).to eq('service')
-      expect(service.agent_id).to be_nil
+      expect(human.role).to be_nil
+      expect(human.actor).to eq('human')
+      expect(human.agent_id).to be_nil
     end
 
     # The examples above hand `build` a bare exception; the Executor hands it

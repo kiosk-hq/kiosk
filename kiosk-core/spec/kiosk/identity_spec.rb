@@ -49,9 +49,9 @@ RSpec.describe Kiosk::Identity do
       expect(identity.role).to be_nil
     end
 
-    it 'rejects unknown actor' do
-      expect { described_class.new(**valid_args, actor: 'robot') }
-        .to raise_error(ArgumentError, /actor/)
+    it 'rejects an actor that is neither agent nor human' do
+      expect { described_class.new(**valid_args, actor: 'service', agent_id: nil) }
+        .to raise_error(ArgumentError, /actor must be one of \["agent", "human"\]/)
     end
 
     it 'requires agent_id when actor is agent' do
@@ -74,11 +74,6 @@ RSpec.describe Kiosk::Identity do
       identity = described_class.new(**valid_args, actor: 'human', agent_id: nil)
       expect(identity.actor).to eq('human')
       expect(identity.agent_id).to be_nil
-    end
-
-    it 'allows service actor with no agent_id' do
-      identity = described_class.new(**valid_args, actor: 'service', agent_id: nil)
-      expect(identity.actor).to eq('service')
     end
 
     it 'defaults claims to empty hash' do

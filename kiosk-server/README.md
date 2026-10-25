@@ -328,7 +328,7 @@ framework decided for your customers' data.
 |---|---|
 | `action` | the action's published name |
 | `user_id` / `agent_id` | the principal, and the assistant credential that acted (nil when the caller is not an agent) |
-| `role` / `actor` | the active role (may be nil), and `"agent"` \| `"human"` \| `"service"` |
+| `role` / `actor` | the active role (may be nil), and `"agent"` \| `"human"` |
 | `args` | **the arguments exactly as the handler received them** |
 | `status` | `"ok"` or `"error"` |
 | `error_class` / `error_message` | the raised error, untruncated, on the `"error"` branch |

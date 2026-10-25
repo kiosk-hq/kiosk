@@ -14,6 +14,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 - 2026-10-25: Kiosk's tables are `kiosk_*` tables in the schema `c.schema` names, `public` by default, made by plain Rails migrations. A 0.6 database is rebuilt to upgrade.
 - 2026-10-25: `bin/rails g kiosk:rls:install` creates the `kiosk_current_*()` functions RLS policies call; `kiosk:install` does not.
 - 2026-10-25: Each demo's migrations are one fresh install again, with kiosk:install's migrations; every deployed demo database is rebuilt.
+- 2026-10-25: `Kiosk::Identity` takes the actor `agent` or `human`; `service` is removed.
 
 ## [0.6.15] — 2026-10-25
 

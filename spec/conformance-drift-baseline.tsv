@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-26 at afe12b41
+# recorded: 2026-10-26 at 34d2cdec
 # 2072 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	49c865ab	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	49c865ab	        if: matrix.demo != 'kiosk-demo-prove'
@@ -326,7 +326,7 @@ kiosk-core/lib/kiosk/configuration.rb	f93913e953f166ea	49c865ab	    # to the iss
 kiosk-core/lib/kiosk/configuration.rb	26e6c45479a4cc5c	49c865ab	A table that Rails made with its default key is :bigint.
 kiosk-core/lib/kiosk/configuration.rb	eb55ac83bee281d4	49c865ab	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	0b9b9bb8049ae29f	49c865ab	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	3af210ee63b6910e	afe12b41	API_VERSION = '0.6.
+kiosk-core/lib/kiosk/protocol.rb	8f6e7009a79a72b7	34d2cdec	API_VERSION = '0.6.
 kiosk-core/spec/kiosk/kyc_providers/base_spec.rb	d4efc7346062c77b	49c865ab	refuses a key that is not Ed25519
 kiosk-core/spec/spec_helper.rb	c89ca3f73742cd52	49c865ab	require 'kiosk'
 kiosk-demo-atablefor/README.md	9c41ef23a955233a	49c865ab	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
@@ -1078,11 +1078,11 @@ kiosk-server/lib/kiosk/server/client_assertion.rb	7b38dcb6424b5f76	49c865ab	issu
 kiosk-server/lib/kiosk/server/client_registration.rb	93acfb9b02cf3a3a	49c865ab	# RFC 7591 open registration of an AI assistant's public key, with no human:
 kiosk-server/lib/kiosk/server/client_registration.rb	08037059c8fd4ec7	49c865ab	AuthToll.gate(verb: 'oauth/register', body: { key: AssistantKey.thumbprint(key) }, pow: pow, config: config)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	c1e0f9e32b401aa9	49c865ab	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	7df60588b0a587fd	afe12b41	        @skill_url ||= 'https://kiosk.tech/skill-v
-kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	afe12b41	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
-kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	afe12b41	      attr_accessor :spending_cap_window_days
-kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	afe12b41	      def computed_capabilities
-kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	afe12b41	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6c6ef22a7bf2f925	34d2cdec	        @skill_url ||= 'https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	34d2cdec	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
+kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	34d2cdec	      attr_accessor :spending_cap_window_days
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	34d2cdec	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	34d2cdec	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
 kiosk-server/lib/kiosk/server/device_code_grant.rb	0127c4b9e1aef66b	49c865ab	# The claim ceremony on the RFC 8628 device-grant endpoints: binds a registered
 kiosk-server/lib/kiosk/server/device_code_grant.rb	8077327e193a9d87	49c865ab	da = authorization_of(client, store.lookup_by_device_code_hash(hash))
 kiosk-server/lib/kiosk/server/engine.rb	9a04fe52f1e0a44f	49c865ab	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'

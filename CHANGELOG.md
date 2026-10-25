@@ -11,6 +11,10 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.15] — 2026-10-25
+
+- 2026-10-25: **Every gem and `API_VERSION` are 0.6.15, matching skill 0.6.15; the engine default is `skill-v0.6.15.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.
+
 - 2026-10-25: The demos take `skill_url` from kiosk-server and set only `skill_sha256`. Each has a skill pin test that fails, with the steps to fix, when kiosk-server gives a different skill.
 
 ## [0.6.14] — 2026-10-25

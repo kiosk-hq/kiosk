@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.15] — 2026-10-25
+
+- 2026-10-25: Version 0.6.15, the tree cut that matches skill 0.6.15.
+
 - 2026-10-25: `Kiosk::TestHelpers::SkillPin` (Minitest and RSpec): fails when kiosk-server gives a skill that `skill_sha256` is not the digest of, and tells how to make the new digest.
 
 ## [0.6.14] — 2026-10-25

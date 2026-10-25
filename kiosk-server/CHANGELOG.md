@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.15] — 2026-10-25
+
+- 2026-10-25: Version 0.6.15, the tree cut that matches skill 0.6.15.
+
 - 2026-10-25: The generated initializer shows `skill_sha256` and the command that makes it. An operator does not set `skill_url`: each release gives the skill of its version.
 
 ## [0.6.14] — 2026-10-25

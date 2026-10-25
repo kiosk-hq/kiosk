@@ -264,4 +264,5 @@ Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is t
 
 - [kiosk.tech](https://kiosk.tech) — landing page + AI-assistant skill
 - [kiosk.tech/skill.md](https://kiosk.tech/skill.md) — universal AI-assistant skill
+- [ROADMAP.md](ROADMAP.md) — what 0.6 ships, what comes next, what is out of scope
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

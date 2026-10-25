@@ -148,7 +148,7 @@ e2e/assistant.sh	assert "…served public, one minute"     "$(echo "$sch_headers
 e2e/assistant.sh	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
 e2e/assistant.sh	auth.md opens with the auth.md heading
 e2e/assistant.sh	binding: /auth.md served
-e2e/assistant.sh	binding: claim and token poll each paid one toll
+e2e/assistant.sh	binding: claim and token poll each solved one toll
 e2e/assistant.sh	binding: claim of an unknown code → 404
 e2e/assistant.sh	binding: client_credentials refresh
 e2e/assistant.sh	binding: device_authorization fields
@@ -362,7 +362,7 @@ kiosk-demo-atablefor/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tre
 kiosk-demo-atablefor/app/views/layouts/home.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
 kiosk-demo-atablefor/app/views/layouts/home.html.erb	The href is the VERSIONED cut this operator pins, read from
 kiosk-demo-atablefor/before-after.md	`test/stories/booking_test.rb` runs the errand with no human, no web sign-in and no payment:
-kiosk-demo-atablefor/before-after.md	every new assistant pays an Equihash proof-of-work to register. One diner's
+kiosk-demo-atablefor/before-after.md	every new assistant solves an Equihash proof-of-work to register. One diner's
 kiosk-demo-atablefor/before-after.md	rails g kiosk:install
 kiosk-demo-atablefor/config/initializers/kiosk.rb	c.registration_pow_count = 1
 kiosk-demo-atablefor/db/seeds.rb	# A few Lisbon restaurants with named tables, and two diners who sign in with a
@@ -538,7 +538,7 @@ kiosk-demo-philslist/test/stories/household_test.rb	    assert same_second.asks(
 kiosk-demo-philslist/test/stories/household_test.rb	    assert_predicate his.edits(bookshelf, price_text: '€140'), :ok?
 kiosk-demo-philslist/test/stories/household_test.rb	  test "a couple's two assistants share one board presence, and unlinking one shuts out only that one" do
 kiosk-demo-philslist/test/stories/household_test.rb	Alice approves a new assistant on the board's site, and it posts as her
-kiosk-demo-philslist/test/stories/joining_test.rb	an assistant that will not pay the registration toll cannot join, one that does posts at once
+kiosk-demo-philslist/test/stories/joining_test.rb	an assistant that will not solve the registration toll cannot join, one that does posts at once
 kiosk-demo-philslist/test/stories/privacy_test.rb	a listing belongs to the seller whose assistant posted it, whoever the arguments name
 kiosk-demo-philslist/test/stories/privacy_test.rb	assert_includes forged['detail'], 'owner_id'
 kiosk-demo-philslist/test/stories/privacy_test.rb	assert_refused forged, :bad_request
@@ -685,7 +685,7 @@ kiosk-demo-stylish/test/stories/linking_test.rb	unlinking the first leaves the s
 kiosk-demo-stylish/test/stories/privacy_test.rb	Alice's assistant sees Alice's appointment and not Bob's
 kiosk-demo-stylish/test/stories/privacy_test.rb	an appointment belongs to whoever booked it, whoever the arguments name
 kiosk-demo-stylish/test/stories/privacy_test.rb	class PrivacyStory < StoryTest
-kiosk-demo-stylish/test/stories/registration_test.rb	test 'a new assistant pays a proof-of-work toll to register, then finds the salon' do
+kiosk-demo-stylish/test/stories/registration_test.rb	test 'a new assistant solves a proof-of-work toll to register, then finds the salon' do
 kiosk-demo-stylish/test/stories/salon_book_test.rb	a client's assistant sees only the client's own booking
 kiosk-demo-stylish/test/stories/salon_book_test.rb	assert_equal 'customer', alice.role
 kiosk-demo-stylish/test/stories/salon_book_test.rb	assert_equal 'owner', owner.role
@@ -1308,8 +1308,8 @@ kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	registers with no 
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	remaps the uuid principal and re-writes allowed_roles as a text[]
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	revokes every token issued before it, also in the same second
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	saves a cap with its currency, and ColumnSpendingCap reads both
-kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	answers a paid claim of an unknown link code not found
-kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	answers an unpaid poll with the 402 problem document, the same for an unknown and a live code
+kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	answers a claim of an unknown link code with a valid proof not found
+kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	answers a poll with no proof with the 402 problem document, the same for an unknown and a live code
 kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	asks an unknown link code for the toll, the same as a live one
 kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	asks the first poll of an unknown device code for the toll before it reads the store
 kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	asks the toll again for another device code
@@ -1351,12 +1351,12 @@ kiosk-server/spec/kiosk/server/client_registration_spec.rb	RSpec.describe Kiosk:
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	accepts the requested auth method and a subset of the served grant types
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	answers the client information of RFC 7591 Section 3.2.1
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	answers the same client for a key that has a live client, and creates nothing
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	asks the toll before any lookup, on the key thumbprint
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	creates an assistant account and a client with the registration role
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	gives an unlinked key a new client and a new account
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	gives the registration role whatever role or scope the request names
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	ignores metadata members it does not know
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	lists only client_credentials where the origin serves no binding
-kiosk-server/spec/kiosk/server/client_registration_spec.rb	pays the toll before any lookup, on the key thumbprint
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	refuses a body with no usable key
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	refuses a registration_role that is not among the configured roles
 kiosk-server/spec/kiosk/server/client_registration_spec.rb	refuses another auth method and a grant type the origin does not serve
@@ -1908,7 +1908,7 @@ kiosk-server/spec/kiosk/server/sd_jwt_spec.rb	verifies the closed checkout manda
 kiosk-server/spec/kiosk/server/signing_key_spec.rb	has the RFC 8037 public members, use sig, alg EdDSA and the kid, and nothing else
 kiosk-server/spec/kiosk/server/signing_key_spec.rb	refuses an RSA key and a P-256 key, and names the command that makes an Ed25519 key
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	adds the calls of the assistant's previous account to its new account at a binding
-kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	answers 402 on the 10th call of an account with no spend, and the paid proof lets that call through
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	answers 402 on the 10th call of an account with no spend, and the solved proof lets that call through
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	answers 402 on the 20th call at half the cap of recent spend, and on none at the cap
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	counts a call that the operation itself refuses
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	counts a fresh unbound assistant alone, on the account it got at registration
@@ -1917,9 +1917,9 @@ kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	counts no spend older than t
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	gives each of the calls made at the same time its own number, so no two of them skip the proof
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	keeps the count when the assistant gets a new access token
 kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	keeps the count when the assistant rotates its key
-kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	shares the count among the assistants of one account: nine calls by one, the 10th by another pays
-kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	shares the spend among the assistants of one account: at half the cap every 20th call across both pays
-kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	starts a new count of 10 after the paid proof
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	shares the count among the assistants of one account: nine calls by one, the 10th by another is tolled
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	shares the spend among the assistants of one account: at half the cap every 20th call across both is tolled
+kiosk-server/spec/kiosk/server/tolled_calls_spec.rb	starts a new count of 10 after the solved proof
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a checkout signed for the origin being served and refuses one signed for the other
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a token on the origin that minted it and refuses it on the other
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	advertises each origin as its own issuer
@@ -1968,7 +1968,7 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	replaces an incoming curs
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	sends NO Link on the last page — its absence is what completeness means
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	sends an ABSOLUTE Link target — fetchable verbatim, no resolution step
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	sends neither header for an action
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	serves the call that pays and asks the next call of the same token again
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	serves the tolled retry and asks the next call of the same token again
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	still refuses an undeclared parameter under additionalProperties: false
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	validates with validate_requests OFF — the flag no longer gates arguments
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	…while GET <endpoint>/schema, which IS public, says so — the control

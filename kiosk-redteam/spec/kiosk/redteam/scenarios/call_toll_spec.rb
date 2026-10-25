@@ -3,7 +3,7 @@
 require 'spec_helper'
 require_relative 'support'
 
-# An origin in memory: each account pays a proof on every 10th call of `my_rows`.
+# An origin in memory: each account solves a proof on every 10th call of `my_rows`.
 class CallTollOrigin
   EVERY = 10
 

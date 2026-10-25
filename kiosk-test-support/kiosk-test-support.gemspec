@@ -30,7 +30,7 @@ Gem::Specification.new do |spec|
     `kiosk-rls-minitest`.
 
     The ASSISTANT drives an origin over HTTP as an assistant does: it
-    registers, pays proof-of-work tolls, queries, runs, pays with signed
+    registers, solves proof-of-work tolls, queries, runs, pays with signed
     mandates and listens on the event stream. `Kyc` stands in for the
     operator's KYC provider, and `StripeMock` fronts a local stripe-mock.
 

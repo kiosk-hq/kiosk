@@ -232,12 +232,12 @@ The base `Policy` class returns `nil` for every request (never challenge).
 c.reputation_policy = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
 ```
 
-An account pays one proof at the Equihash gem's default params on every Nth
+An account solves one proof at the Equihash gem's default params on every Nth
 tolled call: `N = ceil(10 / share)`, with `share = max(0, (cap - spend) / cap)`.
 `spend` is what the customer spent here within `within`, and `cap` is in whole
 currency units. So with no spend N is 10; at 25, 50 and 75 percent of the cap
-it is 14, 20 and 40; at `cap` or more no call pays. The engine counts the
-calls of each account since its last paid proof. The assistants bound to one
+it is 14, 20 and 40; at `cap` or more no call is tolled. The engine counts the
+calls of each account since its last proof. The assistants bound to one
 account share the count and the spend, and a new access token keeps the count.
 An operator that takes no payment records each fulfilled visit with
 `Kiosk::Visit.record!(user_id:, value_cents:)`, and the visit counts as spend.
@@ -268,8 +268,8 @@ from the customer's settlements and recorded visits in that window. The first
 binding of an assistant merges its assistant account into the customer's
 account, so the settlements and visits of the assistant account count too, also
 after an unlink. It fills `calls_since_proof` with the account's tolled calls since
-its last paid proof, this call included. For any other policy the factors are
-`Factors.empty`. A paid proof sets the count back to zero.
+its last proof, this call included. For any other policy the factors are
+`Factors.empty`. A valid proof sets the count back to zero.
 
 ## Honesty / guardrails
 

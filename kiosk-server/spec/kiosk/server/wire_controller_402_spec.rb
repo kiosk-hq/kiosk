@@ -96,7 +96,7 @@ RSpec.describe Kiosk::Server::WireController do
     describe 'the pow_required 402' do
       include_context 'with a proof-of-work toll on WireController'
 
-      # The reserved plane pays the same toll and answers the same way as the
+      # The reserved plane asks the same toll and answers the same way as the
       # per-verb wire: one answer shape on every Kiosk endpoint, here
       # `POST <endpoint>/pay` for the toll.
       it 'carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay' do

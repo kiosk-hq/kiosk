@@ -30,8 +30,8 @@ PASSWORD = ENV.fetch('HUMAN_PASSWORD')
 # Alice's browser, signed in once and held for every human-side call below.
 HUMAN_SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 
-# The proof-of-work tolls paid, by path. The link-code claim and the first
-# token poll of a device code pay the same toll as register on this origin.
+# The proof-of-work tolls solved, by path. The link-code claim and the first
+# token poll of a device code ask the same toll as register on this origin.
 TOLLS = Hash.new(0)
 
 # Sends the request; on `402 pow_required` it solves the challenges and sends
@@ -86,7 +86,7 @@ def registered_client
 end
 
 # A token request (RFC 6749) with a new client assertion and a new DPoP proof
-# for each send, also for the send that pays the toll. `assert: false` sends no
+# for each send, also for the tolled retry. `assert: false` sends no
 # client assertion.
 def token_post(client_id, key, form, assert: true)
   uri = URI(TOKEN_URL)

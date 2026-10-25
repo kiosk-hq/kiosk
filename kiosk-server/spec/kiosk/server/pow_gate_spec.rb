@@ -964,8 +964,8 @@ RSpec.describe Kiosk::Server::PowGate do
     end
   end
 
-  # The policy decides on each call: a paid proof pays for its own call only.
-  describe 'a paid proof' do
+  # The policy decides on each call: a valid proof clears the toll of its own call only.
+  describe 'a valid proof' do
     include PowGateSpecHelpers
 
     before { configure_with_policy(always_challenge_policy) }

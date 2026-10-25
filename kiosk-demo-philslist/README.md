@@ -85,7 +85,7 @@ On your own machine you need:
 
 - **Ruby 4.0 or newer**, then `bundle install`.
 - **Postgres**, reachable — `pg_isready` returns OK.
-- **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
+- **python3 with numpy** — registering an assistant solves an Equihash toll with the bundled `solve.py`.
 
 From this directory:
 
@@ -121,7 +121,7 @@ The stories in `test/stories/` show it:
   only: no `pay`, no `events`; the catalogue is public, and its examples satisfy their own schemas.
 - **Registration toll** — registering without a proof is **402 `pow_required`**,
   even on a board that sells nothing. A board records no spend, so an
-  assistant also pays one proof on every 10th call.
+  assistant also solves the toll on every 10th call.
 - **Account binding** — the RFC 8628 device grant binds an assistant to the
   human who approves it; two assistants linked to one household share its
   listings, and unlinking one revokes its tokens — including one minted in the

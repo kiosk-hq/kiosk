@@ -78,7 +78,7 @@ On your own machine you need:
 
 - **Ruby 4.0 or newer**, then `bundle install`.
 - **Postgres**, reachable — `pg_isready` returns OK.
-- **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
+- **python3 with numpy** — registering an assistant solves an Equihash toll with the bundled `solve.py`.
 
 From this directory:
 
@@ -89,7 +89,7 @@ bin/rails test         # the tests; CI runs exactly this
 ```
 
 `bin/setup` does the first two. The tests drive the origin over HTTP the way an
-assistant does; each one registers an assistant and pays its toll.
+assistant does; each one registers an assistant and solves its toll.
 
 ### Watch it work
 

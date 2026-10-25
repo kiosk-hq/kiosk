@@ -20,7 +20,7 @@ module Kiosk
 
         def [](header) = headers[header.to_s.downcase]
 
-        # Whether the client paid a proof-of-work toll and sent the request again.
+        # Whether the client solved a proof-of-work toll and sent the request again.
         def pow_retried? = proofs.positive?
       end
 
@@ -95,7 +95,7 @@ module Kiosk
         uri
       end
 
-      # The proof-of-work challenges of a toll this client pays, or nil.
+      # The proof-of-work challenges of a toll this client solves, or nil.
       def toll_challenges(answer)
         return unless @pay_tolls && answer.status == 402 && answer.body.is_a?(Hash)
 

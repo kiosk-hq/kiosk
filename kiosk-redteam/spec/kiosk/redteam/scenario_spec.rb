@@ -40,7 +40,7 @@ RSpec.describe Kiosk::Redteam::Scenario do
   # kiosk-server maps three codes onto 402. None of them is a refusal: the
   # verdict names which one answered, so the line is not read as a provider hole.
   #
-  # The harness pays a PoW toll on every verb, so these stubs are the answers
+  # The harness solves a proof-of-work toll on every verb, so these stubs are the answers
   # that survive that retry: they arrive with no `challenges` to solve, which is
   # what the two payment 402s always look like.
   describe '#verdict_from — HTTP 402 is never a pass on the permissive path (K-736)' do
@@ -84,7 +84,7 @@ RSpec.describe Kiosk::Redteam::Scenario do
       expect(v.blocked).to be(false)
     end
 
-    it 'says the toll was already paid when it was demanded again' do
+    it 'says the toll was already solved when it was demanded again' do
       paid = Kiosk::TestHelpers::Wire::Response.new(status: 402, body: problem('pow_required'), proofs: 1)
       expect(scenario.verdict_from(paid).detail).to include('already solved every issued challenge')
     end

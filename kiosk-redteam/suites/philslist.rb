@@ -17,7 +17,7 @@ ALICE_EMAIL = 'alice@example.com'
 BOB_EMAIL   = 'bob@example.com'
 PASSWORD    = 'philslist-demo-password'
 
-# The assistants' calls; each pays the proof-of-work toll the operator asks.
+# The assistants' calls; each solves the proof-of-work toll the operator asks.
 WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
 BATTERY = Kiosk::Redteam::Battery.new
@@ -212,7 +212,7 @@ BATTERY.record('ContactDetailsStayOutOfTheRequestLog',
                '(want 200, the contact line masked on every one of them, and the unfiltered title present)')
 
 # The shared kiosk-redteam beat; this origin declares a role, so a skip is a breach.
-# The call toll holds against known bypasses: a new account pays a proof of work on every 10th call.
+# The call toll holds against known bypasses: a new account solves a proof of work on every 10th call.
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::CallToll.new,
   client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),

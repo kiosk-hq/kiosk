@@ -47,7 +47,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - **`curl`** and **`jq`** on the PATH
 - **`stripe-mock`** on the PATH (`brew install stripe-mock`); `run.sh` starts it, or reuses one already on port 12111
 - **python packages** — `e2e/requirements.txt` declares them: `numpy` for the
-  register-time Equihash toll the golden path pays, `websockets` for the
+  register-time Equihash toll the golden path solves, `websockets` for the
   event-stream leg, which runs `kiosk-server/listen.py` — the SAME file an
   assistant fetches from kiosk.tech and verifies by SHA-256 before executing —
   and `pyjwt` with `cryptography` for `e2e/dpop.py`, which signs the DPoP proof

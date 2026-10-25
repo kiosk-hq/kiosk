@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Kiosk's identity tables: the registered assistants, the tolled calls of
-# each account since its last paid proof, and the assistant accounts that
+# each account since its last proof, and the assistant accounts that
 # registration opened, with the account each one merged into at its first binding.
 class CreateKioskIdentityTables < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def change

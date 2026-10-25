@@ -5,7 +5,7 @@ require 'json'
 module Kiosk
   module Redteam
     module Scenarios
-      # The calls CallToll makes: unpaid, so that each answer shows whether the toll was asked.
+      # The calls CallToll makes carry no proof, so that each answer shows whether the toll was asked.
       module TollCalls
         # A setup step did not answer as the probe needs, so the probe did not test the toll.
         class SetupFailed < StandardError; end
@@ -24,7 +24,7 @@ module Kiosk
           end
         end
 
-        # The number of the call that met the toll; the toll is paid, so the count is 0 again.
+        # The number of the call that met the toll; the toll is solved, so the count is 0 again.
         def calls_to_toll(principal)
           (1..(@every * 20)).each do |number|
             return number.tap { paid_proof(principal, number:) } if tolled?(ask(principal))
@@ -32,14 +32,14 @@ module Kiosk
           raise SetupFailed, "no call met the toll in #{@every * 20} calls"
         end
 
-        # Pays the toll of the call that met it and answers the proof that paid it.
+        # Solves the toll of the call that met it and answers the proof that cleared it.
         def paid_proof(principal, number: @every)
           tolled = ask(principal)
           raise SetupFailed, "call #{number} answered HTTP #{tolled.status}, not the toll" unless tolled?(tolled)
 
           proof = JSON.generate(TestHelpers::Wire.solve(tolled.body.fetch('challenges')))
           paid = ask(principal, proof:)
-          raise SetupFailed, "the paid call answered HTTP #{paid.status} #{paid.body.inspect}" unless ok?(paid)
+          raise SetupFailed, "the tolled retry answered HTTP #{paid.status} #{paid.body.inspect}" unless ok?(paid)
 
           proof
         end
@@ -67,7 +67,7 @@ module Kiosk
         def error_code(answer) = Kiosk::Redteam.error_code(answer)
       end
 
-      # The call toll: an account pays a proof of work on every Nth tolled call.
+      # The call toll: an account solves a proof of work on every Nth tolled call.
       # The control brings a new account to N-1 calls and meets `402
       # pow_required` on call N. Each probe brings an account to N-1 calls,
       # tries a known way past the toll, and must still meet the toll.
@@ -173,7 +173,7 @@ module Kiosk
           not_tolled(principal, "call #{@every}, after a refused call")
         end
 
-        # A proof pays for one call: sent again on a later tolled call, it is refused.
+        # A proof clears the toll of one call: sent again on a later tolled call, it is refused.
         def replayed_proof
           principal = primed
           proof = paid_proof(principal)

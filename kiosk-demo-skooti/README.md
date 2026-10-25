@@ -46,7 +46,7 @@ nothing to withhold — this document is a POINTER and the catalog is the
 CONTRACT, and a second copy of the verb list would be a second source of truth
 for it. Registration is priced
 with one Equihash proof-of-work at the gem's default n=168 k=7 — the "I'm not a
-fly-by bot" cost. After that, the assistant pays one more proof on every 10th
+fly-by bot" cost. After that, the assistant solves the toll again on every 10th
 call with no recent spend, on every 20th at 50 euros paid here in the past
 week, and on none from 100 euros.
 Renting a motorcycle
@@ -93,7 +93,7 @@ On your own machine you need:
 
 - **Ruby 4.0 or newer**, then `bundle install`.
 - **Postgres**, reachable — `pg_isready` returns OK.
-- **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
+- **python3 with numpy** — registering an assistant solves an Equihash toll with the bundled `solve.py`.
 - **stripe-mock** on PATH for the tests — `brew install stripe-mock`.
 
 From this directory:

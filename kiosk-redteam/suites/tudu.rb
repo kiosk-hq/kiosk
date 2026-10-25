@@ -16,7 +16,7 @@ PASSWORD = 'tudu-demo-password'
 
 require 'kiosk/user_identity_providers/devise_session'
 
-# WIRE carries an assistant's call and pays the proof-of-work toll the operator asks.
+# WIRE carries an assistant's call and solves the proof-of-work toll the operator asks.
 # SESSION is the human's browser, for the binding ceremony.
 WIRE    = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
@@ -246,7 +246,7 @@ BATTERY.record('ChosenNameNeverTheAddress',
                "(want the chosen name #{chosen_name.inspect} there and no address in it)")
 
 # Shared kiosk-redteam beat; this origin declares a role, so a skip is a breach.
-# The call toll holds against known bypasses: a new account pays a proof of work on every 10th call.
+# The call toll holds against known bypasses: a new account solves a proof of work on every 10th call.
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::CallToll.new,
   client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),

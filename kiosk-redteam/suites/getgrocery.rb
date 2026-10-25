@@ -117,7 +117,7 @@ profile = Kiosk::Redteam::Profile.new(
   kyc_valid: nil,
   kyc_expired: nil,
   kyc_forged: nil,
-  # CallToll: a new account pays a proof of work on every 10th call (RecentSpend with no spend).
+  # CallToll: a new account solves a proof of work on every 10th call (RecentSpend with no spend).
   tolled_calls_per_proof: 10,
   tolled_query: 'my_orders',
   person: -> { Kiosk::TestHelpers::Person.new(BASE_URL, email: 'hana@example.com', password: 'getgrocery-demo-password') }

@@ -13,7 +13,7 @@ module Kiosk
 
       def on?(config = Kiosk.configuration) = config.registration_pow_count.to_i.positive?
 
-      # `verb` and `body` make the fingerprint, so a proof pays for this request only.
+      # `verb` and `body` make the fingerprint, so a proof clears the toll of this request only.
       def gate(verb:, body:, pow:, config: Kiosk.configuration)
         return unless on?(config)
 

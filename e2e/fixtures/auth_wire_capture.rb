@@ -107,7 +107,7 @@ def post_form(url, form, headers = {})
   end]
 end
 
-# The link-code claim and the first token poll of a device code pay the same
+# The link-code claim and the first token poll of a device code ask the same
 # toll as registration: on `402 pow_required`, solve every challenge and yield
 # the `Kiosk-PoW` header for the SAME request again.
 def paying_toll(answer)
@@ -215,7 +215,7 @@ end
 approve = session.post_form('/kiosk/oauth/device/verify', form)
 abort "approval failed (#{approve.code})" unless [200, 302, 303].include?(approve.code.to_i)
 
-# A new client assertion and a new DPoP proof for each send, also for the send that pays the toll.
+# A new client assertion and a new DPoP proof for each send, also for the tolled retry.
 poll = lambda do |pow = {}|
   form = { 'grant_type' => 'urn:ietf:params:oauth:grant-type:device_code', 'device_code' => da.fetch('device_code'),
            **assertion_params(client_id, reg_key, ISSUER) }

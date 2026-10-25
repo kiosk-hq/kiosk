@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # Each account's tolled calls since its last paid proof, in
+    # Each account's tolled calls since its last proof, in
     # `tolled_calls.calls_since_proof`. The count belongs to the account: the
     # assistants bound to one account share it, and a new access token or a
     # new key does not set it back.
@@ -20,7 +20,7 @@ module Kiosk
         connection.exec_query(sql, 'Kiosk tolled call', [user_id]).rows.dig(0, 0)
       end
 
-      # A paid proof sets the count back to zero.
+      # A valid proof sets the count back to zero.
       def reset!(user_id)
         connection.exec_query(%(UPDATE "#{schema}".kiosk_tolled_calls SET calls_since_proof = 0 WHERE user_id = $1),
                               'Kiosk tolled calls reset', [user_id])

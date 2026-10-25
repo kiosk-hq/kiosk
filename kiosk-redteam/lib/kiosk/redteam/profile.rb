@@ -22,7 +22,7 @@ module Kiosk
     #   kyc_valid             (user_id) -> a valid attestation JWS
     #   kyc_expired           (user_id) -> an expired attestation JWS
     #   kyc_forged            (user_id) -> an attestation with a wrong issuer or signature
-    #   tolled_calls_per_proof the call toll's interval for a new account: call N pays a proof (CallToll)
+    #   tolled_calls_per_proof the call toll's interval for a new account: call N is tolled (CallToll)
     #   tolled_query          a query any principal may call with no arguments (CallToll)
     #   person                () -> a signed-in Kiosk::TestHelpers::Person who links assistants (CallToll)
     class Profile

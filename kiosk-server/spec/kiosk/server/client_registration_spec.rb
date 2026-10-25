@@ -111,7 +111,7 @@ RSpec.describe Kiosk::Server::ClientRegistration do
     end
   end
 
-  it 'pays the toll before any lookup, on the key thumbprint' do
+  it 'asks the toll before any lookup, on the key thumbprint' do
     allow(Kiosk::Server::AuthToll).to receive(:gate).and_raise(Kiosk::Server::Errors::Forbidden, 'toll')
     allow(Kiosk::Server::Client).to receive(:with_key)
     expect { register(metadata, pow: :proofs) }.to raise_error(Kiosk::Server::Errors::Forbidden)

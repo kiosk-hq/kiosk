@@ -183,7 +183,7 @@ RSpec.describe Kiosk::Server::VerbController do
     end
 
     # The header is input, so it is refused at the argument gate, before the
-    # toll: a caller does not pay for a proof to learn its header is unreadable.
+    # toll: a caller does not solve a proof to learn its header is unreadable.
     context 'when the verb is tolled' do
       before do
         Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
@@ -801,7 +801,7 @@ RSpec.describe Kiosk::Server::VerbController do
     end
   end
 
-  # A paid proof pays for its own call; the policy decides on every later one.
+  # A valid proof clears the toll of its own call; the policy decides on every later one.
   describe 'the toll on a call' do
     before do
       Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
@@ -815,7 +815,7 @@ RSpec.describe Kiosk::Server::VerbController do
 
     after { Kiosk::Reputation::Backends.reset! }
 
-    it 'serves the call that pays and asks the next call of the same token again' do
+    it 'serves the tolled retry and asks the next call of the same token again' do
       _, body = call_verb(:get, 'salons')
 
       expect(call_verb(:get, 'salons', pow: proof_for(body[:challenges].first)).first).to eq(200)

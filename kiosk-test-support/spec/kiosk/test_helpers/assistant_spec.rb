@@ -66,7 +66,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
       expect(registered_principal).to have_attributes(agent_id: 'a1', user_id: 'u1')
     end
 
-    it 'pays a registration toll with the proofs in the Kiosk-PoW header and the same body' do
+    it 'solves a registration toll and sends the proofs in the Kiosk-PoW header with the same body' do
       stub, sent = requests_to(:post, '/kiosk/oauth/register')
       toll_then(stub, registered)
       stub_request(:post, "#{origin}/kiosk/oauth/token").to_return(issued)
@@ -142,7 +142,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
                                  'payment_instrument' => { 'id' => 'on_file', 'type' => 'card' })
     end
 
-    it 're-sends the same signed mandates when it pays a toll' do
+    it 're-sends the same signed mandates when it solves a toll' do
       stub, sent = requests_to(:post, '/kiosk/pay')
       toll_then(stub, json_return(200, 'settlement_id' => 's1'))
 
@@ -216,7 +216,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
   describe 'proof-of-work tolls' do
     include_context 'with an assistant and an origin'
 
-    it 'pays a toll once and says how many proofs it cost' do
+    it 'solves a toll once and says how many proofs it cost' do
       stub, sent = requests_to(:get, '/kiosk/catalog')
       toll_then(stub, json_return(200, []))
 
@@ -226,7 +226,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
       expect(sent.map(&:uri).uniq.size).to eq(1)
     end
 
-    it 'pays a re-demanded toll only once' do
+    it 'solves a re-demanded toll only once' do
       stub, sent = requests_to(:get, '/kiosk/catalog')
       stub.to_return { problem_return('pow_required', status: 402, challenges: [toll]) }
 

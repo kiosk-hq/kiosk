@@ -50,7 +50,7 @@ RSpec.describe Kiosk::TestHelpers::Customer do
     describe '#asks' do
       let(:toll) { problem_return('pow_required', status: 402, challenges: [{ 'id' => 'c1' }]) }
 
-      it 'answers an unpaid toll instead of paying it' do
+      it 'answers a toll instead of solving it' do
         stub_request(:get, "#{origin}/kiosk/catalog").to_return(toll)
 
         expect(customer.asks(:catalog, unpaid: true)).to be_refused(:pow_required)
@@ -179,7 +179,7 @@ RSpec.describe Kiosk::TestHelpers::Customer do
       expect(answer(200, { 'code' => 'forbidden' })).not_to be_refused(:forbidden)
     end
 
-    it 'reads the detail, a header, the tolls paid and the next page' do
+    it 'reads the detail, a header, the tolls solved and the next page' do
       page = answer(200, [], headers: { 'link' => '<https://h.example/kiosk/search?cursor=x>; rel="next"', 'x-total-count' => '9' }, proofs: 2)
 
       expect([page.next_page, page.header('X-Total-Count'), page.tolls_paid]).to eq(['https://h.example/kiosk/search?cursor=x', '9', 2])

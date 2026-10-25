@@ -218,7 +218,7 @@ problems = []
 require 'openssl'
 status, raw = post('/kiosk/oauth/register',
                    JSON.generate(jwks: { keys: [Kiosk::TestHelpers::Dpop.jwk(OpenSSL::PKey.generate_key('ED25519'))] }))
-problems << ["POST /kiosk/oauth/register (unpaid toll, #{status})", parse(raw)]
+problems << ["POST /kiosk/oauth/register (unsolved toll, #{status})", parse(raw)]
 
 # The token poll's toll comes before the device code is looked up, so an
 # unknown code draws the same 402 problem document as a live one.
@@ -226,7 +226,7 @@ status, raw = post('/kiosk/oauth/token',
                    JSON.generate(grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
                                  device_code: 'e2e-a-device-code-nobody-issued'))
 if status == 402
-  problems << ["POST /kiosk/oauth/token (unpaid toll, unknown device code, #{status})", parse(raw)]
+  problems << ["POST /kiosk/oauth/token (unsolved toll, unknown device code, #{status})", parse(raw)]
 else
   skipped 'the token poll 402 problem document', "this origin answered #{status}: it tolls no device-code poll"
 end
@@ -424,7 +424,7 @@ if pow_capture && !pow_capture.empty? && File.exist?(pow_capture)
     conforms('one solved PoW proof', "#{B}/pow.schema.json", proofs.first,
              pointer: '#/$defs/proof') do |proof|
       # `challenge` is REQUIRED beside `nonce`: a proof that did not echo the
-      # challenge back verbatim is unbindable to the request it paid for.
+      # challenge back verbatim is unbindable to the request it was solved for.
       proof.delete('challenge')
       proof
     end

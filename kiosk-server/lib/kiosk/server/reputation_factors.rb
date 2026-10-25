@@ -4,7 +4,7 @@ module Kiosk
   module Server
     # The reputation inputs the engine knows itself: what the customer paid
     # here and kept paid, and the visits the operator recorded, within a policy's
-    # window; and the account's tolled calls since its last paid proof.
+    # window; and the account's tolled calls since its last proof.
     module ReputationFactors
       module_function
 

@@ -621,7 +621,7 @@ assert "salon name is Combette"      "$(echo "$r" | jq -r '.[0].name')"         
 
 # Spec §3.7.1 — the cache policy is response shape, so it is asserted here
 # with the body. Without `Kiosk-PoW` in Vary a private cache keyed on the URL
-# would serve a paid 200 to an unpaid retry; without `Kiosk-Timezone` it would
+# would serve a tolled 200 to a retry with no proof; without `Kiosk-Timezone` it would
 # serve an answer computed for one caller's calendar day to a caller on another
 # clock that sent the identical URL.
 cache_headers=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/salons" -sS -o /dev/null -D -)
@@ -833,8 +833,8 @@ assert "unknown action → 404"         "$status" "404"
 # (2) not_found -- the call is REAL and an ARGUMENT addressed something absent.
 # Exercised in the BINDING block below, where `POST /kiosk/auth/claim` with a
 # link code the origin never minted answers it after a real client assertion
-# (§6.2, §9.1 rule 2). It is dialled there because the claim pays the toll
-# before it looks the code up, and that block pays it. Search "binding: claim
+# (§6.2, §9.1 rule 2). It is dialled there because the claim asks the toll
+# before it looks the code up, and that block solves it. Search "binding: claim
 # of an unknown code".
 
 # (3) module_not_served -- the whole CAPABILITY is absent from this origin.
@@ -1077,9 +1077,9 @@ assert "binding: verb as bound account"  "$(echo "$bind_out" | jq -r '.wire_as_b
 assert "binding: client_credentials refresh"  "$(echo "$bind_out" | jq -r '.token_bound | map(tostring) | join(":")')" "200:true"
 assert "binding: link-code mint (session)"    "$(echo "$bind_out" | jq -r '.link_mint')"                            "201"
 assert "binding: link-code redeem → human"    "$(echo "$bind_out" | jq -r '.link_claim | map(tostring) | join(":")')" "204:true"
-# The toll comes before the code is looked up: the claim pays every time, the
+# The toll comes before the code is looked up: the claim is tolled every time, the
 # token poll once per device code (five polls above, one toll).
-assert "binding: claim and token poll each paid one toll" \
+assert "binding: claim and token poll each solved one toll" \
   "$(echo "$bind_out" | jq -r '[.tolls["/kiosk/auth/claim"], .tolls["/kiosk/oauth/token"]] | map(tostring) | join(":")')" "1:1"
 # 204, not 200: unlink answers with no body at all, and protocol.md §6.2 states
 # that beside its two siblings.

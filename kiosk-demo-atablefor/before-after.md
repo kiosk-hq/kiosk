@@ -31,12 +31,12 @@ drive it rather than a script, see "Watch it work" in `README.md`.
 
 A table operator's fear is not fraud but reservation-scalping: scripts that
 mass-claim prime-time two-tops to resell. Kiosk prices that at the door:
-every new assistant pays an Equihash proof-of-work to register. One diner's
-assistant pays that once. After that, the assistant pays one more proof on
+every new assistant solves an Equihash proof-of-work to register. One diner's
+assistant solves that once. After that, the assistant solves one more proof on
 every 10th call with no recent spend, on every 20th at 50 euros spent here in
 the past week, and on none from 100 euros. A booking the diner keeps counts as
 spend at its seating time. A script that rents a fresh identity for each claim
-has no spend, so it pays to register and on every 10th call.
+has no spend, so it solves the toll to register and on every 10th call.
 
 An assistant sees and cancels only its own bookings: `test/stories/privacy_test.rb`
 and `../kiosk-redteam/suites/atablefor.rb` assert that a cross-tenant read, a cross-owner cancel and

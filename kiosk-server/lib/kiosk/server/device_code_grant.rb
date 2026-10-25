@@ -42,7 +42,7 @@ module Kiosk
           expires_in: expires_in, interval: DEFAULT_POLL_INTERVAL, da: da }
       end
 
-      # The first poll of each device code value pays the auth toll; later polls
+      # The first poll of each device code value is tolled; later polls
       # of that value are free until any code could have expired. The store is
       # not read first, so an unknown code costs the same work as a live one.
       def pay_toll!(device_code, pow, now: Time.current)

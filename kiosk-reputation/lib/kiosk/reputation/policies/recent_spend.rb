@@ -6,7 +6,7 @@ module Kiosk
       # One proof-of-work toll on every Nth tolled call of an account. N grows
       # with what the customer spent here within `within` seconds:
       # N = ceil(10 / share), share = max(0, (cap - spend) / cap). So a customer
-      # with no spend pays on every 10th call, at half the cap on every 20th, and
+      # with no spend solves the toll on every 10th call, at half the cap on every 20th, and
       # at `cap` or more on none.
       class RecentSpend < Policy
         # The tolled calls per proof of a customer with no recent spend.
@@ -15,14 +15,14 @@ module Kiosk
         attr_reader :within
 
         # @param within [#to_i] the window in seconds, e.g. `1.week`
-        # @param cap [Integer] whole currency units of recent spend at which no call pays the toll
+        # @param cap [Integer] whole currency units of recent spend at which no call is tolled
         def initialize(within:, cap:)
           super()
           @within = within
           @cap_cents = cap * 100
         end
 
-        # A caller the engine does not count (no `calls_since_proof`) pays on every call that the interval tolls.
+        # A caller the engine does not count (no `calls_since_proof`) solves the toll on every call that the interval tolls.
         def challenge_for(factors:, **)
           every = interval(factors.settled_purchases_cents.to_i)
           calls = factors.calls_since_proof

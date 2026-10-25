@@ -10,7 +10,7 @@ RSpec.describe Kiosk::Reputation::Policies::RecentSpend do
     policy.challenge_for(identity: nil, verb: :query, factors:)
   end
 
-  # The first call that pays, counting from the last proof, among the next 200.
+  # The first tolled call, counting from the last proof, among the next 200.
   def first_tolled_call(cents) = (1..200).find { toll(cents, it) }
 
   it 'tolls every 10th call of a customer with no recent spend' do
@@ -29,7 +29,7 @@ RSpec.describe Kiosk::Reputation::Policies::RecentSpend do
     expect([0, 25_00, 50_00, 75_00, 100_00, 150_00].map { policy.interval(it) }).to eq([10, 14, 20, 40, nil, nil])
   end
 
-  it 'keeps tolling every call past the interval until a proof is paid' do
+  it 'keeps tolling every call past the interval until the toll is solved' do
     expect([toll(50_00, 21), toll(50_00, 35)]).to eq([proof, proof])
   end
 

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-25: The `pow_required` note and the call-toll setup failure say that the harness solves the toll and name the tolled retry.
+
 ## [0.6.17] — 2026-10-25
 
 - 2026-10-25: Version 0.6.17, the tree cut that matches skill 0.6.17.

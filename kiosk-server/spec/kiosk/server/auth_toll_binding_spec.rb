@@ -2,7 +2,7 @@
 
 # The auth toll on the two binding redeems: the link-code claim and the
 # device-code token poll. The toll is asked before the code is looked up, so
-# the answer to an unpaid request never says whether the code exists. Driven
+# the answer to a request with no proof never says whether the code exists. Driven
 # with the kiosk-pow-equihash known-answer proof (n=8, k=1).
 
 require 'kiosk/reputation'
@@ -69,16 +69,16 @@ RSpec.describe Kiosk::Server::AuthToll do
       expect(challenges).to eq([1, 1])
     end
 
-    it 'answers a paid claim of an unknown link code not found' do
+    it 'answers a claim of an unknown link code with a valid proof not found' do
       unknown = SecureRandom.urlsafe_base64(32)
       expect { redeem(unknown, pow: claim_proof(unknown, id: 'unknown')) }.to raise_error(Kiosk::Server::Errors::NotFound)
     end
 
-    it 'binds a paid claim of a live link code' do
+    it 'binds a claim of a live link code with a valid proof' do
       expect(redeem(code, pow: claim_proof(code, id: 'live')).id).to eq(client.id)
     end
 
-    it 'refuses a proof paid for another link code' do
+    it 'refuses a proof solved for another link code' do
       expect { redeem(code, pow: claim_proof('another', id: 'other')) }.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
   end
@@ -116,7 +116,7 @@ RSpec.describe Kiosk::Server::AuthToll do
       token_request({ 'grant_type' => grant, 'device_code' => code, **assertion_params(client.id) }, headers: headers)
     end
 
-    it 'answers an unpaid poll with the 402 problem document, the same for an unknown and a live code' do
+    it 'answers a poll with no proof with the 402 problem document, the same for an unknown and a live code' do
       answers = [SecureRandom.urlsafe_base64(32), live].map do |code|
         status, headers, body = poll(code)
         [status, headers['WWW-Authenticate'], headers['Cache-Control'], body['code'], body['challenges'].size]
@@ -130,7 +130,7 @@ RSpec.describe Kiosk::Server::AuthToll do
       expect(headers['Content-Type']).to include('application/problem+json')
     end
 
-    it 'answers a paid poll on the OAuth endpoints' do
+    it 'answers a poll with a valid proof on the OAuth endpoints' do
       status, _headers, body = poll(live, 'HTTP_KIOSK_POW' => JSON.generate(poll_proof(live, id: 'ctl-live')))
       expect([status, body['error']]).to eq([400, 'authorization_pending'])
     end

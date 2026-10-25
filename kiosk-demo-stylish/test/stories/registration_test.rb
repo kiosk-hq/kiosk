@@ -5,7 +5,7 @@ require 'test_helper'
 class RegistrationStory < StoryTest
   def arrives_without_paying = Kiosk::TestHelpers::Answer.new(assistant.register_raw(pow: :skip))
 
-  test 'a new assistant pays a proof-of-work toll to register, then finds the salon' do
+  test 'a new assistant solves a proof-of-work toll to register, then finds the salon' do
     unpaid = arrives_without_paying
 
     assert_refused unpaid, :pow_required

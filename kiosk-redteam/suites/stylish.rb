@@ -35,7 +35,7 @@ def owner_session
                                                                 .sign_in!(email: OWNER_EMAIL, password: DEMO_PASSWORD)
 end
 
-# The assistants' calls; each pays the proof-of-work toll the operator asks.
+# The assistants' calls; each solves the proof-of-work toll the operator asks.
 WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
 # The assistant side of the binding ceremonies: registration, client assertions, tokens.
@@ -204,7 +204,7 @@ def approve_on_verify_page(session, user_code)
 end
 
 # The registered client opens a ceremony, `session`'s human approves it on the
-# verify page, the client polls once; the first poll of a code pays the toll.
+# verify page, the client polls once; the first poll of a code solves the toll.
 # Returns [authorization_http, poll_http, token_or_nil, verify_page_html].
 def claim_ceremony(session, principal, **params)
   opened = ASSISTANT.device_authorization(principal, **params)
@@ -390,7 +390,7 @@ BATTERY.record('UntypedBookingInput', bad_failures.empty?,
                bad_failures.empty? ? "#{BAD_INPUTS.size} bad-input shapes → typed 400 bad_request, no PG internals; bare + priced bookings still succeed" : bad_failures.join(' | '))
 
 # The shared kiosk-redteam beat; this origin declares two roles, so a skip is a breach.
-# The call toll holds against known bypasses: a new account pays a proof of work on every 10th call.
+# The call toll holds against known bypasses: a new account solves a proof of work on every 10th call.
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::CallToll.new,
   client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),

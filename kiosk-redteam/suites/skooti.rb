@@ -128,7 +128,7 @@ profile = Kiosk::Redteam::Profile.new(
   kyc_valid: ->(user_id) { ProveTestIssuer.attest(user_id: user_id) },
   kyc_expired: ->(user_id) { ProveTestIssuer.attest_expired(user_id: user_id) },
   kyc_forged: method(:attest_forged),
-  # CallToll: a new account pays a proof of work on every 10th call (RecentSpend with no spend).
+  # CallToll: a new account solves a proof of work on every 10th call (RecentSpend with no spend).
   tolled_calls_per_proof: 10,
   tolled_query: 'my_reservations',
   person: -> { Kiosk::TestHelpers::Person.new(BASE_URL, email: 'ben@example.com', password: 'skooti-demo-password') }
@@ -631,7 +631,7 @@ def token_status(token, key)
 end
 
 # SelfAssertedTokenForgery: a self-asserted agent bearer, even naming a real account as owner,
-# resolves to no identity; the real token, paying its toll, is the control.
+# resolves to no identity; the real token, solving its toll, is the control.
 def self_asserted_token_forgery(customer)
   forgeries = forged_agent_bearers(customer).map do |label, token|
     code = token_status(token, customer.key)

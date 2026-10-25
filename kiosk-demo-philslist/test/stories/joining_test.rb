@@ -3,7 +3,7 @@
 require 'test_helper'
 
 class JoiningStory < StoryTest
-  test 'an assistant that will not pay the registration toll cannot join, one that does posts at once' do
+  test 'an assistant that will not solve the registration toll cannot join, one that does posts at once' do
     unproven = Kiosk::TestHelpers::Answer.new(assistant.register_raw(pow: :skip))
 
     assert_refused unproven, :pow_required

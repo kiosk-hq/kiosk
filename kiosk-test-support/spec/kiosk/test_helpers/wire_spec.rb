@@ -113,7 +113,7 @@ RSpec.describe Kiosk::TestHelpers::Wire do
       expect(wire.post_form('/oauth', 'client_id' => 'cli').body).to eq('ok' => true)
     end
 
-    it 'pays a proof-of-work toll only when told to' do
+    it 'solves a proof-of-work toll only when told to' do
       toll = { 'id' => 'c1', 'alg' => 'equihash', 'params' => { 'n' => 8, 'k' => 1 },
                'salt' => Base64.strict_encode64('kat'), 'exp' => 9_999_999_999, 'sig' => 'x' }
       stub_request(:get, 'http://provider.test/kiosk/catalog')

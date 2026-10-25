@@ -15,7 +15,7 @@ module Kiosk
   module TestHelpers
     # Calls a verb of the booted app through its route, in this process, as an
     # assistant does: one linked to the principal's account, as a person links
-    # one, and paying any proof-of-work toll. A caller with no identity sends no
+    # one, and solving any proof-of-work toll. A caller with no identity sends no
     # token.
     class InProcessWire
       # `app` defaults to the Rails application, middleware included.
@@ -63,7 +63,7 @@ module Kiosk
         Wire::DpopCredential.new(token:, key:)
       end
 
-      # Registers the key as a client, and pays the registration toll if the origin asks for one.
+      # Registers the key as a client, and solves the registration toll if the origin asks for one.
       def register(key)
         metadata = { 'jwks' => { 'keys' => [Kiosk::Server::AssistantKey.to_jwk(key)] } }
         Kiosk::Server::ClientRegistration.call(metadata)

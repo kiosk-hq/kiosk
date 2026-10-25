@@ -228,7 +228,7 @@ zero on that block. Two consequences the verifier must respect:
 **Verifying is the operator's Ruby; solving is the caller's problem.** Nothing
 an operator's server loads to serve a request ever executes a subprocess — the
 `verify` above is pure Ruby with no shell-out anywhere in its reach, and
-`solve.py` is here for the CALLER that pays the toll, run by the caller's own
+`solve.py` is here for the CALLER that solves the toll, run by the caller's own
 process. No process-spawning construct — `Open3`, `system`, backticks,
 `IO.popen`, `spawn`, `exec`, `%x` — is reachable from the served set, and no
 served file names the solver. The example below is what a CLIENT does, and that is why it is safe.

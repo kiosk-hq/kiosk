@@ -54,6 +54,6 @@ class StoryTest < Kiosk::StoryTest
   def signs_in(person) = a_person(email: PEOPLE.fetch(person), password: 'combette-demo-password')
   def account_of(person) = User.find_by!(email: PEOPLE.fetch(person)).id
 
-  # A fresh assistant pays the registration toll, then claims a link code the person mints.
+  # A fresh assistant solves the registration toll, then claims a link code the person mints.
   def assistant_of(person) = signs_in(person).links(a_customer(as: Client))
 end

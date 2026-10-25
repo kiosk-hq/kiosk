@@ -4,7 +4,7 @@ Test helpers for [Kiosk](https://kiosk.tech) origins, and the journey-test DSL o
 
 ## What it does
 
-- `Kiosk::TestHelpers::Assistant` — registers, pays tolls, queries, runs actions, pays and listens for events against an origin, as an AI assistant does.
+- `Kiosk::TestHelpers::Assistant` — registers, solves tolls, queries, runs actions, pays and listens for events against an origin, as an AI assistant does.
 - `Kiosk::TestHelpers::Wire` — the same transport without a principal: any method, any path, any headers.
 - `Kiosk::StoryTest` / `Kiosk::TestHelpers::Story` — a test told as a business story by customers' assistants and the people on the operator's site.
 - `Kiosk::TestHelpers::Kyc` — stands in for the operator's KYC provider, so a test decides how an identity check ends.
@@ -28,7 +28,7 @@ end
 
 Both harnesses pull `kiosk-test-support` as a transitive dependency.
 
-Your bundle brings what the helpers drive: `puma` for `LiveServer` (`rails new` writes it), and `kiosk-pow-equihash` for the solver that pays Equihash tolls. `Wire` solves no other proof of work.
+Your bundle brings what the helpers drive: `puma` for `LiveServer` (`rails new` writes it), and `kiosk-pow-equihash` for the solver that solves Equihash tolls. `Wire` solves no other proof of work.
 
 ## DSL
 
@@ -70,7 +70,7 @@ The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; produc
 
 ## Driving the protocol as an assistant
 
-`Kiosk::TestHelpers::Assistant` registers its key as an OAuth client and gets DPoP-bound tokens, pays proof-of-work tolls, queries, runs, pays with closed AP2 mandates (SD-JWT) and listens on `<endpoint>/events`, against any origin — a test's own live server or a deployment:
+`Kiosk::TestHelpers::Assistant` registers its key as an OAuth client and gets DPoP-bound tokens, solves proof-of-work tolls, queries, runs, pays with closed AP2 mandates (SD-JWT) and listens on `<endpoint>/events`, against any origin — a test's own live server or a deployment:
 
 ```ruby
 require "kiosk/test_helpers/assistant"

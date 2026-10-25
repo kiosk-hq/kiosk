@@ -1889,7 +1889,7 @@ E2E_FIXTURES = {
   },
   'equihash_register.rb' => {
     pairs: nil,
-    why: 'Run in place; it hands the proofs it paid to the schema checks.'
+    why: 'Run in place; it hands the proofs it solved to the schema checks.'
   },
   'claim_flow.rb' => {
     pairs: nil,

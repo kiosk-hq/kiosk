@@ -5,13 +5,13 @@ require 'kiosk/pow/equihash'
 require 'kiosk/reputation'
 require_relative '../../support/postgres'
 
-# A backend that accepts the nonce 'solved', so a paid proof costs the spec no work.
+# A backend that accepts the nonce 'solved', so a proof costs the spec no work.
 module AcceptingEquihash
   def self.verify(nonce:, **) = nonce == 'solved' # rubocop:disable Naming/PredicateMethod -- `verify` is the backend contract Backends.register names
 end
 
 # The toll by call count through the real gate, `RecentSpend` and the shipped
-# tables: every Nth tolled call of an account answers 402 until a proof pays for
+# tables: every Nth tolled call of an account answers 402 until a proof clears
 # it, and the assistants bound to one account share the count and the spend.
 RSpec.describe Kiosk::Server::TolledCalls do
   include_context 'with registered clients'
@@ -64,18 +64,18 @@ RSpec.describe Kiosk::Server::TolledCalls do
     conn.exec_query(%(INSERT INTO "#{OauthClients::SCHEMA}".kiosk_visits (user_id, value_cents, visited_at) VALUES ($1, $2, $3)), 'spec', [account, cents, at])
   end
 
-  it 'answers 402 on the 10th call of an account with no spend, and the paid proof lets that call through' do
+  it 'answers 402 on the 10th call of an account with no spend, and the solved proof lets that call through' do
     expect(first_tolled_call).to eq(10)
     expect(pay(call)).to eq(:proceed)
   end
 
-  it 'counts a 402 and the retry that pays it as one call: the paid retry sets the count to zero' do
+  it 'counts a 402 and its tolled retry as one call: the tolled retry sets the count to zero' do
     refusal = Array.new(10) { call }.last
 
     expect([tolled?(refusal), pay(refusal), calls_since_proof]).to eq([true, :proceed, 0])
   end
 
-  it 'starts a new count of 10 after the paid proof' do
+  it 'starts a new count of 10 after the solved proof' do
     first_tolled_call
     pay(call)
 
@@ -116,14 +116,14 @@ RSpec.describe Kiosk::Server::TolledCalls do
     expect(first_tolled_call).to eq(10)
   end
 
-  it 'shares the count among the assistants of one account: nine calls by one, the 10th by another pays' do
+  it 'shares the count among the assistants of one account: nine calls by one, the 10th by another is tolled' do
     other = assistant_of(human)
     9.times { call }
 
     expect(tolled?(call(token(other)))).to be(true)
   end
 
-  it 'shares the spend among the assistants of one account: at half the cap every 20th call across both pays' do
+  it 'shares the spend among the assistants of one account: at half the cap every 20th call across both is tolled' do
     visit(50_00)
     other = assistant_of(human)
     tolled = (1..40).select do |n|

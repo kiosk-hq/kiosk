@@ -143,7 +143,7 @@ scenarios share:
 | `PayForOtherUseSelf` | B paying for A's resource does not let B use it |
 | `TokenTampering` | a JWT with a flipped claim and the original signature is 401 |
 | `StolenToken` | a real access token without its key is 401: as a bearer token, and with a DPoP proof that another key signs |
-| `RegistrationWithoutPow` | a missing or bad proof is rejected when the origin charges a toll |
+| `RegistrationWithoutPow` | a missing or bad proof is rejected when the origin asks a toll |
 | `MandatePrincipalSwap` | B paying, with its own key, the checkout the operator signed for A is rejected |
 | `MandateReplay` | A's signed mandates re-submitted under B's token are rejected |
 | `UnpaidGatedAction` | the gated action without a prior settled payment is denied |

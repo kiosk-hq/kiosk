@@ -38,8 +38,8 @@ module Kiosk
     PAYMENT_REQUIRED_CODES = {
       'pow_required' =>
         'a toll was DEMANDED, not a refusal — the request was deferred until a proof is ' \
-        'supplied. This harness PAYS that toll on every verb, so seeing this code here ' \
-        'means the demand survived a paid retry (or arrived with no challenges to ' \
+        'supplied. This harness SOLVES that toll on every verb, so seeing this code here ' \
+        'means the demand survived a tolled retry (or arrived with no challenges to ' \
         'solve); either way the attack itself was never evaluated',
       'payment_setup_required' =>
         "the principal has no payment instrument on file — a gap in the ATTACKER's setup, " \

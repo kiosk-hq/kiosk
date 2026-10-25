@@ -25,7 +25,7 @@ module Kiosk
       # How many proofs of work the assistant solved to be answered.
       def tolls_paid = @response.proofs
 
-      # The proofs of work that pay the toll this refusal demands.
+      # The proofs of work that solve the toll this refusal demands.
       def solved_toll = Wire.solve(self['challenges'])
 
       # The `Link` target with `rel="next"`: the rest of a truncated list.
@@ -50,7 +50,7 @@ module Kiosk
 
       def origin = @assistant.base_url
 
-      # Pays any proof-of-work toll asked for, unless `unpaid:` or carrying its own `proofs:`.
+      # Solves any proof-of-work toll asked for, unless `unpaid:` or carrying its own `proofs:`.
       def asks(query, headers: {}, unpaid: false, proofs: nil, **params)
         headers = headers.merge('Kiosk-PoW' => JSON.generate(proofs)) if proofs
         Answer.new(@assistant.query(principal, name: query.to_s, headers:, pay_tolls: !(unpaid || proofs), **params))

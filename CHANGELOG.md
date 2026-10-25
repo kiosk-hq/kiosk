@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-25: Comments, READMEs, test names and the atablefor home page say that an assistant solves the toll, and name the request sent again after a `402` the tolled retry.
+
 ## [0.6.17] — 2026-10-25
 
 - 2026-10-25: **Every gem and `API_VERSION` are 0.6.17, matching skill 0.6.17; the engine default is `skill-v0.6.17.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.

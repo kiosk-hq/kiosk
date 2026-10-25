@@ -65,7 +65,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
 
   # ── HTTP 402 on the gated action ─────────────────────────────────────────
   #
-  # #run pays a `pow_required` that carries challenges, and the attack runs.
+  # #run solves a `pow_required` that carries challenges, and the attack runs.
   # These stubs carry none: the shape of the two payment 402s, and of a toll a
   # provider demands again. The attack never executed, so the verdict is
   # could-not-test, or a breach for payment_failed, and never a pass.

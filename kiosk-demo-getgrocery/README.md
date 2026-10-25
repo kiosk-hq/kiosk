@@ -21,7 +21,7 @@ On your own machine you need:
 
 - **Ruby 4.0 or newer**, then `bundle install`.
 - **Postgres**, reachable — `pg_isready` returns OK.
-- **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
+- **python3 with numpy** — registering an assistant solves an Equihash toll with the bundled `solve.py`.
 - **stripe-mock** on PATH for the tests — `brew install stripe-mock`.
 
 From this directory:

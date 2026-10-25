@@ -187,7 +187,7 @@ in cents and a currency. The engine refuses a `pay` that passes the cap, or a
 ### Proof of work
 
 Set a policy and the engine asks it on each query, action and `pay`. The
-engine counts each account's tolled calls since its last paid proof. The
+engine counts each account's tolled calls since its last proof. The
 assistants bound to one account share that count, and a new access token or a
 key rotation keeps it. A binding adds the count of the assistant's previous account
 to the count of its new account. With the ready-made policy, an account pays a

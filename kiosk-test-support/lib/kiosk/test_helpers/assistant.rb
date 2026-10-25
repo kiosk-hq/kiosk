@@ -87,7 +87,7 @@ module Kiosk
         wire.post('/kiosk/agents/kyc', { kyc_jws: attestation_jws }, credential(principal))
       end
 
-      # `pay_tolls: false` answers a proof-of-work toll instead of paying it.
+      # `pay_tolls: false` answers a proof-of-work toll instead of solving it.
       def query(principal, name:, headers: {}, pay_tolls: true, **params)
         (pay_tolls ? wire : unpaid).get("/kiosk/#{name}", params, credential(principal).merge(headers))
       end

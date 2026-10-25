@@ -26,11 +26,10 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2072 anchors.
+# 2070 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
-.github/workflows/ci.yml	SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	## [0.6.0] — 2026-10-21
@@ -1053,7 +1052,6 @@ kiosk-server/app/controllers/kiosk/server/verb_controller.rb	class VerbControlle
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	def serve(command)
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	descriptor = descriptor_for!(command, name)
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	    # Response (JSON): success is the handler's payload VERBATIM
-kiosk-server/app/controllers/kiosk/server/wire_controller.rb	Response (JSON): success is the handler's payload VERBATIM
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	def schema
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	include VerbWire
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	rescue_from ::ActionDispatch::Http::Parameters::ParseError do

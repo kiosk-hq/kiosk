@@ -2,6 +2,6 @@
 
 module Kiosk
   module Server
-    VERSION = '0.6.19'
+    VERSION = '0.6.20'
   end
 end

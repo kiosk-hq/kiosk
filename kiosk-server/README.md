@@ -75,6 +75,10 @@ Kiosk.configure do |c|
   # nobody sets neither line, and then no token carries a `role` claim.
   c.registration_role = :customer
   c.owner         = { name: "Acme Inc.", support: "support@acme.example" }
+  # The SHA-256 of the skill file that kiosk-server gives (Kiosk.configuration.skill_url):
+  #   curl -fsS "$(bin/rails runner 'puts Kiosk.configuration.skill_url')" | shasum -a 256
+  # Without it, discovery advertises no skill pin. See "The skill pin" below.
+  c.skill_sha256  = "<the 64 hexadecimal characters that the command prints>"
   # The Ed25519 key that signs access tokens, checkouts and receipts (EdDSA):
   #   openssl genpkey -algorithm ed25519 | base64
   c.signing_key   = Base64.decode64(ENV.fetch("KIOSK_SIGNING_KEY_B64"))
@@ -257,6 +261,15 @@ upgrade edits it.
 The principle behind all three: generate as little as possible, derive at boot
 whatever can be derived, default whatever can be defaulted, and fail closed on
 what can be neither.
+
+### The skill pin
+
+Each kiosk-server release gives the skill of its own version as
+`skill_url`. Do not set `skill_url`. After an upgrade to a release with a
+different skill, your `skill_sha256` is the digest of the old file, and an AI
+assistant that checks the digest refuses the skill. The skill pin test of
+`kiosk-test-support` (`Kiosk::TestHelpers::SkillPin`) fails in this case, and
+its message tells you how to make the new digest.
 
 
 ## Multi-process deployments

@@ -42,6 +42,11 @@ Kiosk.configure do |c|
   # Owner block surfaced in /.well-known/kiosk.json.
   # c.owner = { name: "Your Company", support: "support@example.com" }
 
+  # The SHA-256 of the skill file that kiosk-server gives. Without it, discovery advertises no skill pin.
+  #   curl -fsS "$(bin/rails runner 'puts Kiosk.configuration.skill_url')" | shasum -a 256
+  # Kiosk::TestHelpers::SkillPin (kiosk-test-support) fails when an upgrade gives a different skill.
+  # c.skill_sha256 = "<the 64 hexadecimal characters that the command prints>"
+
   # Optional: an agent IdP of your own (subclass Kiosk::AgentIdentityProviders::Base; agent ids must be UUIDs).
   # c.agent_idp = MyExternalAgentIdp.new
 

@@ -568,9 +568,10 @@ jobs:
   # THE PUBLISHED ARTEFACTS — the one job that checks kiosk.tech out beside this
   # repo, because it compares this tree's skill pins against published BYTES.
   #
-  # Every demo initializer pins `skill_url` + `skill_sha256`, and that pair is the
-  # entire supply-chain instruction an AI assistant gets: fetch this file, verify
-  # this digest, refuse it on a mismatch. Sibling-less, nothing can compare them.
+  # kiosk-server's default `skill_url` and each demo initializer's `skill_sha256`
+  # are the entire supply-chain instruction an AI assistant gets: fetch this
+  # file, verify this digest, refuse it on a mismatch. Sibling-less, nothing can
+  # compare them.
   #
   # `kiosk-hq/kiosk.tech` is a PUBLIC repository, so the default GITHUB_TOKEN
   # clones it, and a published `skill-vX.Y.Z.md` is never edited
@@ -583,8 +584,8 @@ jobs:
   #
   # THE STEPS, and each one is dead without the sibling:
   #   * skill_pin_spec.rb — every demo's `skill_sha256` against the SHA-256 of
-  #     the file its `skill_url` names, the engine default naming that same
-  #     published artefact, and the pinned cut bounding its device-code poll.
+  #     the file the engine default `skill_url` names, that file published, and
+  #     the pinned cut bounding its device-code poll.
   #     `KIOSK_REQUIRE_SITE_SIBLING=1` makes an absent sibling a FAILURE rather
   #     than pending examples.
   #   * bin/check-live-skill-pin (offline, no network) — that the cut every demo

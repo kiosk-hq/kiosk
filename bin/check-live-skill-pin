@@ -1,8 +1,9 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# check-live-skill-pin — every operator demo pins a skill cut (skill_url + skill_sha256) and has a
-# host in deploy/README.md; beside a ../kiosk.tech checkout, the pin is the newest published cut.
+# check-live-skill-pin — every operator demo sets skill_sha256 for the skill_url kiosk-server gives,
+# sets no skill_url of its own, and has a host in deploy/README.md; beside a ../kiosk.tech checkout,
+# the pin is the newest published cut.
 # --network also fetches each origin's /.well-known/kiosk.json and compares the served pin.
 # --network is a manual deploy-time check, never CI: the fleet lags the tree until the next deploy.
 # Usage: bin/check-live-skill-pin [--offline (default) | --network]
@@ -75,9 +76,14 @@ def operator_dirs
   Dir.glob(File.join(ROOT, 'kiosk-demo-*', 'config', 'initializers', 'kiosk.rb'))
 end
 
-def demo_pin(initializer)
-  src = File.read(initializer)
-  [src[/^\s*c\.skill_url\s*=\s*['"]([^'"]+)['"]/, 1], src[/^\s*c\.skill_sha256\s*=\s*['"]([^'"]+)['"]/, 1]]
+# The skill_sha256 a demo sets; nil, after a finding, when it sets none or sets its own skill_url.
+def demo_sha(demo, initializer)
+  src  = File.read(initializer)
+  path = "kiosk-demo-#{demo}/config/initializers/kiosk.rb"
+  return fail!("#{path} sets `c.skill_url`; kiosk-server gives it, so remove the line") if src.match?(/^\s*c\.skill_url\s*=/)
+
+  src[/^\s*c\.skill_sha256\s*=\s*['"]([^'"]+)['"]/, 1] ||
+    fail!("#{path}: no `c.skill_sha256` — cannot say what that box is meant to serve")
 end
 
 def engine_default_url
@@ -141,7 +147,7 @@ def resolve_expectation
 
   pins = expected.values.map { |e| [e[:url], e[:sha256]] }.uniq
   report_pins(expected, pins)
-  report_engine_default(pins)
+  report_engine_default
   check_newest_cut(pins)
   expected
 end
@@ -174,11 +180,8 @@ def expected_pin(demo, host, initializer)
                  '`*.demo.kiosk.tech` host to it; add its row to the per-demo map'
   end
 
-  url, sha = demo_pin(initializer)
-  return { host: host, url: url, sha256: sha } if url && sha
-
-  fail! "kiosk-demo-#{demo}/config/initializers/kiosk.rb: no `c.skill_url`/`c.skill_sha256` " \
-        'pair — cannot say what that box is meant to serve'
+  sha = demo_sha(demo, initializer)
+  { host: host, url: engine_default_url, sha256: sha } if sha && engine_default_url
 end
 
 def report_pins(expected, pins)
@@ -194,16 +197,13 @@ def pins_summary(expected, pins)
   end
 end
 
-def report_engine_default(pins)
+def report_engine_default
   default = engine_default_url
   if default.nil?
     fail! 'kiosk-server/lib/kiosk/server/configuration_extension.rb: no `@skill_url ||= "…"` — ' \
-          'the default a demo inherits when it pins nothing cannot be read'
-  elsif pins.length == 1 && default != pins[0][0]
-    pass "kiosk-server default is #{File.basename(default)}; the demos override it with " \
-         "#{File.basename(pins[0][0])} (an override is normal)"
+          'the skill_url every demo serves cannot be read'
   else
-    pass "kiosk-server default skill_url is #{File.basename(default.to_s)}"
+    pass "kiosk-server default skill_url is #{File.basename(default)}"
   end
 end
 
@@ -225,8 +225,8 @@ def check_pin_is_newest(url, sha, cut_count, newest_path, newest_sha)
          "its sha256 is #{short(newest_sha)}…"
   else
     fail! "the demos pin #{File.basename(url)} (#{short(sha)}…) but the newest cut on disk " \
-          "is #{File.basename(newest_path)} (#{short(newest_sha)}…); relink every demo and the " \
-          'engine default to the newest cut'
+          "is #{File.basename(newest_path)} (#{short(newest_sha)}…); move the kiosk-server " \
+          "default to the newest cut, and each demo's skill_sha256 and hashed_version: with it"
   end
 end
 

@@ -7,19 +7,18 @@ require 'kiosk/server/oauth_error'
 
 # Skill pin check (immutable versioned skill files).
 #
-# Nine consumers name a skill. Seven demo initializers pin `skill_url` and
-# `skill_sha256`; kiosk-server ships the default `skill_url` that every other
-# operator inherits by not setting one; and kiosk-server's well_known_spec
-# asserts what the discovery document advertises. The engine default is a
-# consumer in its own right here, not a fallback.
+# kiosk-server ships the default `skill_url`, and no demo sets its own. Each of
+# the seven demos sets `skill_sha256` in its initializer and names the skill
+# version that digest is for in its skill pin test (`hashed_version:`).
 #
 # This spec owns what needs the published BYTES:
-#   * INTEGRITY: each pinned `skill_sha256` equals the SHA-256 of the pinned
+#   * INTEGRITY: each pinned `skill_sha256` equals the SHA-256 of the default
 #     file as kiosk.tech publishes it. A hash-verifying AI assistant refuses the
 #     skill on a mismatch, so a stale pin stops the operator being usable.
-#   * PATCH AGREEMENT: the engine default and the demos name the SAME cut.
+#   * PATCH AGREEMENT: the engine default and every demo's `hashed_version:`
+#     name the SAME cut.
 # It does not check that the pinned version matches
-# `Kiosk::Protocol::API_VERSION`: it reads bytes, not version strings.
+# `Kiosk::Protocol::API_VERSION`: bin/check-version-parity does.
 #
 # The byte groups need the published cuts from the kiosk.tech repository, so
 # they run when that repository sits beside this one and skip when it does not.
@@ -42,16 +41,24 @@ module SkillPin
     File.read(DEFAULT_URL_SOURCE)[/@skill_url\s*\|\|=\s*['"]([^'"]+)['"]/, 1]
   end
 
-  # demo => {url:, sha:, path:}. A demo that sets no `skill_url` inherits
-  # kiosk-server's default, which is a legitimate configuration.
+  # demo => {url:, sha:, hashed_version:, path:}. The url is kiosk-server's
+  # default; `own_url` is a `skill_url` the initializer sets, which it must not.
   def pins
     INITIALIZERS.to_h do |path|
       src = File.read(path)
       [path[%r{(kiosk-demo-[^/]+)}, 1],
-       { url: src[/skill_url\s*=\s*['"]([^'"]+)['"]/, 1] || default_url,
+       { url: default_url,
+         own_url: src[/skill_url\s*=\s*['"]([^'"]+)['"]/, 1],
          sha: src[/skill_sha256\s*=\s*['"]([0-9a-f]{64})['"]/, 1],
+         hashed_version: hashed_version(File.expand_path('../../..', path)),
          path: path }]
     end
+  end
+
+  # The version a demo's skill pin test names; nil when it has no such test.
+  def hashed_version(demo_dir)
+    test = Dir[File.join(demo_dir, '{test,spec}/kiosk_skill_pin_{test,spec}.rb')].first
+    test && File.read(test)[/hashed_version: '(\d+\.\d+\.\d+)'/, 1]
   end
 
   def published_sha(url) = Digest::SHA256.hexdigest(File.binread(published_file(url)))
@@ -107,18 +114,25 @@ RSpec.describe 'the skill pin' do
                                         'carry on without it — teach it where the default moved.'
   end
 
+  it 'finds no demo that sets its own skill_url' do
+    own = SkillPin.pins.select { |_, pin| pin[:own_url] }.keys
+    expect(own).to be_empty, "#{own.join(', ')} set skill_url; kiosk-server gives it, so remove the line"
+  end
+
   # Runs without the sibling checkout. The message names no version: it prints
-  # every URL and derives the series from them.
+  # every version and derives the series from them.
   it "is the same published cut in kiosk-server's default and in every demo" do
     skip "kiosk-server's default is unreadable (asserted above)" if SkillPin.default_url.nil?
 
-    named  = SkillPin.pins.transform_values { it[:url] }.merge('kiosk-server (default)' => SkillPin.default_url)
-    series = named.values.filter_map { it[/skill-v(\d+\.\d+)\./, 1] }.uniq.sort
+    named  = SkillPin.pins.transform_values { it[:hashed_version] }
+                     .merge('kiosk-server (default)' => SkillPin.default_url[/skill-v(\d+\.\d+\.\d+)\.md/, 1])
+    series = named.values.compact.map { it[/\A\d+\.\d+/] }.uniq.sort
     expect(named.values.uniq.size).to eq(1),
-                                      "the skill_url consumers disagree on which cut is current:\n" \
-                                      "#{named.map { |who, url| "  #{who}: #{url}" }.join("\n")}\n" \
-                                      'All nine consumers re-pin together when a new skill is cut ' \
-                                      "(ADR-0012). Series named: #{series.join(' / ')}."
+                                      "kiosk-server's default and the demos' skill pin tests (hashed_version:) " \
+                                      "disagree on which cut is current:\n" \
+                                      "#{named.map { |who, version| "  #{who}: #{version.inspect}" }.join("\n")}\n" \
+                                      'All consumers re-pin together when a new skill is cut. ' \
+                                      "Series named: #{series.join(' / ')}."
   end
 
   # The engine default carries no sha256 of its own, so the property is that the
@@ -140,7 +154,7 @@ RSpec.describe 'the skill pin' do
                            "the default cut #{File.basename(url)} hashes to #{actual}, " \
                            "but the demos pin #{demo_shas.inspect} — the default and the demo pins " \
                            'are supposed to be the same artefact. Re-pin them together, or publish ' \
-                           'a new immutable cut and move all nine consumers to it.'
+                           'a new immutable cut and move every consumer to it.'
     end
   end
 
@@ -150,9 +164,7 @@ RSpec.describe 'the skill pin' do
     SkillPin.pins.each do |demo, pin|
       it "#{demo} pins the sha256 of the published skill version file" do
         expect(pin[:sha]).not_to be_nil, "#{demo}: no skill_sha256 pin in #{pin[:path]}"
-        expect(pin[:url]).not_to be_nil,
-                                 "could not determine the skill URL (no skill_url in #{pin[:path]} " \
-                                 "and no default in #{SkillPin::DEFAULT_URL_SOURCE})"
+        expect(pin[:url]).not_to be_nil, "no default skill_url in #{SkillPin::DEFAULT_URL_SOURCE}"
         expect(File).to exist(SkillPin.published_file(pin[:url])),
                         "pinned skill file #{File.basename(pin[:url])} (from #{pin[:url]}) not found in #{SkillPin::SITE_ROOT}"
 

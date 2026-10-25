@@ -2,8 +2,8 @@
 # frozen_string_literal: true
 
 # check-version-parity — protocol.md §14.1: before 1.0, API_VERSION, every gem, every
-# lockfile kiosk-* entry and every skill pin share one MAJOR.MINOR.PATCH (from 1.0,
-# MAJOR.MINOR). MIN_CLIENT is in API_VERSION's MAJOR.MINOR and no newer (§3.6). Also:
+# lockfile kiosk-* entry, kiosk-server's skill_url and the hashed_version: of every demo's
+# skill pin test share one MAJOR.MINOR.PATCH (from 1.0, MAJOR.MINOR). MIN_CLIENT is in API_VERSION's MAJOR.MINOR and no newer (§3.6). Also:
 # inter-gem deps are `~> MAJOR.MINOR.0`, each gem's version comes from one version.rb,
 # and each demo emits rel="kiosk" from Kiosk.configuration.skill_url.
 
@@ -78,15 +78,21 @@ end
 initializers = Dir[File.join(ROOT, 'kiosk-demo-*', 'config', 'initializers', 'kiosk.rb')]
 errors << 'no kiosk-demo-*/config/initializers/kiosk.rb found' if initializers.empty?
 
-pins = [['kiosk-server (default)', File.read(DEFAULTS)[/@skill_url\s*\|\|=\s*['"]([^'"]+)['"]/, 1]]]
-pins += initializers.filter_map do |path|
-  url = File.read(path)[/skill_url\s*=\s*['"]([^'"]+)['"]/, 1]
-  [rel(path)[%r{\Akiosk-demo-[^/]+}], url] if url
+default_url = File.read(DEFAULTS)[/@skill_url\s*\|\|=\s*['"]([^'"]+)['"]/, 1]
+default_version = default_url && File.basename(default_url)[/\Askill-v(\d+\.\d+\.\d+)\.md\z/, 1]
+if default_version
+  check.call('kiosk-server (default) skill pin', default_version)
+else
+  errors << "kiosk-server (default): skill_url #{default_url.inspect} names no skill-vX.Y.Z.md cut"
 end
 
-pins.each do |where, url|
-  version = url && File.basename(url)[/\Askill-v(\d+\.\d+\.\d+)\.md\z/, 1]
-  version ? check.call("#{where} skill pin", version) : errors << "#{where}: skill_url #{url.inspect} names no skill-vX.Y.Z.md cut"
+# Each demo names the skill version of its skill_sha256 in its skill pin test.
+pins = initializers.map do |path|
+  demo = rel(path)[%r{\Akiosk-demo-[^/]+}]
+  test = Dir[File.join(ROOT, demo, '{test,spec}', 'kiosk_skill_pin_{test,spec}.rb')].first
+  version = test && File.read(test)[/hashed_version: '(\d+\.\d+\.\d+)'/, 1]
+  version ? check.call("#{demo} skill pin test (hashed_version:)", version) : errors << "#{demo}: no skill pin test names hashed_version:"
+  demo
 end
 
 # ── Discovery signal (§4.5) ──────────────────────────────────────────────────
@@ -121,7 +127,7 @@ initializers.map { File.expand_path('../../..', it) }.each do |dir|
 end
 
 if errors.empty?
-  puts "check-version-parity: OK — #{specs.size} gems, lockfiles and #{pins.size} skill pins at #{rule}"
+  puts "check-version-parity: OK — #{specs.size} gems, lockfiles, the skill_url and #{pins.size} skill pin tests at #{rule}"
   exit 0
 end
 

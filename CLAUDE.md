@@ -86,7 +86,9 @@ skill is `skill.md` on the same site.
 - Version parity (spec §14.1) binds the protocol, this implementation and the
   skill: before 1.0 to one MAJOR.MINOR.PATCH, from 1.0 to one MAJOR.MINOR. The
   number is `kiosk-core/lib/kiosk/protocol.rb`'s `API_VERSION`. Every
-  gemspec, every tracked lockfile and every pinned `skill_url` follow it.
+  gemspec, every tracked lockfile, kiosk-server's `skill_url` and the
+  `hashed_version:` of every demo's skill pin test follow it. A demo sets
+  `skill_sha256` and never `skill_url`.
   `MIN_CLIENT` is the oldest skill cut the release works with: the same
   MAJOR.MINOR, no newer. Every `kiosk-*` inter-gem constraint is
   `~> MAJOR.MINOR.0`. A skill cut moves the gems, and a gem release moves the

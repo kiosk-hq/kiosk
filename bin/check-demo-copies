@@ -508,6 +508,7 @@ EXTRA_SCANNED = [
   'test/stories/household_test.rb',
   'test/stories/link_test.rb',
   'test/stories/privacy_test.rb',
+  'test/kiosk_skill_pin_test.rb',
   'app/views/crawler/robots.text.erb',
   'app/views/privacy/_kiosk.html.erb',
   'app/views/privacy/show.html.erb',
@@ -555,6 +556,11 @@ COPIES = {
     rule: :per_demo,
     ships: %w[atablefor getgrocery philslist skooti stylish tudu],
     why: "Each demo's customers kept apart over its own rows."
+  },
+  'test/kiosk_skill_pin_test.rb' => {
+    rule: :identical,
+    ships: %w[atablefor getgrocery philslist skooti stylish tudu],
+    why: 'The skill pin test an operator copies; every demo pins the same skill version. Hoteling has the RSpec form.'
   },
   '.gitignore' => {
     rule: :identical,

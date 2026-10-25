@@ -199,9 +199,10 @@ the spec promises ([protocol §14.1](https://kiosk.tech/spec/protocol.md)): the
 protocol, every gem here and the published skill read the same MAJOR.MINOR.PATCH,
 and a new cut of any one of them moves all of them. From 1.0 they share
 MAJOR.MINOR. The number is `Kiosk::Protocol::API_VERSION`, and the `~> MAJOR.MINOR.0`
-inter-gem constraints, the lockfiles and the pinned `skill_url` follow it. Releases are cut as
-path-scoped git tags — the gem's directory name, then `/v` and the version —
-off each subdir's authoritative `*.gemspec`.
+inter-gem constraints, the lockfiles, kiosk-server's `skill_url` and every demo's
+skill pin test follow it. Releases are cut as path-scoped git tags — the gem's
+directory name, then `/v` and the version — off each subdir's authoritative
+`*.gemspec`.
 
 ## The two development keypairs this repo tracks on purpose
 

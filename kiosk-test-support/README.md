@@ -12,6 +12,7 @@ Test helpers for [Kiosk](https://kiosk.tech) origins, and the journey-test DSL o
 - `Kiosk::TestHelpers::LiveServer` — serves the app over HTTP from the test process and gives the test an assistant for it.
 - `Kiosk::TestHelpers::SeededDatabase` — each test starts from the seeds and leaves the database empty.
 - `Kiosk::TestHelpers::DescriptorExamples` — the examples a served `/kiosk/schema` publishes, each checked against its schema.
+- `Kiosk::TestHelpers::SkillPin` — fails when an update of kiosk-server gives a skill that your `skill_sha256` is not the digest of.
 
 Carries the shared pieces of the Kiosk journey-test DSL: the `Journey` module mixed into RSpec / Minitest tests, the pluggable `executor` contract, a `NullExecutor` for self-tests, and the structured error classes that the framework-specific matchers and assertions look for.
 
@@ -131,6 +132,46 @@ end
 `kyc_attestation(principal, **attributes)` signs an attestation an assistant submits to `POST <endpoint>/agents/kyc`. A check the human refuses sends nothing, so there is no helper for it.
 
 `Kiosk::TestHelpers::StripeMock.start` fronts a local [stripe-mock](https://github.com/stripe/stripe-mock) that answers a confirmed charge as paid. stripe-mock lists a saved card for every Customer, so once `payment_setup` has mapped one, `pay` settles.
+
+## The skill pin
+
+kiosk-server gives the URL of the skill that AI assistants read, and each kiosk-server release gives the skill of its own version. You set `skill_sha256`, the SHA-256 of that file, in `config/initializers/kiosk.rb`. This command downloads the file from kiosk.tech and calculates the digest:
+
+```bash
+curl -fsS "$(bin/rails runner 'puts Kiosk.configuration.skill_url')" | shasum -a 256
+```
+
+```ruby
+c.skill_sha256 = "<the 64 hexadecimal characters that the command prints>"
+```
+
+Then add a test that names the skill version of that digest: `X.Y.Z` from `skill-vX.Y.Z.md`. Minitest:
+
+```ruby
+require "kiosk/test_helpers/skill_pin"
+
+class KioskSkillPinTest < ActiveSupport::TestCase
+  include Kiosk::TestHelpers::SkillPin::Assertions
+
+  test "skill_sha256 is the digest of the skill that kiosk-server gives" do
+    assert_kiosk_skill_pin hashed_version: "X.Y.Z"
+  end
+end
+```
+
+RSpec:
+
+```ruby
+require "kiosk/test_helpers/skill_pin/rspec"
+
+RSpec.describe "the skill pin" do
+  it "is the digest of the skill that kiosk-server gives" do
+    expect(Kiosk.configuration).to pin_the_served_skill(hashed_version: "X.Y.Z")
+  end
+end
+```
+
+After an update of kiosk-server to a release with a different skill, the test fails. Its message gives the URL of the new skill, the command that calculates its SHA-256, and the two lines to change. The test also fails when your configuration sets `skill_url`: kiosk-server gives it.
 
 ## Status
 

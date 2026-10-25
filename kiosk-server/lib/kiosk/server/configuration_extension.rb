@@ -30,13 +30,18 @@ module Kiosk
           @owner ||= {}
         end
 
-        # The skill this origin was built against. Discovery emits the `skill`
-        # block only when `skill_sha256` is set.
+        # The skill cut of this kiosk-server release. Each release gives the cut
+        # of its own version. Do not set it.
         attr_writer :skill_url
 
         def skill_url
           @skill_url ||= 'https://kiosk.tech/skill-v0.6.14.md'
         end
+
+        # The SHA-256 of the file at `skill_url`, as hex. Default nil: discovery
+        # then advertises no `skill` block. Make it with
+        # `curl -fsS <skill_url> | shasum -a 256`. Kiosk::TestHelpers::SkillPin
+        # fails when an update of kiosk-server changes `skill_url`.
         attr_accessor :skill_sha256
 
         private

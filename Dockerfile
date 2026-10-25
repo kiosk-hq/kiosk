@@ -1,6 +1,6 @@
-# One image for every demo in this repository. The demos resolve the kiosk
-# gems through `path: "../kiosk-<gem>"`, so the build context is the whole
-# repository; each demo's compose.yaml picks the working directory.
+# One image for every demo in this repository. The demos read the kiosk gems
+# from the repository root (`path '..'` in each Gemfile), so the build context
+# is the whole repository; each demo's compose.yaml picks the working directory.
 #
 # The image carries the tools demo code runs: python3 with numpy (registering
 # an assistant solves an Equihash toll with the bundled solve.py). Compose

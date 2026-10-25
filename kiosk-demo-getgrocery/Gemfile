@@ -23,16 +23,18 @@ gem 'solid_queue'
 # that Warden session through the kiosk-user-idp-devise adapter below.
 gem 'devise'
 
-# --- Kiosk ----------------------------------------------------------------
-gem 'kiosk-all',        path: '../kiosk-all'
-gem 'kiosk-core',       path: '../kiosk-core'
-gem 'kiosk-kyc-prove',    path: '../kiosk-kyc-prove'
-gem 'kiosk-pay-stripe',   path: '../kiosk-pay-stripe'
-gem 'kiosk-pow',          path: '../kiosk-pow'
-gem 'kiosk-pow-equihash', path: '../kiosk-pow-equihash'
-gem 'kiosk-reputation',   path: '../kiosk-reputation'
-gem 'kiosk-server',       path: '../kiosk-server'
-gem 'kiosk-user-idp-devise', path: '../kiosk-user-idp-devise'
+# ─── Kiosk ────────────────────────────────────────────────────────────
+# kiosk-all brings kiosk-core and kiosk-server, and kiosk-pow-equihash brings
+# kiosk-pow. `path '..'` reads each gem from the working tree of this
+# monorepo. Outside it, keep the gem lines and remove the `path` block around them.
+path '..' do
+  gem 'kiosk-all'
+  gem 'kiosk-kyc-prove'
+  gem 'kiosk-pay-stripe'
+  gem 'kiosk-pow-equihash'
+  gem 'kiosk-reputation'
+  gem 'kiosk-user-idp-devise'
+end
 
 group :development, :test do
   gem 'debug', platforms: %i[mri windows], require: 'debug/prelude'
@@ -43,10 +45,10 @@ group :test do
   # resolve, that a verb executes, that a query answers the shape it declared,
   # and that data access is scoped to the calling customer. `test/` connects the
   # Minitest adapter; the RSpec adapter ships in the same gem and needs no other.
-  gem 'kiosk-test-support', path: '../kiosk-test-support'
+  gem 'kiosk-test-support', path: '..'
 end
 
 # The attack battery, ../kiosk-redteam/suites/getgrocery.rb, runs with this bundle.
 group :development do
-  gem 'kiosk-redteam', path: '../kiosk-redteam', require: false
+  gem 'kiosk-redteam', path: '..', require: false
 end

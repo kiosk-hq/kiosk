@@ -1,56 +1,24 @@
 PATH
-  remote: ../kiosk-all
+  remote: ..
   specs:
     kiosk-all (0.6.14)
       kiosk-core (~> 0.6.0)
       kiosk-server (~> 0.6.0)
-
-PATH
-  remote: ../kiosk-core
-  specs:
     kiosk-core (0.6.14)
-
-PATH
-  remote: ../kiosk-kyc-prove
-  specs:
     kiosk-kyc-prove (0.6.14)
       kiosk-core (~> 0.6.0)
-
-PATH
-  remote: ../kiosk-pay-stripe
-  specs:
     kiosk-pay-stripe (0.6.14)
       activerecord (~> 8.1)
       kiosk-core (~> 0.6.0)
       stripe (~> 19)
-
-PATH
-  remote: ../kiosk-pow-equihash
-  specs:
+    kiosk-pow (0.6.14)
     kiosk-pow-equihash (0.6.14)
       kiosk-pow (~> 0.6.0)
-
-PATH
-  remote: ../kiosk-pow
-  specs:
-    kiosk-pow (0.6.14)
-
-PATH
-  remote: ../kiosk-redteam
-  specs:
     kiosk-redteam (0.6.14)
       base64
       kiosk-test-support (~> 0.6.0)
-
-PATH
-  remote: ../kiosk-reputation
-  specs:
     kiosk-reputation (0.6.14)
       base64
-
-PATH
-  remote: ../kiosk-server
-  specs:
     kiosk-server (0.6.14)
       actioncable (~> 8.1)
       actionpack (~> 8.1)
@@ -62,10 +30,6 @@ PATH
       kiosk-core (~> 0.6.0)
       railties (~> 8.1)
       zeitwerk (~> 2.6)
-
-PATH
-  remote: ../kiosk-test-support
-  specs:
     kiosk-test-support (0.6.14)
       json_schemer (>= 2.3, < 3.0)
       jwt (>= 2.10, < 4.0)
@@ -73,10 +37,6 @@ PATH
       kiosk-server (~> 0.6.0)
       kiosk-user-idp-devise (~> 0.6.0)
       websocket-driver (~> 0.7)
-
-PATH
-  remote: ../kiosk-user-idp-devise
-  specs:
     kiosk-user-idp-devise (0.6.14)
       kiosk-core (~> 0.6.0)
 
@@ -372,14 +332,11 @@ DEPENDENCIES
   devise
   jbuilder
   kiosk-all!
-  kiosk-core!
   kiosk-kyc-prove!
   kiosk-pay-stripe!
-  kiosk-pow!
   kiosk-pow-equihash!
   kiosk-redteam!
   kiosk-reputation!
-  kiosk-server!
   kiosk-test-support!
   kiosk-user-idp-devise!
   pg (~> 1.1)

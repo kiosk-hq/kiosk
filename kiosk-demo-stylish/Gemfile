@@ -31,16 +31,15 @@ gem 'solid_queue'
 gem 'devise'
 
 # ─── Kiosk ────────────────────────────────────────────────────────────
-# Path overrides while the gems live in this monorepo. When the demo
-# moves to its own kiosk-hq/kiosk-demo-stylish repo, swap these to
-# rubygems-published versions.
-gem 'kiosk-all',                path: '../kiosk-all'
-gem 'kiosk-core',               path: '../kiosk-core'
-gem 'kiosk-pow',                path: '../kiosk-pow'
-gem 'kiosk-pow-equihash',       path: '../kiosk-pow-equihash'
-gem 'kiosk-reputation',         path: '../kiosk-reputation'
-gem 'kiosk-server',             path: '../kiosk-server'
-gem 'kiosk-user-idp-devise',    path: '../kiosk-user-idp-devise'
+# kiosk-all brings kiosk-core and kiosk-server, and kiosk-pow-equihash brings
+# kiosk-pow. `path '..'` reads each gem from the working tree of this
+# monorepo. Outside it, keep the gem lines and remove the `path` block around them.
+path '..' do
+  gem 'kiosk-all'
+  gem 'kiosk-pow-equihash'
+  gem 'kiosk-reputation'
+  gem 'kiosk-user-idp-devise'
+end
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
@@ -48,10 +47,10 @@ group :development, :test do
 end
 
 group :test do
-  gem 'kiosk-test-support', path: '../kiosk-test-support'
+  gem 'kiosk-test-support', path: '..'
 end
 
 # The attack battery, ../kiosk-redteam/suites/stylish.rb, runs with this bundle.
 group :development do
-  gem 'kiosk-redteam', path: '../kiosk-redteam', require: false
+  gem 'kiosk-redteam', path: '..', require: false
 end

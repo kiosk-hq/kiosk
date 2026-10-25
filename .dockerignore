@@ -1,7 +1,7 @@
 # What the container build does NOT need out of this repository.
 #
 # The build context is this whole repository, because the kiosk gems are
-# resolved through `path: "../kiosk-<gem>"` wherever a demo depends on them.
+# resolved from the repository root (`path '..'`) wherever a demo depends on them.
 # That makes the context large, and everything below is either regenerated inside the image,
 # machine-local, or has no bearing on a build.
 #

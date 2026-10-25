@@ -17,7 +17,7 @@
 #
 # The image is shared by every demo in this repository and is built from the
 # Dockerfile one directory up. It has to be: the kiosk gems are resolved
-# through `path: "../kiosk-<gem>"` wherever a demo depends on them, so the
+# from the repository root (`path '..'`) wherever a demo depends on them, so the
 # build context is the repository rather than any one demo directory — and one
 # image carrying all of them is also what lets the tasks that boot a sibling
 # demo work.

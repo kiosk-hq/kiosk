@@ -59,8 +59,7 @@ class KioskEvents < ActionCable::Channel::Base
   end
 
   # Replay and live delivery both come here, through {Kiosk::Server::EventsReplay}.
-  # An event may arrive twice; delivery is at-least-once and the client
-  # ignores an `id` it has seen.
+  # An event can arrive twice; the client ignores an `id` it has seen.
   def deliver(event)
     transmit(event) if for_this_subscription?(event)
   end

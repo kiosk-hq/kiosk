@@ -45,6 +45,15 @@ class RideStory < StoryTest
     assert the_lock_on('SK-001').unlock(token: rental['rental_token'], now: Time.now.to_i)
   end
 
+  test 'the checkout a rider approves names the scooter and the price of its first minute' do
+    scooter = a_rider.reserves('SK-001')
+    price = Scooter.find_by!(code: 'SK-001').price_per_min_cents
+
+    assert_equal [{ 'reservation_id' => scooter['reservation_id'] },
+                  { 'scooter_code' => 'SK-001', 'qty' => 1, 'price_cents' => price }],
+                 JWT.decode(scooter['checkout_jwt'], nil, false).first['line_items']
+  end
+
   test "the lock opens only this scooter, only before the rental expires, only with skooti's signature, and only once" do
     rider = a_rider
     scooter = rider.reserves('SK-001')

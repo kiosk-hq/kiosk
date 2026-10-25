@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: skooti's `reserve` checkout line names the scooter by its `scooter_code`.
+
 ## [0.6.19] — 2026-10-26
 
 - 2026-10-26: **Every gem and `API_VERSION` are 0.6.19, matching skill 0.6.19; the engine default is `skill-v0.6.19.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.

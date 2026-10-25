@@ -11,6 +11,9 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.19] — 2026-10-26
+
+- 2026-10-26: **Every gem and `API_VERSION` are 0.6.19, matching skill 0.6.19; the engine default is `skill-v0.6.19.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.
 - 2026-10-26: The vendored event schema and the channel comment say that an event can come more than once.
 - 2026-10-26: The event comments say that an event committed after a higher id is outside id order, and that `Events.emit` goes last in its transaction.
 - 2026-10-26: hoteling's confirmation code is six digits, unique at its property. The `reserve_room` checkout line names the room type.

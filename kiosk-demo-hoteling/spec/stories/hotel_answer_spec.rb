@@ -34,6 +34,19 @@ RSpec.describe "The hotel's answer to a paid booking", type: :story do
     expect(the_hotel_answers(booking, accepts: false)).to have_attributes(status: 'confirmed', confirmation_code: code)
   end
 
+  it 'a hotel never gives one confirmation code to two of its bookings' do
+    first, second = Array.new(2) do |i|
+      guest = a_guest
+      guest.reserves(check_in: Date.current + 30 + (i * 5)).tap { expect(guest.pays_for(it)).to be_ok }
+    end
+    expect(Booking.find(second['booking_id']).property_id).to eq(Booking.find(first['booking_id']).property_id)
+    allow(SecureRandom).to receive(:random_number).and_call_original
+    allow(SecureRandom).to receive(:random_number).with(1_000_000).and_return(42, 42, 7)
+
+    expect(the_hotel_answers(first, accepts: true).confirmation_code).to eq('000042')
+    expect(the_hotel_answers(second, accepts: true).confirmation_code).to eq('000007')
+  end
+
   context 'when the hotel declines' do
     it 'a hotel that declines cancels the booking, frees its nights and refunds the guest' do
       guest = a_guest

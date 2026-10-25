@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: hoteling's confirmation code is six digits, unique at its property. The `reserve_room` checkout line names the room type.
 - 2026-10-26: ROADMAP.md says why Kiosk exists, what 0.6 ships, what 0.7 and later bring, and what is out of scope.
 
 ## [0.6.18] — 2026-10-25

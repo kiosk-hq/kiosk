@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_25_200014) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_25_200015) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
@@ -28,7 +28,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_25_200014) do
     t.string "refund_psp_reference"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["confirmation_code"], name: "index_bookings_on_confirmation_code", unique: true
+    t.index ["property_id", "confirmation_code"], name: "index_bookings_on_property_id_and_confirmation_code", unique: true
     t.index ["property_id"], name: "index_bookings_on_property_id"
     t.index ["room_type_id"], name: "index_bookings_on_room_type_id"
     t.index ["user_id"], name: "index_bookings_on_user_id"

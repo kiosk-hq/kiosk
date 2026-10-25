@@ -14,10 +14,19 @@ RSpec.describe 'Booking a room', type: :story do
     row = guest.bookings.find { it['booking_id'] == booking['booking_id'] }
     expect(row).to include('status' => 'confirmed', 'payment_state' => 'paid', 'total_cents' => booking['total_cents'])
     code = row['confirmation_code']
-    expect(code).to be_present
+    expect(code).to match(/\A[0-9]{6}\z/)
 
     expect(Booking.find(booking['booking_id'])).to have_attributes(status: 'confirmed', confirmation_code: code)
     expect(Kiosk::Settlement.where(user_id: guest.principal.user_id).count).to eq(1)
+  end
+
+  it 'the checkout a guest approves names the room type, its nights and its price' do
+    booking = a_guest.reserves(check_in: Date.current + 30, check_out: Date.current + 33)
+    room_type = Booking.find(booking['booking_id']).room_type
+
+    expect(JWT.decode(booking['checkout_jwt'], nil, false).first['line_items'])
+      .to eq([{ 'booking_id' => booking['booking_id'] },
+              { 'room_type' => room_type.name, 'qty' => 3, 'price_cents' => room_type.nightly_price_cents }])
   end
 
   it 'a booking nobody paid for is not confirmed' do

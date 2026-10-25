@@ -21,7 +21,8 @@ RFC 9457 problem document.
 - `GET /kiosk/availability?property_id=&check_in=&check_out=` — check room
   availability for a stay
 - `GET /kiosk/my_bookings` — the signed-in customer's bookings: each stay's
-  status, its payment state and, once the hotel confirms it, its confirmation code
+  status, its payment state and, once the hotel confirms it, its six-digit
+  confirmation code
 - `GET /kiosk/search_hotels?...` — paginated search over the ~100-hotel
   catalogue; the only paginating verb here, and since RFC 8288 it answers the
   same bare array as the rest — a truncated page says so in a `Link: <…>;

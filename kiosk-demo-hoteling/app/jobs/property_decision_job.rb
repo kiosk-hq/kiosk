@@ -19,11 +19,15 @@ class PropertyDecisionJob < ApplicationJob
 
   private
 
+  # The code is six digits that a guest reads out at the desk. A code that the
+  # property already gave is drawn again.
   def accept!(booking)
-    code = SecureRandom.uuid
-    booking.update!(status: :confirmed, confirmation_code: code)
+    code = format('%06d', SecureRandom.random_number(1_000_000))
+    Booking.transaction(requires_new: true) { booking.update!(status: :confirmed, confirmation_code: code) }
 
     emit(booking, 'confirmed', { 'confirmation_code' => code })
+  rescue ActiveRecord::RecordNotUnique
+    retry
   end
 
   # A booking with no settlement was never charged: cancelled, nothing refunded.

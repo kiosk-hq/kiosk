@@ -9,13 +9,13 @@ module Kiosk
     BOOKING_ID = '0b6f3a52-4c1e-4d7a-9a3e-6f2d8c1b5e70'
 
     topic :booking_confirmation do
-      description '`confirmed`, with the code the guest gives at the desk, or `cancelled` with its `reason`: ' \
+      description '`confirmed`, with the six-digit code the guest gives at the desk, or `cancelled` with its `reason`: ' \
                   '`property_declined` (the hotel declined a paid booking; `refund` goes to the card that paid) ' \
                   'or `hold_lapsed` (unpaid past its pay-by time; nothing was charged).'
       payload_schema type: 'object', additionalProperties: false,
                      properties: { booking_id: { type: 'string', format: 'uuid' },
                                    status: { enum: %w[confirmed cancelled] },
-                                   confirmation_code: { type: 'string' },
+                                   confirmation_code: { type: 'string', pattern: '^[0-9]{6}$' },
                                    reason: { enum: %w[property_declined hold_lapsed] },
                                    refund: { type: 'object', additionalProperties: false,
                                              properties: {
@@ -25,7 +25,7 @@ module Kiosk
                                                reverses: { type: 'string', description: 'The charge this refund reverses.' }
                                              } } },
                      required: %w[booking_id status]
-      example booking_id: BOOKING_ID, status: 'confirmed', confirmation_code: '5d1c9e04-8f2b-4a6e-b3c7-2e9f0a4d6b18'
+      example booking_id: BOOKING_ID, status: 'confirmed', confirmation_code: '482139'
       example booking_id: BOOKING_ID, status: 'cancelled', reason: 'property_declined',
               refund: { amount_cents: 45_000, currency: 'eur', psp_reference: 're_3Q8x2L', reverses: 'pi_3Q8x2K' }
       example booking_id: BOOKING_ID, status: 'cancelled', reason: 'hold_lapsed'
@@ -50,8 +50,8 @@ module Kiosk
                                 description: 'The stay: held, confirmed by the hotel, or cancelled (declined by ' \
                                              'the hotel, or held unpaid past its pay-by time).' },
                       payment_state: Kiosk::Payable::STATE_SCHEMA,
-                      confirmation_code: { type: %w[string null],
-                                           description: 'The reference the guest gives at the desk; null until confirmed.' }
+                      confirmation_code: { type: %w[string null], pattern: '^[0-9]{6}$',
+                                           description: 'The six digits the guest gives at the desk; null until confirmed.' }
                     },
                     required: %w[booking_id property_id room_type_id check_in check_out
                                  total_cents status payment_state confirmation_code]

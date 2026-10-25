@@ -115,19 +115,9 @@ module HotelingScenarios
     def call(client, profile)
       a = client.register!
       owned = profile.create_owned.call(client, a)
-      resp = client.pay(a, lowered(profile.pay_for.call(client, a, owned), owned))
+      resp = client.pay(a, underpriced_checkout(profile.pay_for.call(client, a, owned), by: 50))
       # 403 by name: a 401 would mean the checkout was never verified.
       verdict_from(resp, expect: 403, expect_code: %w[forbidden], detail: "below-quote checkout settled (HTTP #{resp.status})")
-    end
-
-    private
-
-    # Lower the line price too, so the lines still sum to the total.
-    def lowered(checkout_jwt, owned)
-      nights        = owned[:nights].to_i.nonzero? || NIGHTS
-      lowered_total = owned[:total_cents].to_i - 100
-      tampered_checkout(checkout_jwt, line_items: [{ booking_id: owned[:id] }, { qty: nights, price_cents: (lowered_total / nights) }],
-                                      total_amount_cents: lowered_total)
     end
   end
 

@@ -155,11 +155,8 @@ module SkootiScenarios
     end
 
     def call(client, profile)
-      a, owned, checkout_jwt = SkootiScenarios.reserved(client, profile)
-      lowered = owned[:price_per_min_cents] - 5
-      forged = tampered_checkout(checkout_jwt, line_items: [{ reservation_id: owned[:id] }, { qty: 1, price_cents: lowered }],
-                                               total_amount_cents: lowered)
-      resp = client.pay(a, forged)
+      a, _owned, checkout_jwt = SkootiScenarios.reserved(client, profile)
+      resp = client.pay(a, underpriced_checkout(checkout_jwt, by: 5))
       # 403 by name: a 401 would mean the checkout was never verified.
       verdict_from(resp, expect: 403, expect_code: %w[forbidden], detail: "below-quote checkout settled (HTTP #{resp.status})")
     end

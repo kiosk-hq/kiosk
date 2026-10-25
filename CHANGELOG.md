@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The tampered-price attacks on hoteling and skooti lower the price in the lines the operator signed and keep every other member, so the forgery has the shape of a real checkout.
+
 - 2026-10-26: ROADMAP.md says what the Poppy draft says: an assistant is named by an HTTPS URL that serves its metadata, with its keys on the same domain.
 
 ## [0.6.20] — 2026-10-26

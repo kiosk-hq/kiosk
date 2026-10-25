@@ -30,6 +30,15 @@ module Kiosk
                    header.slice('kid', 'typ'))
       end
 
+      # +checkout_jwt+ with each priced line +by+ cents cheaper and the total to match, so the
+      # lines still sum to the total. The lines keep every other member the operator signed.
+      def underpriced_checkout(checkout_jwt, by:)
+        paid, *priced = JWT.decode(checkout_jwt, nil, false).first.fetch('line_items')
+        priced = priced.map { |line| line.merge('price_cents' => line.fetch('price_cents') - by) }
+        tampered_checkout(checkout_jwt, line_items: [paid, *priced],
+                                        total_amount_cents: priced.sum { |line| line.fetch('qty') * line.fetch('price_cents') })
+      end
+
       # The two mandates for +checkout_jwt+, with the payment mandate's fields changed and signed again.
       def mandates_with_payment(principal, checkout_jwt, **changes)
         mandates = Kiosk::TestHelpers::Mandate.pay(principal.key, checkout_jwt)

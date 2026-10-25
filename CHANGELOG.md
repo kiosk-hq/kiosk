@@ -11,6 +11,9 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.17] — 2026-10-25
+
+- 2026-10-25: **Every gem and `API_VERSION` are 0.6.17, matching skill 0.6.17; the engine default is `skill-v0.6.17.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.
 - 2026-10-25: The event stream sends the replay of every subscription the upgrade URL declares in one ascending id order, and live events in the order the pubsub gives them.
 - 2026-10-25: `deploy/kyc-pairing-audit.sh` finds a KYC operator whose Gemfile indents the `kiosk-kyc-prove` line.
 ## [0.6.16] — 2026-10-25

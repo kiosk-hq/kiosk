@@ -2,6 +2,6 @@
 
 module Kiosk
   module RLSMinitest
-    VERSION = '0.6.16'
+    VERSION = '0.6.17'
   end
 end

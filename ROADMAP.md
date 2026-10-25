@@ -14,9 +14,10 @@ middle. Let's Encrypt made TLS free for every website. Kiosk aims to make
 every business open to every assistant, with no gatekeeper.
 
 Other efforts have the same aim. The Personal Agent Protocol (Poppy, from
-Sierra and Meta, first draft in October 2026) names an assistant by a URL on
-its vendor's domain. Kiosk needs only a key the assistant made itself, and the
-toll. That is the edge we keep building on.
+Sierra and Meta, first draft in October 2026) names an assistant by an HTTPS
+URL that serves its metadata, with its keys on the same domain. Kiosk needs only
+a key the assistant made itself, and the toll. That is the edge we keep
+building on.
 
 ## 0.6: what we show
 

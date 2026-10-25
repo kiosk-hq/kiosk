@@ -2,11 +2,12 @@
 
 module Kiosk
   module Server
-    # Delivery is ordered per origin (spec Section 8.5.5). The subscriptions
-    # one upgrade URL declares form one group; a `subscribe` frame forms a
-    # group of one. When every member is confirmed, the group replays the
-    # members' tail in one ascending pass. Until then it holds their live
-    # events, and after the replay it sends those it did not replay, in id order.
+    # Delivery in id order (spec Section 8.5.5). The subscriptions one upgrade
+    # URL declares form one group; a `subscribe` frame forms a group of one.
+    # When every member is confirmed, the group replays the members' committed
+    # tail in one ascending pass. Until then it holds their live events, and
+    # after the replay it sends those it did not replay, in id order. An event
+    # that commits after a higher id is outside this order (the same section).
     class EventsReplay
       # One subscription in the group. `floor` is the cursor it replays after.
       Member = Struct.new(:group, :floor, :deliver) do

@@ -32,7 +32,8 @@ module Kiosk
         def catalog = known.map { |name| catalog_entry(registry[name]) }
 
         # Appends one event to the tail of every identity in `identity_scope`. `reach` authorises
-        # subscribing; `identity_scope` names who is told about this transition.
+        # subscribing; `identity_scope` names who is told about this transition. The id is taken
+        # here and seen at commit, so call it as the last step of the transaction (spec Section 8.5.5).
         # @param identity_scope [Array<String>] user_ids; empty writes nothing
         # @return [Integer, nil] the id of the last append, nil for an empty scope
         def emit(topic:, data:, identity_scope:, subject: nil, occurred_at: nil)

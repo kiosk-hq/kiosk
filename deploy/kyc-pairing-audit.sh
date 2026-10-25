@@ -47,7 +47,7 @@ bad() { echo "FAIL  $*"; fail=1; }
 ok()  { echo "ok    $*"; }
 
 # A demo is a KYC operator iff its Gemfile bundles kiosk-kyc-prove.
-roster=$(cd "$REPO" 2>/dev/null && grep -lE "^gem ['\"]kiosk-kyc-prove['\"]" kiosk-demo-*/Gemfile 2>/dev/null |
+roster=$(cd "$REPO" 2>/dev/null && grep -lE "^[[:space:]]*gem ['\"]kiosk-kyc-prove['\"]" kiosk-demo-*/Gemfile 2>/dev/null |
          sed -e 's|^kiosk-demo-||' -e 's|/Gemfile$||' | sort)
 if [ -z "$roster" ]; then
   echo "FAIL  no KYC operator found under $REPO (set KIOSK_REPO to the checkout)"

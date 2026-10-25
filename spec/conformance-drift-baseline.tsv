@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-25 at c06f9724
+# recorded: 2026-10-26 at afe12b41
 # 2072 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	49c865ab	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	49c865ab	        if: matrix.demo != 'kiosk-demo-prove'
@@ -326,7 +326,7 @@ kiosk-core/lib/kiosk/configuration.rb	f93913e953f166ea	49c865ab	    # to the iss
 kiosk-core/lib/kiosk/configuration.rb	26e6c45479a4cc5c	49c865ab	A table that Rails made with its default key is :bigint.
 kiosk-core/lib/kiosk/configuration.rb	eb55ac83bee281d4	49c865ab	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	0b9b9bb8049ae29f	49c865ab	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	c0a605def906ff2b	49c865ab	API_VERSION = '0.6.
+kiosk-core/lib/kiosk/protocol.rb	3af210ee63b6910e	afe12b41	API_VERSION = '0.6.
 kiosk-core/spec/kiosk/kyc_providers/base_spec.rb	d4efc7346062c77b	49c865ab	refuses a key that is not Ed25519
 kiosk-core/spec/spec_helper.rb	c89ca3f73742cd52	49c865ab	require 'kiosk'
 kiosk-demo-atablefor/README.md	9c41ef23a955233a	49c865ab	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
@@ -478,12 +478,12 @@ kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	2eb6794de5bffe1d
 kiosk-demo-hoteling/spec/payment_window_spec.rb	b82fc5a37c7b1e7e	49c865ab	reads a capture in flight pending, and a returned capture paid before its settlement row
 kiosk-demo-hoteling/spec/property_spec.rb	d18bcf16dde80026	49c865ab	names the hours between the two clocks, in one sentence
 kiosk-demo-hoteling/spec/property_spec.rb	6cd03c682b54d183	49c865ab	says nothing to a caller on the same clock, or one that declared none
-kiosk-demo-hoteling/spec/stories/booking_spec.rb	340786d17be456f6	49c865ab	  it 'a booking nobody paid for is not confirmed' do
-kiosk-demo-hoteling/spec/stories/booking_spec.rb	340786d17be456f6	49c865ab	a booking nobody paid for is not confirmed
-kiosk-demo-hoteling/spec/stories/booking_spec.rb	ada9b533533192e5	49c865ab	a guest with no account books three nights, pays, and gets the confirmation code the hotel keeps
+kiosk-demo-hoteling/spec/stories/booking_spec.rb	340786d17be456f6	afe12b41	  it 'a booking nobody paid for is not confirmed' do
+kiosk-demo-hoteling/spec/stories/booking_spec.rb	340786d17be456f6	afe12b41	a booking nobody paid for is not confirmed
+kiosk-demo-hoteling/spec/stories/booking_spec.rb	edf1437c23430827	afe12b41	a guest with no account books three nights, pays, and gets the confirmation code the hotel keeps
 kiosk-demo-hoteling/spec/stories/discovery_spec.rb	5e234bb607368b4a	49c865ab	an assistant that knows nothing finds out, without an account, what the hotel offers and how to book
 kiosk-demo-hoteling/spec/stories/hold_spec.rb	5fcb9401796ef23c	49c865ab	an unpaid hold past its pay-by time frees the room for another guest, and its owner can no longer pay
-kiosk-demo-hoteling/spec/stories/hotel_answer_spec.rb	3e17f268d128d78f	49c865ab	The hotel's answer to a paid booking
+kiosk-demo-hoteling/spec/stories/hotel_answer_spec.rb	c21aae75d41954db	afe12b41	The hotel's answer to a paid booking
 kiosk-demo-hoteling/spec/stories/privacy_spec.rb	149516ce60ee9cd9	49c865ab	another guest can neither pay for nor see them
 kiosk-demo-hoteling/spec/stories/search_spec.rb	d28b2b83b4a8f411	49c865ab	a guest reads one hotel's rooms, and is told when a hotel does not exist
 kiosk-demo-hoteling/spec/stories/search_spec.rb	95a5e8a7bac94133	49c865ab	a made-up cursor moves through the hotels the search matches, and reaches no other hotel
@@ -1078,11 +1078,11 @@ kiosk-server/lib/kiosk/server/client_assertion.rb	7b38dcb6424b5f76	49c865ab	issu
 kiosk-server/lib/kiosk/server/client_registration.rb	93acfb9b02cf3a3a	49c865ab	# RFC 7591 open registration of an AI assistant's public key, with no human:
 kiosk-server/lib/kiosk/server/client_registration.rb	08037059c8fd4ec7	49c865ab	AuthToll.gate(verb: 'oauth/register', body: { key: AssistantKey.thumbprint(key) }, pow: pow, config: config)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	c1e0f9e32b401aa9	49c865ab	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	4559ef8d32439563	49c865ab	        @skill_url ||= 'https://kiosk.tech/skill-v
-kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	49c865ab	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
-kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	49c865ab	      attr_accessor :spending_cap_window_days
-kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	49c865ab	      def computed_capabilities
-kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	49c865ab	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	7df60588b0a587fd	afe12b41	        @skill_url ||= 'https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	afe12b41	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
+kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	afe12b41	      attr_accessor :spending_cap_window_days
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	afe12b41	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	afe12b41	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
 kiosk-server/lib/kiosk/server/device_code_grant.rb	0127c4b9e1aef66b	49c865ab	# The claim ceremony on the RFC 8628 device-grant endpoints: binds a registered
 kiosk-server/lib/kiosk/server/device_code_grant.rb	8077327e193a9d87	49c865ab	da = authorization_of(client, store.lookup_by_device_code_hash(hash))
 kiosk-server/lib/kiosk/server/engine.rb	9a04fe52f1e0a44f	49c865ab	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
@@ -2009,11 +2009,11 @@ kiosk-test-support/README.md	6449265207831953	49c865ab	Kiosk::TestHelpers.execut
 kiosk-test-support/README.md	f618edc656b15790	49c865ab	The DSL is inert until you configure an executor. In production-shaped tests you configure `Kiosk::TestHelpers::InProcessExecutor`, which runs against `kiosk-server` in your Rails app:
 kiosk-test-support/README.md	6f4673d1f99a2894	49c865ab	The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; production-shaped tests configure `Kiosk::TestHelpers::InProcessExecutor` (above).
 kiosk-test-support/README.md	db06384a8b900e95	49c865ab	stripe-mock lists a saved card for every Customer, so once `payment_setup` has mapped one, `pay` settles.
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	e1b8e8f30a348d56	49c865ab	    class Assistant
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	7fe9620c1df6121c	49c865ab	# Customer that `payment_setup` maps already lists a card, so that answer settles.
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	f6029ac764edd61f	49c865ab	On a 402 `payment_setup_required` it calls `payment_setup`, as the hint
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	ccde2dec6015e45b	49c865ab	def setup_required?(answer)
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	6840cea9532adee3	49c865ab	key  = Dpop.generate_key
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	cd6635d8182f57d5	afe12b41	    class Assistant
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	7fe9620c1df6121c	afe12b41	# Customer that `payment_setup` maps already lists a card, so that answer settles.
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	f6029ac764edd61f	afe12b41	On a 402 `payment_setup_required` it calls `payment_setup`, as the hint
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	ccde2dec6015e45b	afe12b41	def setup_required?(answer)
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	6840cea9532adee3	afe12b41	key  = Dpop.generate_key
 kiosk-test-support/lib/kiosk/test_helpers/assistant/events.rb	be2c0ebd66d112fb	49c865ab	def self.payload_errors(schema_document, events)
 kiosk-test-support/lib/kiosk/test_helpers/customer.rb	755a6f2ac96a07f8	49c865ab	def pays(checkout_jwt) = Answer.new(@assistant.pay(principal, checkout_jwt))
 kiosk-test-support/lib/kiosk/test_helpers/customer.rb	a09d894293c3dcd7	49c865ab	def refused?(code)
@@ -2040,7 +2040,7 @@ kiosk-test-support/lib/kiosk/test_helpers/person.rb	6c193c6814571d48	49c865ab	@s
 kiosk-test-support/lib/kiosk/test_helpers/person.rb	e531001cf0c50623	49c865ab	raise "the site did not unlink #{customer.principal.agent_id}: #{status}" unless status == 204
 kiosk-test-support/lib/kiosk/test_helpers/story.rb	9290ac3a490defef	49c865ab	raise "GET #{path} with no credential answered #{status}" unless status == 200
 kiosk-test-support/lib/kiosk/test_helpers/stripe_mock.rb	64e760bc735bd703	49c865ab	stripe-mock not found. Install it: brew install stripe-mock
-kiosk-test-support/lib/kiosk/test_helpers/wire.rb	68694da6adfbb19c	49c865ab	    class Wire
+kiosk-test-support/lib/kiosk/test_helpers/wire.rb	195b3c95d60cda7f	afe12b41	    class Wire
 kiosk-test-support/spec/descriptor_cross_reference_spec.rb	d4e0f0cad73dd97b	49c865ab	#{demo}: every verb description's cross-reference names params the target verb declares
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	63c53af5cc85175a	49c865ab	#{origin}: every calendar-day argument names its clock
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	734469a2334c53af	49c865ab	#{origin}: every verb declares #{DescriptorRequiredFields::MACROS.join(', ')}

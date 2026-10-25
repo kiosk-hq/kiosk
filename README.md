@@ -100,7 +100,7 @@ Each backend is built on `kiosk-pow`, which holds the shared BLAKE2b-256.
 | `kiosk-reputation` | Customer reputation factors | alpha |
 | `kiosk-redteam` | Red-team scenarios, adversarial test harness | alpha |
 
-### Demo providers
+### Demo operators
 
 | Demo | Vertical | Deployment |
 |---|---|---|
@@ -111,9 +111,13 @@ Each backend is built on `kiosk-pow`, which holds the shared BLAKE2b-256.
 | `kiosk-demo-stylish` | Salon/appointment booking (Combette on Park) — non-commerce (no payments) | active |
 | `kiosk-demo-philslist` | Classifieds board — non-commerce (no payments) | active |
 | `kiosk-demo-tudu` | Collaborative todo — non-commerce (no payments) | active |
-| `kiosk-demo-prove` | anonymizing KYC broker (deploys at `kyc.demo.kiosk.tech`) — an ISSUER, not a Kiosk operator (no verbs) | active |
 
-**`e2e/` is not in that table, because it is not a ninth provider.** It is the
+`kiosk-demo-prove` is not an operator. It is the KYC broker: a service outside
+the operators. A demo connects to it to confirm facts about a customer, for
+example an age over 18 or a driving licence. It serves no Kiosk verb, and it
+deploys at `kyc.demo.kiosk.tech`.
+
+**`e2e/` is not in that table, because it is not an eighth operator.** It is the
 end-to-end test harness — fixtures, a stripe-mock-backed pay flow and the AI-assistant drivers —
 so it serves no vertical and deploys nowhere. It runs as a CI gate
 (`./e2e/run.sh`) and nothing else.
@@ -134,9 +138,9 @@ with `bin/rails test` (`bundle exec rspec` in hoteling).
 
 **Four of the demos — `atablefor`, `getgrocery`, `hoteling`, `skooti` — also
 carry a `before-after.md`**: a contrast between what an AI assistant can do at
-that provider today and what the same errand looks like once Kiosk is
+that business today and what the same errand looks like once Kiosk is
 installed, followed by the operator-side adoption recipe. Four rather than all
-eight is deliberate. Every fenced block in one declares what produced it. The
+seven operators is deliberate. Every fenced block in one declares what produced it. The
 rest say it shorter: `philslist` carries an inline **Before / after** section in
 its README; `stylish` and `tudu` carry neither.
 
@@ -173,7 +177,8 @@ SERVER_URL=http://localhost:3004 bundle exec ruby ../kiosk-redteam/suites/skooti
 What still differs from the deployed box, and why:
 
 - The apps run in Rails development mode. Production mode needs the secrets the
-  box keeps in its env files and sends its session cookie only over TLS.
+  box keeps in its env files (see "The secrets of production mode" below) and
+  sends its session cookie only over TLS.
 - No TLS: each origin is `http://localhost:<port>`. The box serves HTTPS through
   Caddy.
 - Each start resets every database and makes a new signing key, so assistant
@@ -183,6 +188,22 @@ What still differs from the deployed box, and why:
   a Stripe key.
 - The KYC broker signs with the development key this repository tracks. The box's
   broker has its own key.
+
+### The secrets of production mode
+
+`deploy/env/<app>.env.example` names each variable of an app. On the box,
+`deploy/rollout.sh` makes the missing ones. To make one by hand:
+
+| Variable | What it is | How to make it |
+|---|---|---|
+| `SECRET_KEY_BASE` | The Rails key that signs and encrypts cookies | `bin/rails secret` |
+| `KIOSK_SIGNING_KEY_B64` | The Ed25519 key that signs access tokens, checkouts and receipts | `openssl genpkey -algorithm ed25519 \| openssl base64 -A` |
+| `KIOSK_POW_SECRET` | The key that signs each proof-of-work challenge, 32 bytes or more | `openssl rand -hex 32` |
+| `KIOSK_PROVE_INTAKE_SECRET` | The secret an operator and the KYC broker share. The broker keeps the same value as `KIOSK_PROVE_<OPERATOR>_SECRET`, for example `KIOSK_PROVE_SKOOTI_SECRET` | `openssl rand -hex 32`, then set the value on both sides |
+| `PROVE_KEY_PEM` | The broker's Ed25519 key that signs each attestation | `openssl genpkey -algorithm ed25519` |
+| `KIOSK_PROVE_PUBLIC_KEY_PEM` | The public half of the broker's key, which an operator uses to verify an attestation | `openssl pkey -in prove_key.pem -pubout` |
+| `STRIPE_SECRET_KEY` | The Stripe key of an operator that takes payment, in test mode | Stripe Dashboard, Developers, API keys, with "Test mode" on: the secret key that starts with `sk_test_` |
+| `KIOSK_UNLOCK_SIGNING_KEY_PEM` | skooti only: the Ed25519 key that signs each unlock token for a scooter lock | `openssl genpkey -algorithm ed25519` |
 
 ## Contributing
 

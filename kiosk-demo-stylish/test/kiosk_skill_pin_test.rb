@@ -11,6 +11,6 @@ class KioskSkillPinTest < ActiveSupport::TestCase
   include Kiosk::TestHelpers::SkillPin::Assertions
 
   test 'skill_sha256 is the digest of the skill that kiosk-server gives' do
-    assert_kiosk_skill_pin hashed_version: '0.6.20'
+    assert_kiosk_skill_pin hashed_version: '0.6.21'
   end
 end

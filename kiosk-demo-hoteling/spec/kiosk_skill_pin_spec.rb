@@ -9,6 +9,6 @@ require 'kiosk/test_helpers/skill_pin/rspec'
 # new digest.
 RSpec.describe 'the skill pin' do
   it 'is the digest of the skill that kiosk-server gives' do
-    expect(Kiosk.configuration).to pin_the_served_skill(hashed_version: '0.6.20')
+    expect(Kiosk.configuration).to pin_the_served_skill(hashed_version: '0.6.21')
   end
 end

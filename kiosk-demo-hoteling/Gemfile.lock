@@ -1,23 +1,23 @@
 PATH
   remote: ..
   specs:
-    kiosk-all (0.6.20)
+    kiosk-all (0.6.21)
       kiosk-core (~> 0.6.0)
       kiosk-server (~> 0.6.0)
-    kiosk-core (0.6.20)
-    kiosk-pay-stripe (0.6.20)
+    kiosk-core (0.6.21)
+    kiosk-pay-stripe (0.6.21)
       activerecord (~> 8.1)
       kiosk-core (~> 0.6.0)
       stripe (~> 19)
-    kiosk-pow (0.6.20)
-    kiosk-pow-equihash (0.6.20)
+    kiosk-pow (0.6.21)
+    kiosk-pow-equihash (0.6.21)
       kiosk-pow (~> 0.6.0)
-    kiosk-redteam (0.6.20)
+    kiosk-redteam (0.6.21)
       base64
       kiosk-test-support (~> 0.6.0)
-    kiosk-reputation (0.6.20)
+    kiosk-reputation (0.6.21)
       base64
-    kiosk-server (0.6.20)
+    kiosk-server (0.6.21)
       actioncable (~> 8.1)
       actionpack (~> 8.1)
       activerecord (~> 8.1)
@@ -28,14 +28,14 @@ PATH
       kiosk-core (~> 0.6.0)
       railties (~> 8.1)
       zeitwerk (~> 2.6)
-    kiosk-test-support (0.6.20)
+    kiosk-test-support (0.6.21)
       json_schemer (>= 2.3, < 3.0)
       jwt (>= 2.10, < 4.0)
       kiosk-core (~> 0.6.0)
       kiosk-server (~> 0.6.0)
       kiosk-user-idp-devise (~> 0.6.0)
       websocket-driver (~> 0.7)
-    kiosk-user-idp-devise (0.6.20)
+    kiosk-user-idp-devise (0.6.21)
       kiosk-core (~> 0.6.0)
 
 GEM
@@ -396,16 +396,16 @@ CHECKSUMS
   json (3.0.2) sha256=8e6d7e7b11384c21230430cef90b71f14849a34a1f4452796670f7c981bd19df
   json_schemer (2.5.0) sha256=2f01fb4cce721a4e08dd068fc2030cffd0702a7f333f1ea2be6e8991f00ae396
   jwt (3.2.0) sha256=5419b1fe37b1da0982bd07051f573a8b8789ab724c2aa7e785e4784a3ed217d7
-  kiosk-all (0.6.20)
-  kiosk-core (0.6.20)
-  kiosk-pay-stripe (0.6.20)
-  kiosk-pow (0.6.20)
-  kiosk-pow-equihash (0.6.20)
-  kiosk-redteam (0.6.20)
-  kiosk-reputation (0.6.20)
-  kiosk-server (0.6.20)
-  kiosk-test-support (0.6.20)
-  kiosk-user-idp-devise (0.6.20)
+  kiosk-all (0.6.21)
+  kiosk-core (0.6.21)
+  kiosk-pay-stripe (0.6.21)
+  kiosk-pow (0.6.21)
+  kiosk-pow-equihash (0.6.21)
+  kiosk-redteam (0.6.21)
+  kiosk-reputation (0.6.21)
+  kiosk-server (0.6.21)
+  kiosk-test-support (0.6.21)
+  kiosk-user-idp-devise (0.6.21)
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   loofah (2.25.2) sha256=2007f746959ac65552456e04b433e83deb22759ab38c838b4445c70e43425918
   mail (2.9.1) sha256=06574eca475253d6c18145dd70af80d0eb970182d55053497c5f4d797ea160e8

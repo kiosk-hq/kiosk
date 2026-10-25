@@ -233,8 +233,9 @@ database is dropped and rebuilt from `db/schema.rb` instead. **All fleet data is
 bookings, KYC grants and verifications, bound assistants and every account the seeds do not create —
 getgrocery's real third-party orders included.
 
-**Due once, on the next deploy:** the seven operator demos' migrations were collapsed into kiosk:install's
-`kiosk_*` tables in `public`. Run this section for them; `kiosk-demo-prove`'s migrations did not change, so drop
+**Due once, on the next deploy:** the migrations of each of the seven operator demos were collapsed into
+one fresh install: the demo's own tables and kiosk:install's `kiosk_*` tables, all in `public`. Run this
+section for them; `kiosk-demo-prove`'s migrations did not change, so drop
 `prove` from the loop below and keep its database.
 - [ ] Install the current hook (the push below runs it):
       ```

@@ -432,7 +432,7 @@ kiosk-demo-getgrocery/config/initializers/kiosk.rb	public_key: ENV.fetch('KIOSK_
 kiosk-demo-getgrocery/config/routes.rb	actions :create_order, :reschedule_delivery
 kiosk-demo-getgrocery/config/routes.rb	kiosk do
 kiosk-demo-getgrocery/config/routes.rb	queries :catalog, :delivery_slots, :my_orders
-kiosk-demo-getgrocery/db/migrate/20261018100015_create_products_and_orders.rb	      t.text        :address, null: false
+kiosk-demo-getgrocery/db/migrate/20261025200014_create_products_and_orders.rb	      t.text        :address, null: false
 kiosk-demo-getgrocery/db/schema.rb	t.boolean "age_restricted", default: false, null: false
 kiosk-demo-getgrocery/test/courier_states_test.rb	the courier events and the order list match the published schema
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	a window takes orders until picking and the drive no longer fit before it ends
@@ -489,7 +489,7 @@ kiosk-demo-hoteling/before-after.md	`spec/stories/booking_spec.rb` runs the erra
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.registration_pow_count = 1
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.spending_cap           = Kiosk::Server::ColumnSpendingCap.new
-kiosk-demo-hoteling/db/migrate/20261025100010_create_kiosk_pay_stripe_customers.rb	t.column :user_id, :uuid, null: false
+kiosk-demo-hoteling/db/migrate/20261025200011_create_kiosk_pay_stripe_customers.rb	t.column :user_id, :uuid, null: false
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	echoes a calendar day back byte-identical
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	publishes each property's own zone in its hotel_detail row
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	reads each property's zone off the property

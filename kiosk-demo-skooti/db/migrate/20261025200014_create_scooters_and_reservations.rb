@@ -12,6 +12,10 @@ class CreateScootersAndReservations < ActiveRecord::Migration[ActiveRecord::Migr
       t.string  :name,   null: false
       t.string  :kind,   null: false, default: "scooter" # scooter | motorcycle
       t.string  :dock,   null: false
+      # The driving-licence category a vehicle needs: A1 or A, or none for a
+      # scooter. Renting a vehicle that names one needs the rider's `age_over_18`
+      # and the licence attribute of that category, such as `licence_a1`.
+      t.string  :licence_category
       t.decimal :lat, precision: 10, scale: 6, null: false
       t.decimal :lng, precision: 10, scale: 6, null: false
       t.integer :price_per_min_cents, null: false

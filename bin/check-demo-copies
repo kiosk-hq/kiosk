@@ -103,8 +103,8 @@ if ARGV.include?('--self-test')
       expect: /the shared-spec-path rule grouped \d+ key\(s\) and \d+ of them are not a path/ },
     { id: 'migration-pair-undeclared', rule: 'migration pairs',
       what: "a demo's own migration is copied into a second demo at another timestamp",
-      ops: [[:copy, 'kiosk-demo-philslist/db/migrate/20261018100015_create_categories_and_listings.rb',
-             'kiosk-demo-tudu/db/migrate/20261018100016_create_categories_and_listings.rb']],
+      ops: [[:copy, 'kiosk-demo-philslist/db/migrate/20261025200014_create_categories_and_listings.rb',
+             'kiosk-demo-tudu/db/migrate/20261025200015_create_categories_and_listings.rb']],
       expect: %r{db/migrate/\*_create_categories_and_listings\.rb: ships in 2 demos at demo-specific timestamps} },
     { id: 'autoload-once-line-gone', rule: 'autoload-once',
       what: 'the autoload_once_paths line is dropped from one demo',
@@ -680,7 +680,7 @@ COPIES = {
     rule: :identical,
     why: "Rails' own base class; the queue adapter is chosen per demo in config/application.rb."
   },
-  'db/migrate/20261018100001_create_users.rb' => {
+  'db/migrate/20261025200001_create_users.rb' => {
     rule: :identical,
     why: "The users table the engine's identity tables reference, with Devise's login columns.",
     except: {
@@ -689,42 +689,42 @@ COPIES = {
       'tudu' => "adds display_name, the name a shared list's roster shows."
     }
   },
-  'db/migrate/20261025100001_create_kiosk_identity_tables.rb' => {
+  'db/migrate/20261025200002_create_kiosk_identity_tables.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk_agents, kiosk_tolled_calls, kiosk_assistant_accounts.'
   },
-  'db/migrate/20261025100002_create_kiosk_device_authorizations.rb' => {
+  'db/migrate/20261025200003_create_kiosk_device_authorizations.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk_device_authorizations, the account-binding requests.'
   },
-  'db/migrate/20261025100003_create_kiosk_mandates.rb' => {
+  'db/migrate/20261025200004_create_kiosk_mandates.rb' => {
     rule: :identical, why: 'kiosk:install — the AP2 mandate trail and its settlements.'
   },
-  'db/migrate/20261025100004_create_kiosk_kyc_attributes.rb' => {
+  'db/migrate/20261025200005_create_kiosk_kyc_attributes.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk_kyc_attributes and kiosk_kyc_requests.'
   },
-  'db/migrate/20261025100005_create_kiosk_events.rb' => {
+  'db/migrate/20261025200006_create_kiosk_events.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk_events, the per-identity event tail.'
   },
-  'db/migrate/20261025100006_create_kiosk_pow_spent.rb' => {
+  'db/migrate/20261025200007_create_kiosk_pow_spent.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk_pow_spent, the spent proof-of-work ids.'
   },
-  'db/migrate/20261025100007_create_kiosk_revocations.rb' => {
+  'db/migrate/20261025200008_create_kiosk_revocations.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk_revocations, the token revocation watermarks.'
   },
-  'db/migrate/20261025100008_create_kiosk_visits.rb' => {
+  'db/migrate/20261025200009_create_kiosk_visits.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk_visits, the fulfilled visits that lower the toll.'
   },
-  'db/migrate/20261025100009_create_kiosk_refunds.rb' => {
+  'db/migrate/20261025200010_create_kiosk_refunds.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk_refunds, the refunds that recent spend leaves out.'
   },
-  'db/migrate/20261018100012_create_solid_cable_messages.rb' => {
+  'db/migrate/20261025200012_create_solid_cable_messages.rb' => {
     rule: :identical, why: "Action Cable's pubsub queue, on the primary database."
   },
-  'db/migrate/20261025100010_create_kiosk_pay_stripe_customers.rb' => {
+  'db/migrate/20261025200011_create_kiosk_pay_stripe_customers.rb' => {
     rule: :identical,
     ships: %w[getgrocery hoteling skooti],
     why: 'kiosk:pay_stripe:install — the kiosk_stripe_customers table, in the three demos that take money.'
   },
-  'db/migrate/20261018100014_create_solid_queue_tables.rb' => {
+  'db/migrate/20261025200013_create_solid_queue_tables.rb' => {
     rule: :identical,
     ships: %w[atablefor getgrocery hoteling skooti stylish],
     why: "Solid Queue's tables, in the five demos whose jobs run on it."

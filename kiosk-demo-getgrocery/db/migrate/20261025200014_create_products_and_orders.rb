@@ -21,6 +21,9 @@ class CreateProductsAndOrders < ActiveRecord::Migration[ActiveRecord::Migration.
       t.integer     :total_cents, null: false, default: 0
       # What went back to the card for lines a concurrent payment emptied the shelf of.
       t.integer     :refunded_cents, null: false, default: 0
+      # What the shop owes the shopper's account for lines the shelf could not fill
+      # when the payment processor refused to return their price to the card.
+      t.integer     :credited_cents, null: false, default: 0
       t.timestamptz :slot_at, null: false
       t.text        :address, null: false
       # The zone of the district the address routes to, recorded by the verb

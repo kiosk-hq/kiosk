@@ -409,6 +409,12 @@ RSpec.describe Kiosk::Server::Events do
       it 'delivers an event emitted between the subscribed frame and a live stream' do
         expect(report['url_delivered']).to be(true)
       end
+
+      # Spec Section 8.5.5: delivery is ordered per origin. The URL's
+      # subscriptions replay as one, so `--since <highest id seen>` loses nothing.
+      it 'replays the tail of every subscription it declares in one ascending order' do
+        expect(report['url_replayed_ids']).to eq(report['url_tail_ids'])
+      end
     end
 
     describe 'resuming with `since`' do

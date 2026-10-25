@@ -607,6 +607,19 @@ begin
 
   urlsub.close
 
+  # 12b — ONE ORDER across the URL's subscriptions: a tail that interleaves two
+  #       topics replays in ascending id order, so a client that stops at any
+  #       event and resumes from its id loses none.
+  floor = store.head
+  tail_ids = [[:order_delivery, 'ord_4'], [:todo, 'list_ok'], [:order_delivery, 'ord_5']].map do |topic, subject|
+    Kiosk::Server::Events.emit(topic:, subject:, identity_scope: %w[u1], data: { 'done' => false })
+  end
+  ordered = connect(port, path: "/kiosk/events?topic=order_delivery&topic=todo:list_ok&since=#{floor}")
+  ordered.pump_until { tail_ids.all? { |id| ordered.messages.any? { |m| m['id'] == id } } }
+  report[:url_tail_ids] = tail_ids
+  report[:url_replayed_ids] = ordered.messages.filter_map { |m| m['id'] }
+  ordered.close
+
   # 13 — NO `Origin` header at all, and the upgrade is accepted. The
   #      `Authorization` header is the authorisation; `Origin` is a browser's
   #      forgery control and there is no browser on this exchange.

@@ -113,6 +113,16 @@ module Kiosk
         false
       end
 
+      # A subscription the upgrade URL declares joins the URL's replay group;
+      # one a `subscribe` frame declares replays alone (§8.5.5).
+      def kiosk_replay_member(floor, &)
+        member = @kiosk_url_replay&.join(floor, &)
+        return member if member
+
+        group = EventsReplay.new(kiosk_identity_key)
+        group.join(floor, &).tap { group.close }
+      end
+
       private
 
       def reauthorise!
@@ -151,9 +161,11 @@ module Kiosk
       end
 
       def auto_subscribe!
+        @kiosk_url_replay = EventsReplay.new(kiosk_identity_key)
         UrlSubscriptions.identifiers(request.query_string).each do |identifier|
           subscriptions.execute_command('command' => 'subscribe', 'identifier' => identifier)
         end
+        @kiosk_url_replay.close
       end
 
       # The token and the DPoP proof of the upgrade request.

@@ -28,15 +28,14 @@ class KioskEvents < ActionCable::Channel::Base
     assign(declaration)
     return reject unless reachable?(declaration)
 
-    open_stream!
-    transmit(subscribed_frame)
+    transmit(open_delivery!)
   end
 
   # Action Cable confirms once the pubsub subscription is live, so replay
   # starts here: an event emitted before that reaches the client this way.
   def transmit_subscription_confirmation
     super
-    replay!
+    @replay.confirmed
   end
 
   private
@@ -59,13 +58,11 @@ class KioskEvents < ActionCable::Channel::Base
     }
   end
 
-  # Everything after `since`, or after the head read before the stream
-  # opened. An event may arrive twice; delivery is at-least-once and the
-  # client ignores an `id` it has seen.
-  def replay!
-    store.since(identity_key, since || @head).each do |event|
-      transmit(event) if for_this_subscription?(event)
-    end
+  # Replay and live delivery both come here, through {Kiosk::Server::EventsReplay}.
+  # An event may arrive twice; delivery is at-least-once and the client
+  # ignores an `id` it has seen.
+  def deliver(event)
+    transmit(event) if for_this_subscription?(event)
   end
 
   def since = params[:since]
@@ -80,15 +77,31 @@ class KioskEvents < ActionCable::Channel::Base
     (since.nil? || cursor?(since)) && (params[:subject].nil? || params[:subject].is_a?(String))
   end
 
-  def open_stream!
-    # Before the stream opens, so no event falls between head and stream.
+  # Reads head before the stream opens, so no event falls between head and
+  # stream. Returns the `subscribed` frame, built before the replay group
+  # counts this subscription.
+  def open_delivery!
     @head = store.head
+    subscribed_frame.tap do
+      @replay = connection.kiosk_replay_member(since || @head) { |event| deliver(event) }
+      open_stream!
+    end
+  end
 
-    # Without `coder:` the block receives the raw broadcast String.
+  # Without `coder:` the block receives the raw broadcast String.
+  def open_stream!
     stream_from Kiosk::Server::EventsCable.stream_name(identity_key, @topic),
                 coder: ActiveSupport::JSON do |event|
-      transmit(event) if for_this_subscription?(event)
+      @replay.live(event)
+    rescue StandardError => e
+      logger&.error("[kiosk] events delivery failed for topic #{@topic.inspect}: #{e.class}: #{e.message}")
     end
+  end
+
+  # On the pubsub's own thread, in the order it hands events over (spec
+  # Section 8.5.5). Action Cable's worker pool would reorder them.
+  def worker_pool_stream_handler(broadcasting, user_handler, coder: nil)
+    stream_handler(broadcasting, user_handler, coder:)
   end
 
   def cursor?(value) = value.is_a?(Integer) && value.between?(0, MAX_CURSOR)

@@ -2,6 +2,6 @@
 
 module Kiosk
   module Reputation
-    VERSION = '0.6.15'
+    VERSION = '0.6.16'
   end
 end

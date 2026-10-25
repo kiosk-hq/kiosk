@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.16] — 2026-10-25
+
+- 2026-10-25: Version 0.6.16, the tree cut that matches skill 0.6.16.
 - Kiosk's tables are `kiosk_*` tables in the schema `c.schema` names, `public` by default. `kiosk:install` writes them as plain Rails migrations.
 - `kiosk:install` creates no SQL functions and no `agent_tokens` or `agent_mappings` table, and takes no `--guc-namespace`.
 

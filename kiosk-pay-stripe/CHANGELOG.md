@@ -10,6 +10,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.16] — 2026-10-25
+
+- 2026-10-25: Version 0.6.16, the tree cut that matches skill 0.6.16.
 - The principal → Customer mapping is the `kiosk_stripe_customers` table.
 
 ## [0.6.15] — 2026-10-25

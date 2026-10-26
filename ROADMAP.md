@@ -52,6 +52,16 @@ building on.
   and the least work.
 - AP2 open mandates: the customer signs limits with their own key, and the
   assistant buys within them later, while the customer is away.
+- A client script on kiosk.tech that an assistant runs, so that it does not
+  write its own client first.
+- DNS records (DNS-AID) that point an assistant at each demo.
+- Find out whether a Kiosk operator can also answer Poppy's business side.
+- Consider UCP: should a commerce operator also serve it, for platform
+  assistants?
+
+## 0.8
+
+- Stripe Shared Payment Tokens, and MPP, as more ways to pay.
 
 ## Later
 
@@ -65,15 +75,10 @@ building on.
 
 Ideas we have not decided on. They are not promises.
 
-- Answer Poppy's business side from a Kiosk operator.
-- A commerce operator also serves UCP, for platform assistants.
-- Operators sign their answers and events (HTTP Message Signatures).
-- Stripe Shared Payment Tokens, and MPP, as more ways to pay.
 - An open, free service that vouches a checked human stands behind an
   assistant, without saying who.
 - x402 as an alternative to the proof-of-work toll: the assistant pays a
   small sum per call over HTTP 402, in place of computing a proof.
-- Release the gems from CI on each version tag.
 
 ## Out of scope
 

@@ -16,8 +16,9 @@ module Kiosk
         rental_token: { type: 'string',
                         description: 'A signed, single-use unlock token for this vehicle; the lock checks it offline.' },
         unlock_url: { type: 'string', format: 'uri',
-                      description: 'The page to give your human, verbatim and once: it carries the token and its QR, ' \
-                                   'which opens the App Clip that writes the token to the lock.' },
+                      description: 'The page to give your human, verbatim and once. It shows the token and its QR. ' \
+                                   'At the vehicle, a phone app of the shop reads the QR and gives the token ' \
+                                   'to the lock. This demo publishes no such app.' },
         exp: { type: 'integer', description: 'When the token expires, in Unix seconds.' }
       },
       required: %w[scooter_code rental_token unlock_url exp]

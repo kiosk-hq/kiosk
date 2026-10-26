@@ -39,9 +39,10 @@ key, scooter code, expiry, one-shot `jti`. No round-trip, no account session.
 **The step the assistant does not take, and cannot** — a lock opens on a
 Bluetooth write from something standing beside the scooter. An assistant
 reaching this origin over HTTP has no radio, so it relays the `unlock_url`
-the verb answers — a page showing the token and its QR — to its human exactly
-as it relays a card-setup link. The human's tap on the NFC tag
-launches the App Clip, and the clip writes the token to the lock.
+the operation answers — a page showing the token and its QR — to its human exactly
+as it relays a card-setup link. At the scooter, a phone app of the shop reads
+the QR and gives the token to the lock over Bluetooth. The demo publishes no
+such app: its lock is a software copy of the firmware.
 
 A licence-free scooter needs no identity check at all. The signed KYC
 attestation gates `rent_motorcycle` instead (`test/stories/licence_check_test.rb`), where a licence
@@ -53,7 +54,9 @@ a rider whose licence covers only A1 rides the A1 motorcycle and not the other.
 The Kiosk gems and `rails g kiosk:install`; the `kiosk` block in `config/routes.rb`;
 `app/controllers/kiosk/{fleet,reservations,rentals}_controller.rb`; a fleet Ed25519 keypair
 whose public half is baked into every lock; the lock firmware (`firmware/`, an
-ESP32-C3 reference) and the App Clip (`appclip/`, iOS only).
+ESP32-C3 reference); and a phone app that gives the token to the lock
+(`appclip/` holds the source of an iOS App Clip; the demo publishes no build of
+it).
 
 This is a demo against a fake operator paying in Stripe test mode with a software lock
 simulator; the firmware crypto is host-tested, and on-device Bluetooth is the

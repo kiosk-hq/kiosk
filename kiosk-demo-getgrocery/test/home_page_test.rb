@@ -15,4 +15,12 @@ class HomePageTest < ActionDispatch::IntegrationTest
 
     assert_select '.stat', text: /2\s*Deliveries scheduled/
   end
+
+  test 'names the shop GetGrocery, and Start shopping leads to how an assistant shops here' do
+    get root_path
+
+    assert_select 'header .logo', 'GetGrocery'
+    assert_select 'a.cta[href="#try"]', 'Start shopping'
+    assert_select 'section#try', text: /Try it with your own assistant/
+  end
 end

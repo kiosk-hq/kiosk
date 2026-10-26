@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: Demo error pages and footers call the operator «this site» or «a demo»; tudu has one footer; the GetGrocery logo and its Start shopping link are fixed.
 - 2026-10-26: The KYC broker page says it proves that the human holds a government account, and that the human answers each check afresh.
 - 2026-10-26: atablefor names diners as the people who sign in, in its header link, its note and its signed-in label.
 - 2026-10-26: The sign-in page of atablefor, getgrocery, hoteling, philslist, skooti and stylish is a whole document under the demo's header.

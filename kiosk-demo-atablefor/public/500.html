@@ -1,16 +1,7 @@
 <!DOCTYPE html>
 <!--
-  Static 500 page. Rails' PublicExceptions serves this file for every unhandled
-  exception in production. WITHOUT it the response is BODYLESS (text/html,
-  Content-Length: 0), so neither a human nor an assistant can tell a server
-  fault from an empty answer. Static: no interpolation, relative links.
-
-  THE PROTOCOL'S ERRORS ARE RFC 9457 PROBLEM DOCUMENTS. A protocol failure is a FLAT
-  problem document served as application/problem+json, whose top-level `code`
-  (here `internal_error`) is the branch point — never the retired 0.3 wrapper
-  shape, and never a retired 0.3 endpoint name. bin/check-demo-copies reads the
-  WHOLE file, comments included, because every byte of a static page is served
-  to whoever fetched it.
+  The page Rails serves in production for every unhandled exception. Without it
+  the 500 has no body. The page is static, so every link is relative.
 -->
 <html lang="en">
   <head>
@@ -30,12 +21,12 @@
     <main>
       <h1>500 — something went wrong here</h1>
       <p>
-        This provider failed to handle the request. Nothing was necessarily
+        This site failed to handle the request. Nothing was necessarily
         changed; try again in a moment.
       </p>
       <p class="note">
         <strong>If you are an AI assistant:</strong> this is a fault on the
-        provider's side, not a rejection of your request — retrying is
+        site's side, not a rejection of your request — retrying is
         reasonable, re-registering is not. The machine surface is listed in
         <a href="/.well-known/kiosk.json"><code>/.well-known/kiosk.json</code></a>
         and reports its own failures as an RFC 9457 problem document served as

@@ -1,24 +1,7 @@
 <!DOCTYPE html>
 <!--
-  Static 404 page. Rails' PublicExceptions serves this file for every unhandled
-  404 in production. WITHOUT it, ShowExceptions#pass_response returns a BODYLESS
-  response — text/html, Content-Length: 0 — and an assistant that guessed a
-  web-app path (POST /bookings, POST /api/register) gets nothing to act on.
-  Static, so it cannot interpolate anything: keep every link relative.
-
-  NAME WHAT THE CATALOG CARRIES, NEVER A VERB LIST. `capabilities` publishes
-  MODULE names, not verb names, and the catalog is a document this page cannot
-  restate without going stale — an endpoint list written here is false on both
-  readings a lost assistant can take. Point at the discovery document and let
-  it answer for itself.
-
-  An error is a FLAT RFC 9457 problem document served as
-  application/problem+json whose top-level `code` is the branch point — the
-  fact <base>/auth.md teaches.
-
-  So nothing here may name a retired 0.3 endpoint or call the error shape by its
-  retired name — and bin/check-demo-copies reads the WHOLE file, comments
-  included, because every byte of a static page is served to whoever fetched it.
+  The page Rails serves in production for every unhandled 404. Without it the
+  404 has no body. The page is static, so every link is relative.
 -->
 <html lang="en">
   <head>
@@ -37,9 +20,9 @@
   <body>
     <main>
       <h1>404 — no such page</h1>
-      <p>This URL does not exist on this provider.</p>
+      <p>This URL does not exist on this site.</p>
       <p class="note">
-        <strong>If you are an AI assistant:</strong> this provider's machine
+        <strong>If you are an AI assistant:</strong> this site's machine
         surface is not guessable from web-app paths. Fetch
         <a href="/.well-known/kiosk.json"><code>/.well-known/kiosk.json</code></a>
         for the registration and token endpoints, the catalog link and the modules this

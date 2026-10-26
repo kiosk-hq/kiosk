@@ -1,17 +1,8 @@
 <!DOCTYPE html>
 <!--
-  Static 422 page. Rails' PublicExceptions serves this file in production for
-  any 422 that reaches the middleware — in practice the CSRF forgery check on a
-  human form, which raises ActionController::InvalidAuthenticityToken for every
-  POST without the form's token. WITHOUT this file the response is BODYLESS
-  (text/html, Content-Length: 0). Static: keep every link relative.
-
-  THE PROTOCOL'S ERRORS ARE RFC 9457 PROBLEM DOCUMENTS. An error in the protocol is a
-  FLAT problem document served as application/problem+json, and the branch
-  point is its top-level `code`, exactly as <base>/auth.md teaches — never the
-  retired 0.3 wrapper shape, and never a retired 0.3 endpoint name.
-  bin/check-demo-copies reads the WHOLE file, comments included, because every
-  byte of a static page is served to whoever fetched it.
+  The page Rails serves in production for a 422 that reaches the middleware:
+  in practice a human form posted without its CSRF token. Without it the 422
+  has no body. The page is static, so every link is relative.
 -->
 <html lang="en">
   <head>

@@ -9,9 +9,9 @@
     <section class="sec">
       <div class="sec-k">Unlock <%= @scooter_code %></div>
       <div class="tryit unlock">
-        <h2>Scan this with your phone at the vehicle</h2>
+        <h2>Your unlock token for <%= @scooter_code %></h2>
         <div class="qr"><%= raw @qr_svg %></div>
-        <p>Or open this page on your phone and tap the vehicle's NFC tag. The App Clip writes the token to the lock over Bluetooth; the lock checks it by itself.</p>
+        <p>At the vehicle, an app of the shop on your phone reads this QR and gives the token to the lock over Bluetooth. The lock checks the token by itself, with no connection to this site. This demo publishes no such app: its lock is a software copy of the real firmware.</p>
         <p class="note">Unlock token — it opens <%= @scooter_code %> once, for a few minutes, for whoever holds it:</p>
         <p class="card token"><%= @rental_token %></p>
       </div>

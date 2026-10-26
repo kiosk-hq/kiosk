@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: skooti `/unlock` with a missing parameter answers a 400 page that tells the person what to do; its pages say that no phone app is published.
 - 2026-10-26: The manage-assistants page shows money amounts and a cap of 0 as «no payments allowed»; its `spending_cap` field takes an amount in the cap currency.
 - 2026-10-26: The manage-assistants and link-approval pages are whole documents with a title, in the engine layout `layouts/kiosk/server/application`.
 

@@ -51,6 +51,8 @@ class UnlockPageTest < ActionDispatch::IntegrationTest
       get "#{UnlockLink::PATH}#{query}"
 
       assert_response :bad_request, query
+      assert_select 'head title', 'Incomplete unlock link — skooti'
+      assert_select 'h1', 'This unlock link is incomplete'
     end
   end
 end

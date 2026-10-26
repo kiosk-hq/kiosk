@@ -7,9 +7,9 @@ and a KYC-gated combustion motorcycle — over the Kiosk HTTP API. An AI assista
 self-registers, reserves a vehicle and pays for it with no account of its
 human's and no sign-in anywhere, and comes away with a short-lived signed
 token that opens that one vehicle. The last step is the human's, because it is
-physical: they present the token at the scooter — a tap on its NFC tag or a
-scan of its QR opens the App Clip, which writes the token to the lock over
-Bluetooth. Payment is kiosk-pay-stripe in Stripe test mode; the tests and CI
+physical: at the scooter, a phone app of the operator gives the token to the lock
+over Bluetooth. `appclip/` holds the source of that app, an iOS App Clip; the
+demo publishes no build of it. Payment is kiosk-pay-stripe in Stripe test mode; the tests and CI
 charge a local stripe-mock. The lock verifies the offline
 Ed25519 token by itself, with no server round-trip; here it is a software
 simulation of the firmware in `firmware/`.

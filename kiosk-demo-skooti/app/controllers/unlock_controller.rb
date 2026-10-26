@@ -4,6 +4,10 @@
 # token and the vehicle. It shows only what the URL carries — the token is the
 # bearer, so the page looks nothing up and grants nothing the URL did not.
 class UnlockController < ApplicationController
+  rescue_from ActionController::ParameterMissing do
+    render :incomplete, status: :bad_request
+  end
+
   layout 'home'
 
   def show

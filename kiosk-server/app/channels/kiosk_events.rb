@@ -136,14 +136,15 @@ class KioskEvents < ActionCable::Channel::Base
   end
 
   # Runs every REAUTHORISE_EVERY_SECONDS. A withdrawn reach is final for this
-  # subscription, so the declaration is dropped and the frame sent once.
+  # subscription: the frame is sent once, and the subscription leaves the
+  # connection, so a later subscribe is judged again rather than confirmed as live.
   def reauthorise!
     return if @declaration.nil? || reachable?(@declaration)
 
     @declaration = nil
     # Braces required: bare pairs would be read as `transmit`'s keywords.
     transmit({ 'type' => 'unsubscribed', 'topic' => @topic, 'reason' => 'reach_revoked' })
-    stop_all_streams
+    connection.subscriptions.remove_subscription(self)
   rescue StandardError => e
     logger&.error("[kiosk] events re-authorisation failed: #{e.class}: #{e.message}")
   end

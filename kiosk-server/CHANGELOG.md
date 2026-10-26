@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The `101` answer at `<endpoint>/events` carries the three version headers, as every answer under the mount does.
+- 2026-10-26: A subscription whose reach is withdrawn leaves the connection, so a later `subscribe` with its identifier gets `reject_subscription`.
+
 ## [0.6.23] — 2026-10-26
 
 - 2026-10-26: Version 0.6.23, the tree cut that matches skill 0.6.23.

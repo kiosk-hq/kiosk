@@ -166,6 +166,10 @@ ProbeApp.routes.draw do
   end
 end
 
+# Spec Section 3, point 6: every answer under the mount carries these.
+VERSION_HEADERS = [Kiosk::Protocol::HEADER_SERVER_VERSION, Kiosk::Protocol::HEADER_API_VERSION,
+                   Kiosk::Protocol::HEADER_MIN_CLIENT].freeze
+
 # ── the client ───────────────────────────────────────────────────────────────
 class ProbeSocket
   # Pings are kept apart, with their arrival time, so no scenario's frame list
@@ -222,6 +226,8 @@ class ProbeSocket
   end
 
   def open? = @open
+  # The named headers of the 101 answer, nil before the answer came.
+  def upgrade_headers(*names) = @driver.headers && names.index_with { |name| @driver.headers[name] }
   # The subprotocol the server answered in `Sec-WebSocket-Protocol`, or nil.
   delegate :protocol, to: :@driver
   def closed? = @closed
@@ -433,6 +439,7 @@ begin
   # never the 101.
   sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
   report[:no_auth_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
+  report[:no_auth_upgrade_headers] = sock.upgrade_headers(*VERSION_HEADERS)
   # Everything the refused socket is told before it goes, which is the typed
   # disconnect spec Section 8.5.3 names and nothing else.
   sock.pump_until(seconds: 2) { sock.closed? }
@@ -483,6 +490,7 @@ begin
   report[:opened] = sock.open?
   report[:welcome] = sock.frames.first
   report[:negotiated_protocol] = sock.protocol
+  report[:upgrade_headers] = sock.upgrade_headers(*VERSION_HEADERS)
 
   report[:default_origin_issuer] = ProbeState.issuers_seen.last
 
@@ -807,6 +815,11 @@ begin
   report[:reach_revoked_frame] = held.messages.find { |m| m['type'] == 'unsubscribed' }
   plain.pump_until(seconds: 2) { false }
   report[:other_socket_unsubscribed] = plain.messages.any? { |m| m['type'] == 'unsubscribed' }
+  # The same identifier again is a new subscription, which the withdrawn reach refuses.
+  seen = held.frames.length
+  held.send_raw(frame('subscribe', identifier('todo', subject: 'list_ok')))
+  held.pump_until(seconds: 5) { held.frames.drop(seen).any? { |f| f['type'] } }
+  report[:resubscribe_after_revoked] = held.frames.drop(seen).map { |f| f['type'] || f.dig('message', 'type') }
 
   # 18 — the credential stops resolving for a reason that is not expiry. The
   #      whole connection goes, and the client is told that coming back with

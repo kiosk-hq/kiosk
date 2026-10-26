@@ -11,6 +11,9 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The `101` answer at `<endpoint>/events` carries the three version headers, as every answer under the mount does.
+- 2026-10-26: A subscription whose reach is withdrawn leaves the connection, so a later `subscribe` with its identifier gets `reject_subscription`.
+
 ## [0.6.23] — 2026-10-26
 
 - 2026-10-26: **Every gem and `API_VERSION` are 0.6.23, matching skill 0.6.23; the engine default is `skill-v0.6.23.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.

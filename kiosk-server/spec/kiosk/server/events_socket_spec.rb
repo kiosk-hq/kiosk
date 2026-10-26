@@ -61,6 +61,14 @@ RSpec.describe Kiosk::Server::Events do
         expect(report['no_auth_welcomed']).to be(false)
       end
 
+      # Spec Section 3, point 6: the 101 is a response under the mount path.
+      it 'answers the upgrade 101 with the three version headers, refused or accepted' do
+        expected = { 'Kiosk-Server-Version' => Kiosk::Server::VERSION, 'Kiosk-API-Version' => Kiosk::Protocol::API_VERSION,
+                     'Kiosk-Min-Client' => Kiosk::Protocol::MIN_CLIENT }
+        expect(report['no_auth_upgrade_headers']).to eq(expected)
+        expect(report['upgrade_headers']).to eq(expected)
+      end
+
       it 'refuses a caller presenting a token the IdP does not know' do
         expect(report['bad_token_welcomed']).to be(false)
       end
@@ -459,6 +467,11 @@ RSpec.describe Kiosk::Server::Events do
         expect(report['reach_revoked_frame'])
           .to eq('type' => 'unsubscribed', 'topic' => 'todo', 'reason' => 'reach_revoked')
         expect(report['other_socket_unsubscribed']).to be(false)
+      end
+
+      # Spec Section 8.5.4: no frame is answered with silence.
+      it 'refuses a subscribe again after reach_revoked, and does not confirm it as live' do
+        expect(report['resubscribe_after_revoked']).to eq(['reject_subscription'])
       end
 
       # Asserted as a LIST, exactly as the refused upgrade above is. `reconnect`

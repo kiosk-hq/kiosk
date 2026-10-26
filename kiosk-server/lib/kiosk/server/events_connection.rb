@@ -61,6 +61,15 @@ module Kiosk
         end
       end
 
+      # Spec Section 3, point 6: the 101 answer carries the version headers. The
+      # WebSocket driver writes it past every middleware, and Action Cable gives
+      # no other way to set its headers than the driver it keeps.
+      def initialize(...)
+        super
+        driver = websocket.send(:websocket)&.instance_variable_get(:@driver)
+        Headers.build.each { |name, value| driver.set_header(name, value) } if driver
+      end
+
       def connect
         identity = resolve_identity || reject_unauthorized_connection
         @kiosk_identity = identity
@@ -105,11 +114,8 @@ module Kiosk
       def kiosk_credential_holds?
         return true if token_holds?
 
-        if kiosk_credential_expired?
-          close(reason: 'token_expired', reconnect: true)
-        else
-          close(reason: 'revoked', reconnect: false)
-        end
+        expired = kiosk_credential_expired?
+        close(reason: expired ? 'token_expired' : 'revoked', reconnect: expired)
         false
       end
 

@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The README says the hosted broker serves only the demo operators, and how an operator runs its own broker and configures the adapter for it.
+
 ## [0.6.24] — 2026-10-26
 
 - 2026-10-26: Version 0.6.24, the tree cut that matches skill 0.6.24.

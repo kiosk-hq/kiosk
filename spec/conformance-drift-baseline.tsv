@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-26 at 7def39e3
-# 2056 anchors.
+# recorded: 2026-10-26 at 77d93b82
+# 2059 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	7def39e3	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	f917a3b8a01e4bef	7def39e3	        if: matrix.demo != 'kiosk-demo-proveli'
 .github/workflows/ci.yml	0a24a48db9aa7ca6	7def39e3	      - name: Red-team battery
@@ -1059,8 +1059,9 @@ kiosk-server/lib/kiosk/server/account_binding.rb	62945665eaf34ae7	7def39e3	role 
 kiosk-server/lib/kiosk/server/account_holder_gate.rb	9bc2331b61cb76b8	7def39e3	@identity = Kiosk.configuration.user_idp&.verify(request)
 kiosk-server/lib/kiosk/server/actions.rb	2608a060da8db686	7def39e3	module Actions
 kiosk-server/lib/kiosk/server/agent_identity_providers/default_agent_idp.rb	05213139ac67ecc8	7def39e3	def authorization_for(request)
-kiosk-server/lib/kiosk/server/auth_toll.rb	2f164011b616e55c	7def39e3	def gate(verb:, body:, pow:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/auth_toll.rb	e5fe5cb38852af11	7def39e3	spec = { alg: 'equihash', params: ::Kiosk::Pow::Equihash.params, count: config.registration_pow_count.to_i }
+kiosk-server/lib/kiosk/server/auth_toll.rb	2f164011b616e55c	77d93b82	def gate(verb:, body:, pow:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/auth_toll.rb	dfa96eb75fe3ceea	77d93b82	def on?(config = Kiosk.configuration) = config.registration_pow_count.to_i.positive?
+kiosk-server/lib/kiosk/server/auth_toll.rb	e5fe5cb38852af11	77d93b82	spec = { alg: 'equihash', params: ::Kiosk::Pow::Equihash.params, count: config.registration_pow_count.to_i }
 kiosk-server/lib/kiosk/server/caller_timezone.rb	f2985d3224bf6ae7	7def39e3	      ENV_KEY = 'HTTP_KIOSK_TIMEZONE'
 kiosk-server/lib/kiosk/server/caller_timezone.rb	d3c9fa209f9c4de2	7def39e3	An IANA `Area/Location` name or `UTC` only: no offsets (no DST), no Rails
 kiosk-server/lib/kiosk/server/caller_timezone.rb	e107b50d34992866	7def39e3	def from_env(env)
@@ -1152,11 +1153,13 @@ kiosk-server/lib/kiosk/server/mandate_verifier.rb	b0fb1e572de7b6c2	7def39e3	retu
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	6b809a1afffa9b8f	7def39e3	value.to_s.downcase
 kiosk-server/lib/kiosk/server/oauth_error.rb	98903b60029909a4	7def39e3	invalid_request invalid_client invalid_grant unsupported_grant_type invalid_dpop_proof
 kiosk-server/lib/kiosk/server/payment_claim.rb	c85c9f17995d9694	7def39e3	return if total == price
-kiosk-server/lib/kiosk/server/pow_gate.rb	7bf0b3eb868bfe4e	7def39e3	      def proofs_from_header(raw)
-kiosk-server/lib/kiosk/server/pow_gate.rb	fcf8ead0ed5e8fa4	7def39e3	# One proof, a JSON array, repeated header lines (Rack joins them with
-kiosk-server/lib/kiosk/server/pow_gate.rb	7bf0b3eb868bfe4e	7def39e3	def proofs_from_header(raw)
-kiosk-server/lib/kiosk/server/pow_gate.rb	7f1a07a420aaf0e7	7def39e3	factors = ReputationFactors.for(identity:, policy:)
-kiosk-server/lib/kiosk/server/pow_gate.rb	731694884cd770e9	7def39e3	policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
+kiosk-server/lib/kiosk/server/pow_gate.rb	7bf0b3eb868bfe4e	77d93b82	      def proofs_from_header(raw)
+kiosk-server/lib/kiosk/server/pow_gate.rb	fcf8ead0ed5e8fa4	77d93b82	# One proof, a JSON array, repeated header lines (Rack joins them with
+kiosk-server/lib/kiosk/server/pow_gate.rb	7bf0b3eb868bfe4e	77d93b82	def proofs_from_header(raw)
+kiosk-server/lib/kiosk/server/pow_gate.rb	7f1a07a420aaf0e7	77d93b82	factors = ReputationFactors.for(identity:, policy:)
+kiosk-server/lib/kiosk/server/pow_gate.rb	731694884cd770e9	77d93b82	policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
+kiosk-server/lib/kiosk/server/pow_gate.rb	6414af56f4011a3b	77d93b82	return :proceed if policy.nil?
+kiosk-server/lib/kiosk/server/pow_gate.rb	d4d85aaf252282cb	77d93b82	return :proceed if spec.nil?
 kiosk-server/lib/kiosk/server/pow_toll.rb	ee0f7f352425e9d5	7def39e3	# Not bad faith (clock skew, a difficulty change): release the claim
 kiosk-server/lib/kiosk/server/pow_toll.rb	2e76d554d27efce4	7def39e3	# The cheap checks first, so only a live challenge this origin signed
 kiosk-server/lib/kiosk/server/pow_toll.rb	ff351f5960767e29	7def39e3	A lost claim is a replay: skipped, not penalised.

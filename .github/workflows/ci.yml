@@ -504,7 +504,7 @@ jobs:
 
   # ITS SIBLING, FOR THE OTHER HALF OF THE SAME CLASS (K-1295). The edge rate
   # limit got the script above and it landed; HSTS got a line in
-  # deploy/CHECKLIST.md, which is 0 ticked of 47, so its tick state carries no
+  # deploy/CHECKLIST.md, whose boxes nobody ticks, so its tick state carries no
   # information at all — and MEASURED 2026-09-05, all eight deployed origins
   # send no `Strict-Transport-Security` at all while deploy/Caddyfile has
   # shipped it ENABLED since K-916. A checklist line is not a mechanism.

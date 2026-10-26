@@ -68,7 +68,7 @@ that unit is skipped:
 
 So a wiped box prints `MISSING <unit> <KEY>`, writes nothing for that unit and
 exits non-zero. Put those values into their own `/etc/kiosk-demo/<unit>.env` by
-hand and re-run: the script keeps them and renders the rest around them. A blank
+hand and re-run: the script keeps them and renders the rest around them. The broker reads each operator's intake secret from that operator's file, so a skipped operator also prints `MISSING proveli KIOSK_PROVELI_<OP>_SECRET` and skips the broker until the re-run. A blank
 is worse than a refusal, for the reason in the first paragraph.
 
 Two values are derived rather than stored twice, so neither pair can be

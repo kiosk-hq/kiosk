@@ -49,8 +49,9 @@ kiosk-server then serves `request_kyc` and the broker's callback. The adapter:
 - accepts only attestations whose `operator` claim is your operator id.
 
 Without `url:`, `Proveli.new` talks to the hosted demo broker at `Proveli::HOSTED`
-(`https://kyc.demo.kiosk.tech`). The issuer is the
-broker's URL; pass `issuer:` when the broker signs another one.
+(`https://kyc.demo.kiosk.tech`). That broker serves only the Kiosk demos and
+refuses every other operator. The issuer is the broker's URL; pass `issuer:`
+when the broker signs another one.
 
 ## License
 

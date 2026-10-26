@@ -104,9 +104,14 @@ Kiosk.configure do |c|
   c.kyc_claims   = %w[age_over_18]
   c.kyc_provider = Kiosk::KycProviders::Proveli.new(operator_id: "acme",
                                                     intake_secret: ENV.fetch("KIOSK_PROVELI_INTAKE_SECRET"),
+                                                    url: ENV.fetch("KIOSK_PROVELI_BROKER_URL"),
                                                     public_key: ENV.fetch("KIOSK_PROVELI_PUBLIC_KEY_PEM"))
 end
 ```
+
+`url:` is the address of your own broker. The default, the demo broker at
+`https://kyc.demo.kiosk.tech`, serves only the Kiosk demos and refuses every
+other operator.
 
 The provider names the `iss` it signs, its Ed25519 public key and the `aud` it
 mints for you, and the engine checks every attestation against them. To accept

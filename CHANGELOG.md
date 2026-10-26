@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: kiosk-server, kiosk-core and kiosk-kyc-proveli: the KYC example passes the operator's own broker `url:`; the default demo broker serves only the Kiosk demos.
 - 2026-10-26: kiosk-demo-philslist and kiosk-demo-tudu: every public text an assistant writes has a maximum length, in the action's input schema and in the model.
 
 ## [0.6.28] — 2026-10-26

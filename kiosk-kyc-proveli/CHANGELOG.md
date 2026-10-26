@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The README says that the default demo broker serves only the Kiosk demos.
+
 ## [0.6.28] — 2026-10-26
 
 - 2026-10-26: Version 0.6.28, the tree cut that matches skill 0.6.28.

@@ -9,10 +9,10 @@
 #
 # The template is the declaration: names, order, comments and every value this
 # repository decides. Only a REPLACE_* value is a slot — kept if the box already
-# has it, minted if not. The three somebody else holds (the DB passwords, Stripe,
-# the locks' signing key) are NAMED instead and that unit is left alone: a blank
-# secret boots an app that fails closed and silently. Put one in its own file by
-# hand and re-run.
+# has it, minted if not. A value somebody else holds is NAMED instead and that
+# unit is left alone: a blank secret boots an app that fails closed and
+# silently. deploy/README.md, "Where a secret comes from", lists these values.
+# Put one in its own file by hand and re-run.
 #
 # It touches no service, no database and no Caddy: restart what it reports.
 # Run it BEFORE pushing prod-demo a tree that adds an env name: the push migrates

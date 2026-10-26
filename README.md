@@ -192,13 +192,15 @@ What still differs from the deployed box, and why:
 ### The secrets of production mode
 
 `deploy/env/<app>.env.example` names each variable of an app. On the box,
-`deploy/rollout.sh` makes each missing value except two: `STRIPE_SECRET_KEY` and
-`KIOSK_UNLOCK_SIGNING_KEY_PEM`. For these two it prints `MISSING`, and the
-operator supplies them. To make a value by hand:
+`deploy/rollout.sh` makes each missing value that nothing off the box holds. For
+a value that someone else holds it prints `MISSING`, and the operator supplies
+it: [`deploy/README.md`](deploy/README.md#configuration-is-declared) lists these
+values. To make a value by hand:
 
 | Variable | What it is | How to make it |
 |---|---|---|
 | `SECRET_KEY_BASE` | The Rails key that signs and encrypts cookies | `bin/rails secret` |
+| `KIOSK_<APP>_DB_PASSWORD` | The password of the app's Postgres role, the same value that `deploy/postgres-init.sql` sets | `openssl rand -hex 32` |
 | `KIOSK_SIGNING_KEY_B64` | The Ed25519 key that signs access tokens, checkouts and receipts | `openssl genpkey -algorithm ed25519 \| openssl base64 -A` |
 | `KIOSK_POW_SECRET` | The key that signs each proof-of-work challenge, 32 bytes or more | `openssl rand -hex 32` |
 | `KIOSK_PROVELI_INTAKE_SECRET` | The secret an operator and the KYC broker share. The broker keeps the same value as `KIOSK_PROVELI_<OPERATOR>_SECRET`, for example `KIOSK_PROVELI_SKOOTI_SECRET` | `openssl rand -hex 32`, then set the value on both sides |

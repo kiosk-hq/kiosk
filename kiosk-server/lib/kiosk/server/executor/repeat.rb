@@ -33,7 +33,7 @@ module Kiosk
           settlement_result(chain, row.fetch('settlement_id'), settled, row.fetch('currency'))
         end
 
-        # A refusal under which no money moved: the checkout stops counting against the spending cap.
+        # A refusal under which no money moved: a new pair can pay the checkout.
         def decline(chain)
           SessionContext.open(connection: connection, identity: identity) { decline_checkout(chain.checkout_row) }
         end

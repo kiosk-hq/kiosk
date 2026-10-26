@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2067 anchors.
+# 2056 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -508,7 +508,7 @@ kiosk-demo-hoteling/spec/stories/search_spec.rb	a search that matches nothing co
 kiosk-demo-hoteling/spec/stories/search_spec.rb	def total(found) = found.header('x-total-count').to_i
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	'spending_cap' => cap, 'spending_cap_currency' => 'EUR')
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest sets the cap of her assistant on the assistants page, and the assistant cannot pay past it
-kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay for the stay that would cross its cap, however the currency is spelled, until the cap is raised
+kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay for a stay above its cap, however the currency is spelled, and pays each stay up to it
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay in a currency other than its cap's
 kiosk-demo-hoteling/spec/stories/timezone_note_spec.rb	tells a guest on another clock how far the hotel is from them, and moves no date
 kiosk-demo-philslist/README.md	  **deliberately no payments**: philslist configures no `payment_provider`, so
@@ -1093,7 +1093,7 @@ kiosk-server/lib/kiosk/server/client_registration.rb	AuthToll.gate(verb: 'oauth/
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	class ColumnSpendingCap
 kiosk-server/lib/kiosk/server/configuration_extension.rb	        @skill_url ||= 'https://kiosk.tech/skill-v
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
-kiosk-server/lib/kiosk/server/configuration_extension.rb	      attr_accessor :spending_cap_window_days
+kiosk-server/lib/kiosk/server/configuration_extension.rb	      attr_accessor :spending_cap
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      def computed_capabilities
 kiosk-server/lib/kiosk/server/configuration_extension.rb	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
 kiosk-server/lib/kiosk/server/configuration_extension.rb	def reputation_policy=
@@ -1137,7 +1137,6 @@ kiosk-server/lib/kiosk/server/executor.rb	            enforce_spending_cap!(chai
 kiosk-server/lib/kiosk/server/executor.rb	      VERBS = %i[query run pay].freeze
 kiosk-server/lib/kiosk/server/executor.rb	# The coarse kinds of call shared by the toll, the policy and this dispatcher; not HTTP paths.
 kiosk-server/lib/kiosk/server/executor.rb	VERBS = %i[query run pay].freeze
-kiosk-server/lib/kiosk/server/executor/spending_cap.rb	WHERE agent_id = $1 AND lower(btrim(currency)) = $2
 kiosk-server/lib/kiosk/server/executor/spending_cap.rb	def enforce_spending_cap!(checkout)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth events kyc oauth pay payment_setup request_kyc schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
@@ -1570,20 +1569,11 @@ kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	answers 409 conflict
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	answers 409 to a second pair for a settled checkout
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	answers 409 to a second pair while the first is unresolved, before any capture
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	captures and settles a pair that was persisted but never captured
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	counts a persisted checkout mandate with no settlement yet
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	does not count a repeat of a recorded checkout mandate a second time
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	hits ONE cap across both spellings
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	does not check a repeat of a recorded checkout mandate again
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	holds one live checkout mandate per checkout, and frees the checkout on a decline
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	is currency-scoped (K-551): a different currency tallies zero
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	lets one through when each fits the cap alone and the two together do not
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	never settles past the cap, and leaves no declined checkout in flight
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	raises the unique violation the Executor maps to 409 when the same reference is replayed
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	refuses a new checkout above the cap
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	settles a second pair after the first was declined
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	spelling is not identity (K-1251)
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	spending cap across spellings
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	still keeps usd out of the eur tally
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	stops counting a declined checkout mandate at once
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	stops counting an unsettled checkout mandate once it has expired
 kiosk-server/spec/kiosk/server/executor_spec.rb	answers 409 conflict to a repeat of a declined pair
 kiosk-server/spec/kiosk/server/executor_spec.rb	answers 409 to a second live pair for one checkout, before any capture
 kiosk-server/spec/kiosk/server/executor_spec.rb	answers `eur` to a checkout already in `eur`, which is the only case where the bytes match
@@ -1598,7 +1588,7 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	is gone from the vocabulary enti
 kiosk-server/spec/kiosk/server/executor_spec.rb	maps a non-retryable capture-time PaymentFailed to a 402 whose hint sends the same mandates again
 kiosk-server/spec/kiosk/server/executor_spec.rb	maps a retryable capture-time PaymentFailed to Errors::PaymentFailed (402, payment_failed)
 kiosk-server/spec/kiosk/server/executor_spec.rb	omits `next` when a paginating handler signals the last page (Page with nil cursor)
-kiosk-server/spec/kiosk/server/executor_spec.rb	proceeds when spent + checkout total is within the cap
+kiosk-server/spec/kiosk/server/executor_spec.rb	proceeds when the checkout total equals the cap
 kiosk-server/spec/kiosk/server/executor_spec.rb	puts module_not_served/501 in the response for it, not a 403
 kiosk-server/spec/kiosk/server/executor_spec.rb	raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true
 kiosk-server/spec/kiosk/server/executor_spec.rb	raises Unauthenticated when identity is nil
@@ -1609,7 +1599,6 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	refuses a second pair for a sett
 kiosk-server/spec/kiosk/server/executor_spec.rb	refuses a settled reference re-presented with different bytes (K-850)
 kiosk-server/spec/kiosk/server/executor_spec.rb	rejects with SpendingCapExceeded (403) and does NOT capture when the cap would be exceeded
 kiosk-server/spec/kiosk/server/executor_spec.rb	resumes a pair whose capture ran but whose settlement was never written
-kiosk-server/spec/kiosk/server/executor_spec.rb	scopes the settled-total tally to the checkout's currency (not currency-blind)
 kiosk-server/spec/kiosk/server/executor_spec.rb	settles a new pair for the same checkout after a declined charge
 kiosk-server/spec/kiosk/server/executor_spec.rb	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	treats a cap of 0 as disabled (any charge rejected)
@@ -1736,7 +1725,7 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a token that is 
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an SD-JWT whose header typ is not dc+sd-jwt
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an amount or a currency other than the checkout, and an amount in a string
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an open mandate, and a payment mandate in the checkout place
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	takes the currency in lower case, the spelling the spending cap counts
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	takes the currency in lower case, the spelling the spending cap compares
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	verifies the mandates the key signs ES256
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	answers 401 invalid_client and the Kiosk-Client-Assertion challenge for a missing or refused client assertion
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	ignores a scope: the row carries no requested role

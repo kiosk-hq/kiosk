@@ -231,15 +231,13 @@ module Kiosk
       # `account`, a `user_model` record, and its tokens are revoked.
       attr_accessor :assistant_unlinked
 
-      # Optional `(agent_id:) → { amount_cents:, currency: } | nil`, checked
-      # before capture; 0 blocks payments, and so does a checkout in another currency.
+      # Optional `(agent_id:) → { amount_cents:, currency: } | nil`: the most
+      # one `pay` may charge, checked before capture. 0 blocks payments, and so
+      # does a checkout in another currency.
       # {Kiosk::Server::ColumnSpendingCap} reads
       # `agents.spending_cap_cents`, the column edited by the manage-assistants
       # page, and `agents.spending_cap_currency`.
       attr_accessor :spending_cap
-
-      # Days of settled spend summed against the cap. Default nil: all time.
-      attr_accessor :spending_cap_window_days
 
       # `call(id, lines) → cents | String`: the payable row's price, or why the checkout is refused.
       attr_accessor :checkout_price_checker

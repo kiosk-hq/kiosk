@@ -161,18 +161,16 @@ When the capture returns, the engine pushes `{"order_id": "…", "payment_state"
 `refund(psp_reference:, amount_cents:, key:)`: `key` names this refund among
 the refunds of the charge, so a retry with the same key refunds once. It
 records the refund in `kiosk_refunds`, and recent spend leaves the refunded
-cents out. The spending cap gets the refunded amount back. When the refund
-returns the whole charge, set the row's status column to `refunded`, which is
-where `payment_state` reads it. Then call `announce(id, "refunded")` on the
+cents out. When the refund returns the whole charge, set the row's status
+column to `refunded`, which is where `payment_state` reads it. Then call `announce(id, "refunded")` on the
 claim to push the same topic.
 
 A repeat of mandates whose capture did not complete runs the capture again
 under the same key, the checkout mandate's `reference`, so your PSP adapter must
 key its charge by it (`kiosk-pay-stripe` does). One checkout holds one live
 checkout mandate: a second pair for it answers `409 conflict`. A charge refused
-with no money moved marks the checkout mandate declined: it stops counting
-against `spending_cap` at once, a repeat of that pair answers `409 conflict`,
-and a new pair for the same checkout is accepted.
+with no money moved marks the checkout mandate declined: a repeat of that pair
+answers `409 conflict`, and a new pair for the same checkout is accepted.
 
 A settled `pay` answers the settlement and the two AP2 receipts,
 `checkout_receipt` and `payment_receipt`, which your origin signs EdDSA with
@@ -180,10 +178,12 @@ A settled `pay` answers the settlement and the two AP2 receipts,
 that your PSP adapter's `capture` answers as `network_confirmation_id`. When the
 adapter answers none, the receipt carries `not reported by the payment provider`.
 
-Set `c.spending_cap = Kiosk::Server::ColumnSpendingCap.new` to cap what each
-assistant spends. The human sets the cap on `/kiosk/auth/assistants`: an amount
-in cents and a currency. The engine refuses a `pay` that passes the cap, or a
-`pay` in another currency, with `403 spending_cap_exceeded` before the capture.
+Set `c.spending_cap = Kiosk::Server::ColumnSpendingCap.new` to cap what one
+payment of each assistant may charge. The human sets the cap on
+`/kiosk/auth/assistants`: an amount and a currency. The engine refuses a `pay`
+whose checkout total is above the cap, or whose checkout is in another
+currency, with `403 spending_cap_exceeded` before the capture. A cap of 0
+stops the payments of that assistant.
 
 ### Proof of work
 

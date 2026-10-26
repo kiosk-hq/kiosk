@@ -11,7 +11,7 @@ class CreateKioskIdentityTables < ActiveRecord::Migration[ActiveRecord::Migratio
       t.text :allowed_roles, array: true, null: false, default: []
       t.text :public_key
       t.text :human_label
-      # NULL: no cap. 0: no spending. A cap has its currency.
+      # The most one payment may charge. NULL: no cap. 0: no payments. A cap has its currency.
       t.bigint :spending_cap_cents
       t.text :spending_cap_currency
       t.timestamptz :created_at, null: false, default: -> { 'now()' }

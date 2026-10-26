@@ -54,7 +54,7 @@
                             elsif cap.zero?
                               "no payments allowed"
                             else
-                              "spending cap #{Kiosk::Server::Money.format(cap, assistant[:spending_cap_currency])}"
+                              "spending cap #{Kiosk::Server::Money.format(cap, assistant[:spending_cap_currency])} per payment"
                             end
               %>
               — <%= cap_label %>
@@ -68,7 +68,7 @@
                 <input type="text" name="human_label" value="<%= assistant[:human_label] %>">
               </label>
               <% if @spending_cap %>
-              <label>Spending cap (blank: no cap; 0: no payments)
+              <label>Spending cap per payment (blank: no cap; 0: no payments)
                 <input type="text" name="spending_cap" inputmode="decimal" value="<%= assistant[:spending_cap_cents] && Kiosk::Server::Money.amount(assistant[:spending_cap_cents], assistant[:spending_cap_currency]) %>">
               </label>
               <label>Cap currency (a three-letter code such as EUR; the assistant cannot pay in another currency)

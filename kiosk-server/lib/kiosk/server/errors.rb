@@ -294,7 +294,7 @@ module Kiosk
         HTTP_STATUS = 403
       end
 
-      # The acting assistant's spending cap would be exceeded; checked before capture.
+      # The checkout is above the acting assistant's spending cap, or in another currency; checked before capture.
       class SpendingCapExceeded < Base
         CODE        = 'spending_cap_exceeded'
         HTTP_STATUS = 403

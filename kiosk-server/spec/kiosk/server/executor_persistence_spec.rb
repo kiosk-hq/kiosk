@@ -3,8 +3,8 @@
 require 'active_record'
 require 'securerandom'
 
-# The three `persist_*` helpers — plus `spent_in_window` — against a REAL
-# Postgres.
+# The three `persist_*` helpers and the spending cap's repeat check against a
+# REAL Postgres.
 #
 # WHY THIS FILE EXISTS. Everywhere else the Executor is driven through
 # `FakeConnection`, which records SQL as a string and asserts nothing about
@@ -82,12 +82,6 @@ module ExecutorPersistenceSpec
       checkout_row = executor.send(:persist_checkout_mandate, checkout_mandate)
       executor.send(:persist_payment_mandate, checkout_row_id: checkout_row, payment: payment_mandate)
       checkout_row
-    end
-
-    # What the cap counts for this assistant: settled plus in flight.
-    def settled_total(currency:, agent_id: agent_uuid, window_days: nil)
-      spender = described_class.new(connection: connection, identity: build_identity(user_id: user_uuid, agent_id: agent_id))
-      spender.send(:spent_in_window, Struct.new(:currency).new(currency), window_days)
     end
   end
 
@@ -174,92 +168,7 @@ RSpec.shared_context 'with a payment mandate on the trail' do
     payment.with(reference: "pm-#{tag}", transaction_id: checkout_mandate.checkout_hash, sd_jwt: "payment-sd-jwt-#{tag}")
   end
 
-  # The verifier answers whichever mandate carries the presented bytes.
-  def verify_from(mandates, delay: 0)
-    find = ->(sd_jwt:, **) { mandates.find { |m| m.sd_jwt == sd_jwt } }
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_checkout, &find)
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment) do |**kw|
-      sleep(delay)
-      find.call(**kw)
-    end
-  end
-
   def pay_args(checkout_mandate, payment_mandate) = { checkout_mandate: checkout_mandate.sd_jwt, payment_mandate: payment_mandate.sd_jwt }
-end
-
-# ── Two spellings of one code are ONE tally and ONE cap (K-1251) ───────
-#
-# A tally keyed on the raw bytes would make `"eur"` and `"EUR"` two tallies
-# for one currency, and an assistant that alternated the spelling between
-# pairs would collect the cap TWICE.
-#
-# Driven against a REAL Postgres because the fold is in the SQL: a
-# FakeConnection would assert the text and not the answer. The rows here
-# are written with the non-canonical spelling ON PURPOSE — a row already in
-# the table from before the boundary canonicalised its input is exactly the
-# case the query-side fold exists for.
-RSpec.shared_context 'with settlements in several currency spellings' do
-  include_context 'with a payment mandate on the trail'
-
-  # A checkout mandate of its own, so two settlements can coexist under
-  # `UNIQUE (checkout_mandate_id)`.
-  def settle(currency:, cents:)
-    c = another_checkout(currency:, total_amount_cents: cents)
-    checkout_row = executor.send(:persist_checkout_mandate, c)
-    executor.send(:persist_settlement, checkout_row_id: checkout_row, checkout: c,
-                                       settled: { psp_reference: "pi_#{SecureRandom.hex(4)}",
-                                                  settled_amount_cents: cents })
-    c
-  end
-end
-
-# Concurrent pays of one assistant, half of them declined by the payment
-# provider: what settles never passes the cap, and every decline is recorded.
-RSpec.shared_context 'with six pairs, half declined' do
-  include_context 'with a payment mandate on the trail'
-
-  let(:pairs) do
-    Array.new(6) do |n|
-      c = another_checkout(n, total_amount_cents: 700)
-      [c, payment_for(c, n)]
-    end
-  end
-
-  let(:provider) do
-    psp = instance_double(Kiosk::PaymentProviders::Base, setup_required?: false)
-    allow(psp).to receive(:capture) do |charged, **|
-      sleep(0.05)
-      raise Kiosk::PaymentProviders::PaymentFailed.new('declined', retryable: true) if charged.sd_jwt.end_with?('0', '2', '4')
-
-      { psp_reference: "pi_#{charged.reference}", settled_amount_cents: charged.total_amount_cents }
-    end
-    psp
-  end
-
-  before do
-    verify_from(pairs.flatten)
-    Kiosk.configure { |c| (c.spending_cap = ->(**) { { amount_cents: 2000, currency: 'eur' } }) && (c.payment_provider = provider) }
-  end
-end
-
-RSpec.shared_context 'with two pairs of one assistant' do
-  include_context 'with a payment mandate on the trail'
-
-  let(:pairs) do
-    Array.new(2) do |n|
-      c = another_checkout(n)
-      [c, payment_for(c, n)]
-    end
-  end
-
-  before do
-    # Between the cap check and the checkout insert: the window two pays race in.
-    verify_from(pairs.flatten, delay: 0.3)
-    Kiosk.configure do |c|
-      c.spending_cap     = ->(**) { { amount_cents: 2000, currency: 'eur' } }
-      c.payment_provider = instance_double(Kiosk::PaymentProviders::Base, setup_required?: false, capture: settled)
-    end
-  end
 end
 
 # ── The settled replay (K-850), driven end to end ──────────────────────
@@ -444,201 +353,20 @@ RSpec.describe Kiosk::Server::Executor do
     end
   end
 
-  describe '#spent_in_window over settlements' do
+  # The first `pay` of a checkout checked it against the cap; a repeat is not checked again.
+  describe 'spending cap and a recorded checkout' do
     include_context 'with a payment mandate on the trail'
 
-    before do
-      checkout_row = persist_trail
-      executor.send(:persist_settlement, checkout_row_id: checkout_row, checkout: checkout, settled: settled)
-    end
+    before { Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 1000, currency: 'eur' } } }
 
-    it "sums this agent's settlements in the given currency" do
-      expect(settled_total(currency: 'eur')).to eq(1599)
-    end
-
-    it 'is currency-scoped (K-551): a different currency tallies zero' do
-      expect(settled_total(currency: 'usd')).to eq(0)
-    end
-
-    it "is agent-scoped: another assistant's spend is not counted" do
-      expect(settled_total(agent_id: SecureRandom.uuid, currency: 'eur')).to eq(0)
-    end
-
-    it 'counts a settlement inside the rolling window' do
-      expect(settled_total(window_days: 7, currency: 'eur')).to eq(1599)
-    end
-
-    it 'excludes a settlement older than the rolling window' do
-      connection.exec_query(
-        "UPDATE #{table('settlements')} SET settled_at = now() - INTERVAL '9 days'", 'persist spec'
-      )
-      expect(settled_total(window_days: 7, currency: 'eur')).to eq(0)
-    end
-  end
-
-  describe 'spelling is not identity (K-1251)' do
-    include_context 'with settlements in several currency spellings'
-
-    it 'tallies an EUR settlement under eur' do
-      settle(currency: 'EUR', cents: 2500)
-      expect(settled_total(currency: 'eur')).to eq(2500)
-    end
-
-    it "tallies a padded ' EUR ' settlement under eur" do
-      settle(currency: ' EUR ', cents: 700)
-      expect(settled_total(currency: 'eur')).to eq(700)
-    end
-
-    it 'sums both spellings into ONE tally' do
-      settle(currency: 'eur', cents: 3000)
-      settle(currency: 'EUR', cents: 2500)
-      expect(settled_total(currency: 'eur')).to eq(5500)
-    end
-
-    it 'canonicalises the ASKED currency too, so an EUR checkout reads the eur history' do
-      settle(currency: 'eur', cents: 3000)
-      expect(settled_total(currency: 'EUR')).to eq(3000)
-    end
-
-    # The positive control: folding CASE must not fold two different codes.
-    it 'still keeps usd out of the eur tally' do
-      settle(currency: 'eur', cents: 3000)
-      settle(currency: 'USD', cents: 4000)
-      expect(settled_total(currency: 'eur')).to eq(3000)
-      expect(settled_total(currency: 'usd')).to eq(4000)
-    end
-  end
-
-  describe 'spending cap across spellings' do
-    include_context 'with settlements in several currency spellings'
-
-    # Spend under one spelling, then the other, against a single configured
-    # cap: the second charge must see the whole tally.
-    it 'hits ONE cap across both spellings' do
-      Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
-      settle(currency: 'eur', cents: 3000)
-      settle(currency: 'EUR', cents: 2500)
-
-      expect { executor.send(:enforce_spending_cap!, another_checkout(total_amount_cents: 1)) }
-        .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded)
-    end
-
-    it 'still admits a charge that fits under the combined tally' do
-      Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
-      settle(currency: 'eur', cents: 3000)
-      settle(currency: 'EUR', cents: 1000)
-
-      expect { executor.send(:enforce_spending_cap!, another_checkout(total_amount_cents: 900)) }.not_to raise_error
-    end
-  end
-
-  # A checkout whose capture may still be running counts against the cap, and
-  # two concurrent pays of one assistant are serialised, so neither can miss the other.
-  describe 'spending cap and checkouts in flight' do
-    include_context 'with a payment mandate on the trail'
-
-    before { Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 2000, currency: 'eur' } } }
-
-    it 'counts a persisted checkout mandate with no settlement yet' do
-      persist_trail
-      expect { executor.send(:enforce_spending_cap!, another_checkout(total_amount_cents: 500)) }
-        .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded) { |e| expect(e.hint).to include('1599 already settled or in flight') }
-    end
-
-    it 'stops counting an unsettled checkout mandate once it has expired' do
-      persist_trail
-      connection.exec_query("UPDATE #{table('checkout_mandates')} SET expires_at = now() - INTERVAL '1 minute'", 'persist spec')
-      expect { executor.send(:enforce_spending_cap!, another_checkout(total_amount_cents: 500)) }.not_to raise_error
-    end
-
-    it 'stops counting a declined checkout mandate at once' do
-      executor.send(:decline_checkout, persist_trail)
-      expect { executor.send(:enforce_spending_cap!, another_checkout(total_amount_cents: 500)) }.not_to raise_error
-    end
-
-    it 'does not count a repeat of a recorded checkout mandate a second time' do
+    it 'does not check a repeat of a recorded checkout mandate again' do
       persist_trail
       expect { executor.send(:enforce_spending_cap!, checkout) }.not_to raise_error
     end
-  end
 
-  # A refund gives the cap back: the cap counts a settlement less what was refunded of it.
-  describe 'spending cap and refunds' do
-    include_context 'with a payment mandate on the trail'
-
-    before { Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 2000, currency: 'eur' } } }
-
-    let(:settlement_id) do
-      executor.send(:persist_settlement, checkout_row_id: persist_trail, checkout: checkout, settled: settled)
-    end
-
-    def refund(cents)
-      connection.exec_query(
-        "INSERT INTO #{table('refunds')} (settlement_id, psp_reference, refunded_amount_cents, refunded_at) " \
-        'VALUES ($1, $2, $3, now())', 'persist spec', [settlement_id, "re_#{SecureRandom.hex(4)}", cents]
-      )
-    end
-
-    it 'counts a settlement less what was refunded of it' do
-      refund(600)
-      expect(settled_total(currency: 'eur')).to eq(999)
-    end
-
-    it 'admits a charge that fits only because of a refund' do
-      refund(1000)
-      expect { executor.send(:enforce_spending_cap!, another_checkout(total_amount_cents: 1000)) }.not_to raise_error
-    end
-
-    it 'counts a settlement refunded past its amount as zero' do
-      2.times { refund(1000) }
-      expect(settled_total(currency: 'eur')).to eq(0)
-    end
-  end
-
-  describe 'concurrent pays with declines under one cap' do
-    include_context 'with six pairs, half declined'
-
-    def pay_in_a_thread(checkout_mandate, payment_mandate)
-      args = pay_args(checkout_mandate, payment_mandate)
-      Thread.new do
-        ActiveRecord::Base.connection_pool.with_connection do |conn|
-          described_class.call(kind: :pay, args: args, identity: identity, connection: conn) && :paid
-        rescue Kiosk::Server::Errors::SpendingCapExceeded
-          :refused
-        rescue Kiosk::Server::Errors::PaymentFailed
-          :declined
-        end
-      end
-    end
-
-    it 'never settles past the cap, and leaves no declined checkout in flight' do
-      results = pairs.map { |pair| pay_in_a_thread(*pair) }.map(&:value)
-
-      settled = value("SELECT COALESCE(SUM(settled_amount_cents), 0) FROM #{table('settlements')}").to_i
-      expect(settled).to be <= 2000
-      expect(settled_total(currency: 'eur')).to eq(settled) # nothing in flight
-      expect(value("SELECT count(*) FROM #{table('checkout_mandates')} WHERE declined_at IS NOT NULL").to_i)
-        .to eq(results.count(:declined))
-    end
-  end
-
-  describe 'two concurrent pays under one cap' do
-    include_context 'with two pairs of one assistant'
-
-    def pay_in_a_thread(checkout_mandate, payment_mandate)
-      args = pay_args(checkout_mandate, payment_mandate)
-      Thread.new do
-        ActiveRecord::Base.connection_pool.with_connection do |conn|
-          described_class.call(kind: :pay, args: args, identity: identity, connection: conn) && :paid
-        rescue Kiosk::Server::Errors::SpendingCapExceeded
-          :refused
-        end
-      end
-    end
-
-    it 'lets one through when each fits the cap alone and the two together do not' do
-      results = pairs.map { |pair| pay_in_a_thread(*pair) }.map(&:value)
-      expect(results.sort).to eq(%i[paid refused])
+    it 'refuses a new checkout above the cap' do
+      expect { executor.send(:enforce_spending_cap!, another_checkout) }
+        .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded) { |e| expect(e.hint).to include('1599 cents') }
     end
   end
 

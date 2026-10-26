@@ -507,7 +507,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
     end
   end
 
-  # ── AssistantsController: the two-branch statement and its window bind ────
+  # ── AssistantsController: the manage page against a real Postgres ────────
 
   describe Kiosk::Server::AssistantsController, 'the manage page' do
     include_context 'with the auth plane manage page'
@@ -557,36 +557,17 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(agent_row(elsewhere).fetch('human_label')).to be_nil
     end
 
-    context 'with a receipt a day old and one sixty days old' do
-      before do
-        settle!(cents: 2500, days_ago: 1)
-        settle!(cents: 9900, days_ago: 60)
-      end
+    it "lists the holder's assistants with every settlement they paid" do
+      settle!(cents: 2500, days_ago: 1)
+      settle!(cents: 9900, days_ago: 60)
+      status, body = dispatch(:show, method: 'GET')
 
-      it "lists the holder's assistants with settled spend, windowed through make_interval" do
-        Kiosk.configure { |c| c.spending_cap_window_days = 30 }
-        status, body = dispatch(:show, method: 'GET')
-
-        expect(status).to eq(200)
-        expect(body).to include(agent_id[0, 8])
-        # The 60-day-old receipt is outside the window, so the bind reached
-        # `make_interval` as a day count.
-        expect(body).to match(/Spent: 25.00 EUR\s+— (no )?spending cap/)
-      end
-
-      it 'lists them with no window configured (the statement drops the bind)' do
-        Kiosk.configure { |c| c.spending_cap_window_days = nil }
-        status, body = dispatch(:show, method: 'GET')
-
-        expect(status).to eq(200)
-        expect(body).to include(agent_id[0, 8])
-        # No window, so both receipts count: the same statement with one bind
-        # fewer, which is the branch a mismatched bind list breaks first.
-        expect(body).to match(/Spent: 124.00 EUR\s+— (no )?spending cap/)
-      end
+      expect(status).to eq(200)
+      expect(body).to include(agent_id[0, 8])
+      expect(body).to match(/Spent: 124.00 EUR\s+— (no )?spending cap/)
     end
 
-    # The page shows the spend the spending cap counts.
+    # The page shows what each assistant spent: refunds do not count.
     it 'counts each settlement less its refunds, never below zero' do
       refund!(settle!(cents: 2500, days_ago: 1), 600)
       over_refunded = settle!(cents: 1000, days_ago: 1)
@@ -608,7 +589,6 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # mandates migration. It is the only StatementInvalid the listing swallows,
     # so this also shows the narrow predicate matches the real error.
     it 'still lists, spend-free, when the settlements table is not there' do
-      Kiosk.configure { |c| c.spending_cap_window_days = 30 }
       connection.execute(%(DROP TABLE #{table('settlements')} CASCADE))
 
       status, body = dispatch(:show, method: 'GET')

@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: kiosk-server: the spending cap is the most one `pay` may charge. `spending_cap_window_days` and the running total of settled and unfinished charges are removed.
 - 2026-10-26: ROADMAP: 0.7 adds a client script, DNS-AID, Poppy business side and UCP to consider; 0.8 adds Shared Payment Tokens and MPP; rejected ideas are gone.
 - 2026-10-26: kiosk-server: the PoW gate and the auth toll raise their ConfigurationError when only a gem's version file is loaded, as a path bundle loads it, and no NoMethodError or NameError.
 - 2026-10-26: kiosk-reputation: `RecentSpend` asks the Equihash params only when the gem is loaded, so a path bundle that loads only its version file gets n=168, k=7 and no NoMethodError.

@@ -21,7 +21,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       )
     end
 
-    it 'takes the currency in lower case, the spelling the spending cap counts' do
+    it 'takes the currency in lower case, the spelling the spending cap compares' do
       checkout_jwt.replace(checkout(currency: 'EUR'))
       expect(verify_checkout.currency).to eq('eur')
     end

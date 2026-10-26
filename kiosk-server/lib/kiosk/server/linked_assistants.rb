@@ -54,11 +54,9 @@ module Kiosk
           SQL
         end
 
-        # `{ agent_id => { currency => cents } }`: the figure the spending cap
-        # counts, within `spending_cap_window_days` when set.
+        # `{ agent_id => { currency => cents } }`: what each agent spent.
         def spend_by_agent(user_id)
-          window_days = Kiosk.configuration.spending_cap_window_days&.to_i
-          tally(run(spend_sql(window_days), 'Kiosk assistant spend', [user_id, Kiosk.current_issuer, *window_days]))
+          tally(run(spend_sql, 'Kiosk assistant spend', [user_id, Kiosk.current_issuer]))
         rescue ::ActiveRecord::StatementInvalid => e
           raise unless missing_table?(e)
 
@@ -71,16 +69,18 @@ module Kiosk
           end
         end
 
-        # The day count, when set, is the third bind.
-        def spend_sql(window_days)
+        # Each settlement less what was refunded of it, never below zero, one
+        # tally per currency.
+        def spend_sql
           schema = Kiosk.configuration.schema
-          window = window_days ? 'AND settlements.settled_at >= now() - make_interval(days => $3)' : ''
           <<~SQL.squish
             SELECT settlements.agent_id, lower(btrim(settlements.currency)) AS currency,
-                   SUM(#{SettledSpend.net_cents_sql(schema)}) AS cents
+                   SUM(GREATEST(settlements.settled_amount_cents - (
+                     SELECT COALESCE(SUM(r.refunded_amount_cents), 0) FROM #{schema}.kiosk_refunds r WHERE r.settlement_id = settlements.id
+                   ), 0)) AS cents
             FROM #{schema}.kiosk_settlements settlements
             JOIN #{schema}.kiosk_agents agents ON agents.id = settlements.agent_id
-            WHERE agents.user_id = $1 AND agents.issuer = $2 AND agents.revoked_at IS NULL #{window}
+            WHERE agents.user_id = $1 AND agents.issuer = $2 AND agents.revoked_at IS NULL
             GROUP BY 1, 2 ORDER BY 2
           SQL
         end

@@ -10,18 +10,17 @@ RSpec.describe "An assistant's spending cap", type: :story do
     )
   end
 
-  it "a guest's assistant cannot pay for the stay that would cross its cap, however the currency is spelled, until the cap is raised" do
+  it "a guest's assistant cannot pay for a stay above its cap, however the currency is spelled, and pays each stay up to it" do
     guest  = a_guest
     first  = guest.reserves(check_in: Date.current + 90, check_out: Date.current + 92)
     second = guest.reserves(check_in: Date.current + 90, check_out: Date.current + 92)
-    cap    = first['total_cents'] + second['total_cents'] - 1
-    the_hotel_caps_spending(of: guest, at: cap)
+    the_hotel_caps_spending(of: guest, at: first['total_cents'] - 1)
 
+    expect(guest.pays_for(first, currency: 'EUR')).to be_refused(:spending_cap_exceeded)
+    expect(Kiosk::CheckoutMandate.where(user_id: guest.principal.user_id).count).to eq(0)
+
+    the_hotel_caps_spending(of: guest, at: [first['total_cents'], second['total_cents']].max)
     expect(guest.pays_for(first, currency: 'eur')).to be_ok
-    expect(guest.pays_for(second, currency: 'EUR')).to be_refused(:spending_cap_exceeded)
-    expect(Kiosk::CheckoutMandate.where(user_id: guest.principal.user_id).count).to eq(1)
-
-    the_hotel_caps_spending(of: guest, at: cap + 1)
     raised = guest.pays_for(second, currency: 'EUR')
     expect(raised).to be_ok, raised.to_s
     expect(raised['currency']).to eq('eur')
@@ -39,7 +38,7 @@ RSpec.describe "An assistant's spending cap", type: :story do
                                                         'agent_id' => guest.principal.agent_id,
                                                         'spending_cap' => cap, 'spending_cap_currency' => 'EUR')
 
-    expect(ada.visits('/kiosk/auth/assistants').body).to include("spending cap #{cap} EUR")
+    expect(ada.visits('/kiosk/auth/assistants').body).to include("spending cap #{cap} EUR per payment")
     expect(guest.pays_for(stay)).to be_refused(:spending_cap_exceeded)
   end
 

@@ -31,7 +31,8 @@ building on.
   Each operation has its own path and a JSON Schema for its input.
 - **Payments.** The customer saves a card once on the business's own Stripe
   page. The assistant pays a checkout that the business signs, with AP2 v0.2
-  mandates, and gets signed receipts back. Each assistant has a spending cap.
+  mandates, and gets signed receipts back. The customer can cap what one
+  payment of each assistant may charge.
 - **Age and licence checks.** An action can require a fact about the customer
   from an identity-check service. The demo service only asks the customer.
 - **Events.** The business tells the assistant about a change (an order

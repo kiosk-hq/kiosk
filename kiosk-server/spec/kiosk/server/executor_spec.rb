@@ -168,7 +168,7 @@ RSpec.shared_context 'with verb :pay' do
     # Persist helpers return SERVER-generated ids (uuid PKs); the verb
     # threads them through the FK chain.
     { persist_checkout_mandate: 'checkout-row', persist_payment_mandate: 'pay-row', persist_settlement: 's-1',
-      lock_assistant_payments!: nil, checkout_recorded?: false }.each do |helper, value|
+      checkout_recorded?: false }.each do |helper, value|
       allow(executor).to receive(helper).and_return(value)
     end
     Kiosk.configuration.payment_provider = instance_double(Kiosk::PaymentProviders::Base, capture: settlement, setup_required?: false)
@@ -222,9 +222,8 @@ end
 
 # ── The pay path's statements carry BIND PARAMETERS, not spliced values ───
 #
-# K-654: these INSERTs (and the spending-cap SELECT) used to be heredocs
-# with every field run through a private `q()` = `connection.quote`. This
-# group asserts the shape that replaced it — `$N` placeholders, values handed
+# K-654: these INSERTs used to be heredocs with every field run through a
+# private `q()` = `connection.quote`. This group asserts the shape that replaced it — `$N` placeholders, values handed
 # over separately and in order — and, above all, that `connection.quote` is
 # not reachable from the pay path at all.
 #
@@ -714,68 +713,37 @@ RSpec.describe Kiosk::Server::Executor do
     include_context 'with verb :pay'
 
     it 'does not enforce when no spending_cap seam is configured (default)' do
-      allow(executor).to receive(:spent_in_window)
       pay
-      expect(executor).not_to have_received(:spent_in_window)
       expect(Kiosk.configuration.payment_provider).to have_received(:capture)
     end
 
     it 'does not enforce for an assistant the seam reports uncapped (nil)' do
       Kiosk.configuration.spending_cap = ->(**) {}
-      allow(executor).to receive(:spent_in_window)
       pay
-      expect(executor).not_to have_received(:spent_in_window)
       expect(Kiosk.configuration.payment_provider).to have_received(:capture)
     end
 
-    it 'proceeds when spent + checkout total is within the cap' do
-      Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
-      allow(executor).to receive(:spent_in_window).and_return(1000) # +1599 = 2599 <= 5000
+    it 'proceeds when the checkout total equals the cap' do
+      Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 1599, currency: 'eur' } }
       result = pay
       expect(result.kind).to eq(:value)
       expect(Kiosk.configuration.payment_provider).to have_received(:capture)
     end
 
     it 'rejects with SpendingCapExceeded (403) and does NOT capture when the cap would be exceeded' do
-      Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 2000, currency: 'eur' } }
-      allow(executor).to receive(:spent_in_window).and_return(1000) # +1599 = 2599 > 2000
-      expect { pay }
-        .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded) { |e| expect(e.http_status).to eq(403) }
+      Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 1598, currency: 'eur' } }
+      expect { pay }.to raise_error(Kiosk::Server::Errors::SpendingCapExceeded) { |e|
+        expect(e.http_status).to eq(403)
+        expect(e.hint).to eq('one payment may charge 1598 cents at most; this charge is 1599 cents')
+      }
       expect(Kiosk.configuration.payment_provider).not_to have_received(:capture)
     end
-  end
-
-  describe 'verb :pay spending cap tally' do
-    include_context 'with verb :pay'
 
     it 'treats a cap of 0 as disabled (any charge rejected)' do
       Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 0, currency: 'eur' } }
-      allow(executor).to receive(:spent_in_window).and_return(0)
       expect { pay }
         .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded)
       expect(Kiosk.configuration.payment_provider).not_to have_received(:capture)
-    end
-
-    it 'binds the acting agent_id, the checkout currency and the window to the one tally statement' do
-      Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
-      Kiosk.configuration.spending_cap_window_days = 7
-      tally = nil
-      route_exec_query(connection) do |sql, binds|
-        tally = binds if sql.include?('AS total')
-        [{ 'total' => 0 }]
-      end
-      pay
-      expect(tally).to eq(['a-1', 'eur', 7])
-    end
-
-    # K-551: the tally must be scoped to the checkout's currency — summing
-    # cents across currencies is meaningless (4999 USD is not within a 5000
-    # EUR cap), and a cross-currency sum could erode the cap.
-    it "scopes the settled-total tally to the checkout's currency (not currency-blind)" do
-      Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
-      allow(executor).to receive(:spent_in_window).and_return(0)
-      pay
-      expect(executor).to have_received(:spent_in_window).with(having_attributes(currency: 'eur'), nil)
     end
   end
 
@@ -784,17 +752,14 @@ RSpec.describe Kiosk::Server::Executor do
 
     it "refuses a checkout in a currency other than the cap's, before capture" do
       Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'usd' } }
-      allow(executor).to receive(:spent_in_window)
       expect { pay }.to raise_error(Kiosk::Server::Errors::SpendingCapExceeded) { |e|
         expect(e.hint).to eq('the cap is in USD; this charge is in EUR')
       }
-      expect(executor).not_to have_received(:spent_in_window)
       expect(Kiosk.configuration.payment_provider).not_to have_received(:capture)
     end
 
     it 'reads the cap currency case-insensitively' do
       Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'EUR' } }
-      allow(executor).to receive(:spent_in_window).and_return(0)
       pay
       expect(Kiosk.configuration.payment_provider).to have_received(:capture)
     end
@@ -1192,44 +1157,6 @@ RSpec.describe Kiosk::Server::Executor do
           expect(sql).not_to include(value.to_s)
         end
       end
-    end
-  end
-
-  describe 'pay-path #spent_in_window' do
-    include_context 'with pay-path persistence (bind parameters)'
-
-    before { connection.next_exec_result = [{ 'total' => 0 }] }
-
-    def spent(currency, window_days) = executor.send(:spent_in_window, Struct.new(:currency).new(currency), window_days)
-
-    it 'binds the agent and the currency, with no window predicate when uncapped by time' do
-      spent('eur', nil)
-      sql, name, binds = last_statement
-
-      expect(name).to eq('Kiosk spent total')
-      # The predicate folds the COLUMN, for settlement rows written before the
-      # mandate boundary canonicalised what fills it.
-      expect(sql).to  include('WHERE agent_id = $1 AND lower(btrim(currency)) = $2')
-      expect(sql).not_to include('settled_at')
-      expect(binds).to eq([identity.agent_id, 'eur'])
-    end
-
-    it 'binds the window length rather than interpolating the day count' do
-      spent('eur', 7)
-      sql, _name, binds = last_statement
-
-      expect(sql).to include('AND settled_at >= now() - make_interval(days => $3)')
-      expect(sql).not_to include('7')
-      expect(binds).to eq([identity.agent_id, 'eur', 7])
-    end
-
-    # The BIND is folded too, so a caller that hands over a checkout the
-    # verifier never canonicalised still reads the same tally.
-    it 'canonicalises the currency it binds' do
-      spent('EUR', nil)
-      _sql, _name, binds = last_statement
-
-      expect(binds).to eq([identity.agent_id, 'eur'])
     end
   end
 

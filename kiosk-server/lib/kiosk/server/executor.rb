@@ -220,7 +220,7 @@ module Kiosk
         end
 
         # Phase 2: the irreversible capture. A refusal under which no money moved
-        # declines the checkout mandate, so it stops counting against the spending cap.
+        # declines the checkout mandate, so a new pair can pay that checkout.
         def capture(provider, chain)
           charge(provider, chain)
         rescue Kiosk::PaymentProviders::SetupRequired

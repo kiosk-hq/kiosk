@@ -312,38 +312,12 @@ RSpec.describe 'AssistantsController' do
 
       expect(status).to eq(200)
       expect(html).to include('Alice shopper')
-      expect(html).to match(/Spent: 12.00 EUR, 3.00 USD\s+— spending cap 50.00 EUR/)
+      expect(html).to match(/Spent: 12.00 EUR, 3.00 USD\s+— spending cap 50.00 EUR per payment/)
       agents, spend = con.bound(/SELECT/i)
       expect(agents.first).to include('human_label')
       expect(agents.first).to include('spending_cap_cents, spending_cap_currency')
       expect(spend.first).to include('refunded_amount_cents')
-      # No window configured → the statement declares TWO parameters and is sent
-      # TWO arguments. Postgres rejects a mismatch, which is why the statement and
-      # its binds are built together.
-      expect(spend.first).not_to include('$3')
       expect(spend.last).to eq([user_id, 'https://provider.example'])
-    end
-  end
-
-  describe 'spending-cap window' do
-    include_context 'with a holder signed in to the assistants page'
-
-    before { takes_payments }
-
-    # The rolling window is a VALUE, so it is `$3` through `make_interval` — the
-    # same treatment Executor#spent_in_window gives the same expression.
-    it 'binds the spending-cap window rather than splicing the day count' do
-      Kiosk.configure { |c| c.spending_cap_window_days = 30 }
-      con.next_exec_result = [
-        { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-          'human_label' => nil, 'spending_cap_cents' => nil }
-      ]
-      dispatch(:show, method: 'GET')
-
-      select, binds = con.bound(/settlements/).first
-      expect(select).to include('make_interval(days => $3)')
-      expect(select).not_to include("INTERVAL '1 day'")
-      expect(binds).to eq([user_id, 'https://provider.example', 30])
     end
   end
 
@@ -404,7 +378,7 @@ RSpec.describe 'AssistantsController' do
       takes_payments
       _status, html = dispatch(:show, method: 'GET')
 
-      expect(html).to include('spending cap 50.00 EUR', %(name="spending_cap" inputmode="decimal" value="50.00"),
+      expect(html).to include('spending cap 50.00 EUR per payment', %(name="spending_cap" inputmode="decimal" value="50.00"),
                               %(name="spending_cap_currency"))
     end
   end

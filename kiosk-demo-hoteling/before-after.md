@@ -38,8 +38,8 @@ Two things the incumbent flow cannot do follow from that. Payment is part of
 the protocol rather than a handback, so the reservation completes in one exchange.
 And the booking is the assistant's own: `spec/stories/privacy_spec.rb`
 and `../kiosk-redteam/suites/hoteling.rb` assert a cross-tenant read and a forged `user_id` are
-refused, while `spec/stories/spending_cap_spec.rb` holds a per-assistant limit the
-operator sets.
+refused, while `spec/stories/spending_cap_spec.rb` holds the most one payment may
+charge, a cap that the human sets for each assistant.
 
 To watch an assistant drive it rather than a script, see "Watch it work" in
 `README.md`.

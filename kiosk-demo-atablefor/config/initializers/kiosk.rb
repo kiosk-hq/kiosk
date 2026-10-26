@@ -25,7 +25,7 @@ Kiosk.configure do |c|
     support: 'demo@kiosk.tech'
   }
   # The SHA-256 of the skill file that kiosk-server gives. test/kiosk_skill_pin_test.rb says when to change it.
-  c.skill_sha256 = '01ddd6142e87e45fceafea56fee3a81d21c5c3d216d38054e11cf929c3cf4f9e'
+  c.skill_sha256 = '75bd73f6bf014b50a6a343b2051ee808ad0c179ae0a70a230fcb56317740c511'
 end
 
 # The proof-of-work toll.

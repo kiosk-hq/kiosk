@@ -11,6 +11,9 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.28] — 2026-10-26
+
+- 2026-10-26: **Every gem and `API_VERSION` are 0.6.28, matching skill 0.6.28, which says only the human sets the ask-first amount.** Every demo pins its digest.
 - 2026-10-26: kiosk-demo-stylish: the owner signs in as owner@stylish.example with stylish-demo-password.
 
 ## [0.6.27] — 2026-10-26

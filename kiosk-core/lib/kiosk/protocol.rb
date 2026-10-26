@@ -4,7 +4,7 @@ module Kiosk
   # Protocol version and header names.
   module Protocol
     # Before 1.0 every gem and every pinned skill cut carry this exact version (spec §14.1).
-    API_VERSION = '0.6.27'
+    API_VERSION = '0.6.28'
 
     # The oldest skill cut that works with this release: same MAJOR.MINOR as
     # API_VERSION, no newer (spec §3.6). Advisory.

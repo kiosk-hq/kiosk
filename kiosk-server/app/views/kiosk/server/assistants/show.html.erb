@@ -1,6 +1,7 @@
 <%# «Link an assistant» page (link flow — Kiosk extension).
     Minimal on purpose — override by shipping
     app/views/kiosk/server/assistants/show.html.erb in the host app. %>
+<% content_for :title, 'Linked assistants' %>
 <main>
   <h1>Linked assistant accounts</h1>
 
@@ -21,12 +22,12 @@
   <section>
     <h2>Link a new assistant</h2>
     <p>
-      Mint a code, hand it to your assistant; the assistant redeems it with
-      its own key and is then bound to your account.
+      Get a link code and paste it into your assistant's chat. The assistant
+      uses the code once, with its own key, and is then linked to your account.
     </p>
     <form action="<%= @page_path %>/link" method="post">
       <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
-      <button type="submit">Mint a link code</button>
+      <button type="submit">Get a link code</button>
     </form>
   </section>
 
@@ -43,19 +44,17 @@
             <% if assistant[:bound_at] %>— linked <%= assistant[:bound_at] %><% end %>
             <% if @payments %>
             <p>
-              <%
-                spent = assistant[:spent_cents].map { |currency, cents| "#{cents} cents in #{currency.upcase}" }
-              %>
-              spent: <%= spent.empty? ? "0 cents" : spent.join(", ") %>
+              <% spent = assistant[:spent_cents].map { |currency, cents| Kiosk::Server::Money.format(cents, currency) } %>
+              Spent: <%= spent.empty? ? "nothing" : spent.join(", ") %>
               <% if @spending_cap %>
               <%
                 cap = assistant[:spending_cap_cents]
                 cap_label = if cap.nil?
-                              "cap: none"
+                              "no spending cap"
                             elsif cap.zero?
-                              "cap: disabled"
+                              "no payments allowed"
                             else
-                              "cap: #{cap} cents in #{assistant[:spending_cap_currency].upcase}"
+                              "spending cap #{Kiosk::Server::Money.format(cap, assistant[:spending_cap_currency])}"
                             end
               %>
               — <%= cap_label %>
@@ -69,10 +68,10 @@
                 <input type="text" name="human_label" value="<%= assistant[:human_label] %>">
               </label>
               <% if @spending_cap %>
-              <label>Spending cap (cents, blank = no cap)
-                <input type="number" name="spending_cap_cents" min="0" value="<%= assistant[:spending_cap_cents] %>">
+              <label>Spending cap (blank: no cap; 0: no payments)
+                <input type="text" name="spending_cap" inputmode="decimal" value="<%= assistant[:spending_cap_cents] && Kiosk::Server::Money.amount(assistant[:spending_cap_cents], assistant[:spending_cap_currency]) %>">
               </label>
-              <label>Cap currency (ISO 4217 code; the assistant cannot pay in another currency)
+              <label>Cap currency (a three-letter code such as EUR; the assistant cannot pay in another currency)
                 <input type="text" name="spending_cap_currency" maxlength="3" value="<%= assistant[:spending_cap_currency]&.upcase %>">
               </label>
               <% end %>

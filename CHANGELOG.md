@@ -11,6 +11,9 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The manage-assistants page shows money amounts and a cap of 0 as «no payments allowed»; its `spending_cap` field takes an amount in the cap currency.
+- 2026-10-26: The manage-assistants and link-approval pages are whole documents with a title, in the engine layout `layouts/kiosk/server/application`.
+
 ## [0.6.24] — 2026-10-26
 
 - 2026-10-26: **Every gem and `API_VERSION` are 0.6.24, matching skill 0.6.24; the engine default is `skill-v0.6.24.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.

@@ -33,13 +33,13 @@ RSpec.describe "An assistant's spending cap", type: :story do
     ada   = a_person(email: 'cap-page@example.test', password: 'cap-page-password')
     guest = ada.links(a_guest)
     stay  = guest.reserves(check_in: Date.current + 90, check_out: Date.current + 92)
+    cap   = Kiosk::Server::Money.amount(stay['total_cents'] - 1, 'eur')
     page  = ada.visits('/kiosk/auth/assistants')
     ada.site.post_form('/kiosk/auth/assistants/update', 'authenticity_token' => ada.site.csrf_token(page.body),
                                                         'agent_id' => guest.principal.agent_id,
-                                                        'spending_cap_cents' => (stay['total_cents'] - 1).to_s,
-                                                        'spending_cap_currency' => 'EUR')
+                                                        'spending_cap' => cap, 'spending_cap_currency' => 'EUR')
 
-    expect(ada.visits('/kiosk/auth/assistants').body).to include("cap: #{stay['total_cents'] - 1} cents in EUR")
+    expect(ada.visits('/kiosk/auth/assistants').body).to include("spending cap #{cap} EUR")
     expect(guest.pays_for(stay)).to be_refused(:spending_cap_exceeded)
   end
 

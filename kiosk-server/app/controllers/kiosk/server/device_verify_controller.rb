@@ -14,8 +14,6 @@ module Kiosk
       # Failed code lookups per session before a 429, against 31^8 possible codes.
       MAX_CODE_ATTEMPTS = 10
 
-      layout false
-
       def show
         return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
         return render_attempts_capped if attempts_capped?

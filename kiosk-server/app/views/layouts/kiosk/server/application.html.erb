@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<%# The document around the account holder's pages. Override by shipping
+    app/views/layouts/kiosk/server/application.html.erb in the host app. %>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= yield :title %> — <%= request.host %></title>
+</head>
+<body>
+<%= yield %>
+<footer><a href="/">Back to <%= request.host %></a></footer>
+</body>
+</html>

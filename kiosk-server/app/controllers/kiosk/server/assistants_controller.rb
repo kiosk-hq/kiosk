@@ -8,8 +8,8 @@ module Kiosk
     class AssistantsController < ApplicationController
       SIGN_IN_PROMPT = 'Sign in to your account first to manage linked assistants.'
       SIGN_IN_ALERT  = 'Please sign in to manage your linked assistants.'
-
-      layout false
+      CAP_NOT_AN_AMOUNT   = 'Write the spending cap as an amount, such as 50 or 12.50.'
+      CURRENCY_NOT_A_CODE = 'Write the cap currency as a three-letter currency code, such as EUR.'
 
       def show
         return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
@@ -38,7 +38,7 @@ module Kiosk
         render_error(e)
       end
 
-      # Edits a bound assistant's label and/or spending cap and its currency (blank cap → unlimited).
+      # Edits a bound assistant's label and/or spending cap and its currency (blank cap → no cap).
       def update
         return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
 
@@ -70,24 +70,25 @@ module Kiosk
       def settings_changes
         changes = {}
         changes['human_label'] = params[:human_label].to_s if params.key?(:human_label)
-        changes['spending_cap_cents'], changes['spending_cap_currency'] = spending_cap_param if params.key?(:spending_cap_cents)
+        changes['spending_cap_cents'], changes['spending_cap_currency'] = spending_cap_param if params.key?(:spending_cap)
         changes
       end
 
-      # `[cents, currency]`, or `[nil, nil]` for no cap.
+      # `[cents, currency]` from the amount the person typed, or `[nil, nil]` for no cap.
       def spending_cap_param
-        raw = params[:spending_cap_cents].to_s
+        raw = params[:spending_cap].to_s
         return [nil, nil] if raw.strip.empty?
 
-        cents = Integer(raw, exception: false) || raise(Errors::BadRequest, 'spending_cap_cents must be an integer')
-        [cents, spending_cap_currency_param]
+        currency = spending_cap_currency_param
+        cents = Money.parse(raw, currency) || raise(Errors::BadRequest, CAP_NOT_AN_AMOUNT)
+        [cents, currency]
       end
 
       def spending_cap_currency_param
         code = MandateVerifier.canonical_currency(params[:spending_cap_currency])
         return code if MandateVerifier::CURRENCY_CODE.match?(code)
 
-        raise Errors::BadRequest, 'spending_cap_currency must be a three-letter ISO 4217 code, such as EUR'
+        raise Errors::BadRequest, CURRENCY_NOT_A_CODE
       end
     end
   end

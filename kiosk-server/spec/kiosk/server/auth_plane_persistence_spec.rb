@@ -526,7 +526,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       hostile = "Alice's ' OR 1=1 -- assistant"
       status, = dispatch(:update, method: 'POST',
                                   params: { agent_id: agent_id, human_label: hostile,
-                                            spending_cap_cents: '2500', spending_cap_currency: 'eur' })
+                                            spending_cap: '25', spending_cap_currency: 'eur' })
 
       expect(status).to eq(200)
       row = agent_row(agent_id)
@@ -571,7 +571,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
         expect(body).to include(agent_id[0, 8])
         # The 60-day-old receipt is outside the window, so the bind reached
         # `make_interval` as a day count.
-        expect(body).to match(/spent: 2500 cents in EUR\s+— cap/)
+        expect(body).to match(/Spent: 25.00 EUR\s+— (no )?spending cap/)
       end
 
       it 'lists them with no window configured (the statement drops the bind)' do
@@ -582,7 +582,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
         expect(body).to include(agent_id[0, 8])
         # No window, so both receipts count: the same statement with one bind
         # fewer, which is the branch a mismatched bind list breaks first.
-        expect(body).to match(/spent: 12400 cents in EUR\s+— cap/)
+        expect(body).to match(/Spent: 124.00 EUR\s+— (no )?spending cap/)
       end
     end
 
@@ -593,7 +593,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       2.times { refund!(over_refunded, 1000) }
 
       _, body = dispatch(:show, method: 'GET')
-      expect(body).to match(/spent: 1900 cents in EUR\s+— cap/)
+      expect(body).to match(/Spent: 19.00 EUR\s+— (no )?spending cap/)
     end
 
     it 'shows one figure per currency' do
@@ -601,7 +601,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       settle!(cents: 700, days_ago: 1, currency: 'usd')
 
       _, body = dispatch(:show, method: 'GET')
-      expect(body).to match(/spent: 2500 cents in EUR, 700 cents in USD\s+— cap/)
+      expect(body).to match(/Spent: 25.00 EUR, 7.00 USD\s+— (no )?spending cap/)
     end
 
     # The fallback, against the failure it is FOR: an origin that never ran the
@@ -614,7 +614,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       status, body = dispatch(:show, method: 'GET')
 
       expect(status).to eq(200)
-      expect(body).to include('spent: 0 cents')
+      expect(body).to include('Spent: nothing')
     ensure
       %w[refunds payment_mandates checkout_mandates].each { connection.execute(%(DROP TABLE #{table(it)})) }
       KioskTables.create(:mandates, :refunds, schema: AuthPlanePersistenceSpec::SCHEMA)
@@ -623,11 +623,11 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # The cap the page saves is the cap the seam reads, in the cap's own currency.
     it 'saves a cap with its currency, and ColumnSpendingCap reads both' do
       dispatch(:update, method: 'POST',
-                        params: { agent_id: agent_id, spending_cap_cents: '5000', spending_cap_currency: 'EUR' })
+                        params: { agent_id: agent_id, spending_cap: '50', spending_cap_currency: 'EUR' })
 
       expect(Kiosk::Server::ColumnSpendingCap.new.call(agent_id: agent_id)).to eq(amount_cents: 5000, currency: 'eur')
       _, body = dispatch(:show, method: 'GET')
-      expect(body).to include('cap: 5000 cents in EUR')
+      expect(body).to include('spending cap 50.00 EUR')
     end
 
     it 'refuses a stored cap with no currency' do

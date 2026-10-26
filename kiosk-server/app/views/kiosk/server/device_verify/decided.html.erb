@@ -1,5 +1,6 @@
 <%# Claim-ceremony decision confirmation. Override by shipping
     app/views/kiosk/server/device_verify/decided.html.erb in the host app. %>
+<% content_for :title, 'Link an assistant' %>
 <main>
   <% if @decision == :approved %>
     <h1>Approved</h1>

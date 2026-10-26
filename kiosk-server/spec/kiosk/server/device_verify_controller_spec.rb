@@ -78,6 +78,12 @@ RSpec.describe 'DeviceVerifyController' do
       expect(html).to include('Enter the code')
     end
 
+    it 'renders a whole document with a title' do
+      _status, html = dispatch(:show, method: 'GET')
+      expect(html).to start_with('<!DOCTYPE html>').and include('<meta charset="UTF-8">',
+                                                                '<title>Link an assistant — provider.example</title>')
+    end
+
     it '401s a visitor with no provider session (sign in first)' do
       wire_user_idp(nil)
       status, body = dispatch(:show, method: 'GET')
@@ -206,7 +212,7 @@ RSpec.describe 'DeviceVerifyController' do
       )
 
       expect(status).to eq(200)
-      expect(html).to include('Approved')
+      expect(html).to include('Approved', '<title>Link an assistant — provider.example</title>')
       reloaded = store.lookup_by_device_code_hash(start[:da].device_code_hash)
       expect(reloaded).to be_approved
       expect(reloaded.user_id).to eq(user_id)

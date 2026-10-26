@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The manage-assistants and link-approval pages are whole documents with a title, in the engine layout `layouts/kiosk/server/application`.
+- 2026-10-26: The manage-assistants page shows money amounts and a cap of 0 as «no payments allowed»; its `spending_cap` field takes an amount in the cap currency.
+
 ## [0.6.24] — 2026-10-26
 
 - 2026-10-26: Version 0.6.24, the tree cut that matches skill 0.6.24.

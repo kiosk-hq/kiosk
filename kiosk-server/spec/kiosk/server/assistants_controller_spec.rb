@@ -157,6 +157,12 @@ RSpec.describe 'AssistantsController' do
   describe 'listing' do
     include_context 'with a holder signed in to the assistants page'
 
+    it 'renders a whole document with a title' do
+      _status, html = dispatch(:show, method: 'GET')
+      expect(html).to start_with('<!DOCTYPE html>').and include('<meta charset="UTF-8">',
+                                                                '<title>Linked assistants — provider.example</title>')
+    end
+
     it "lists the holder's bound assistant accounts with key fingerprints" do
       con.next_exec_result = [
         { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00' }
@@ -306,7 +312,7 @@ RSpec.describe 'AssistantsController' do
 
       expect(status).to eq(200)
       expect(html).to include('Alice shopper')
-      expect(html).to match(/spent: 1200 cents in EUR, 300 cents in USD\s+— cap: 5000 cents in EUR/)
+      expect(html).to match(/Spent: 12.00 EUR, 3.00 USD\s+— spending cap 50.00 EUR/)
       agents, spend = con.bound(/SELECT/i)
       expect(agents.first).to include('human_label')
       expect(agents.first).to include('spending_cap_cents, spending_cap_currency')
@@ -346,7 +352,7 @@ RSpec.describe 'AssistantsController' do
 
     before { takes_payments }
 
-    it 'shows «(unnamed)» / «cap: none» when the label and cap are unset' do
+    it 'shows «(unnamed)» / «no spending cap» when the label and cap are unset' do
       con.next_exec_result = [
         { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
           'human_label' => nil, 'spending_cap_cents' => nil }
@@ -354,17 +360,19 @@ RSpec.describe 'AssistantsController' do
       _status, html = dispatch(:show, method: 'GET')
 
       expect(html).to include('(unnamed)')
-      expect(html).to include('cap: none')
+      expect(html).to include('no spending cap')
     end
 
-    it 'shows «cap: disabled» when the cap is zero' do
+    # A cap of 0 rejects every charge.
+    it 'shows «no payments allowed» when the cap is zero' do
       con.next_exec_result = [
         { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
           'human_label' => 'Bot', 'spending_cap_cents' => 0, 'spending_cap_currency' => 'eur' }
       ]
       _status, html = dispatch(:show, method: 'GET')
 
-      expect(html).to include('cap: disabled')
+      expect(html).to include('no payments allowed')
+      expect(html).not_to include('no spending cap')
     end
   end
 
@@ -388,7 +396,7 @@ RSpec.describe 'AssistantsController' do
       takes_payments(cap: false)
       _status, html = dispatch(:show, method: 'GET')
 
-      expect(html).to include('spent: 0 cents')
+      expect(html).to include('Spent: nothing')
       expect(html).not_to match(/cap|spending/i)
     end
 
@@ -396,7 +404,8 @@ RSpec.describe 'AssistantsController' do
       takes_payments
       _status, html = dispatch(:show, method: 'GET')
 
-      expect(html).to include('cap: 5000 cents in EUR', %(name="spending_cap_cents"), %(name="spending_cap_currency"))
+      expect(html).to include('spending cap 50.00 EUR', %(name="spending_cap" inputmode="decimal" value="50.00"),
+                              %(name="spending_cap_currency"))
     end
   end
 
@@ -406,7 +415,7 @@ RSpec.describe 'AssistantsController' do
     it 'updates the label and spending cap, scoped by agent id, user_id AND origin' do
       status, html = dispatch(
         :update, method: 'POST',
-                 params: { 'agent_id' => 'agent-1', 'human_label' => "Alice's shopper", 'spending_cap_cents' => '5000',
+                 params: { 'agent_id' => 'agent-1', 'human_label' => "Alice's shopper", 'spending_cap' => '50',
                            'spending_cap_currency' => 'EUR' }
       )
 
@@ -434,10 +443,10 @@ RSpec.describe 'AssistantsController' do
   describe 'update edge cases' do
     include_context 'with a holder signed in to the assistants page'
 
-    it 'clears the cap and its currency (unlimited) when spending_cap_cents is blank' do
+    it 'clears the cap and its currency (no cap) when the cap is blank' do
       _status, _html = dispatch(
         :update, method: 'POST',
-                 params: { 'agent_id' => 'agent-1', 'spending_cap_cents' => '', 'spending_cap_currency' => 'eur' }
+                 params: { 'agent_id' => 'agent-1', 'spending_cap' => '', 'spending_cap_currency' => 'eur' }
       )
 
       upd, binds = con.bound(/UPDATE/i).first
@@ -449,14 +458,23 @@ RSpec.describe 'AssistantsController' do
       expect(binds).to eq(['agent-1', user_id, 'https://provider.example'])
     end
 
-    it 'rejects a non-integer spending cap with 400 and writes no UPDATE' do
-      status, html = dispatch(
-        :update, method: 'POST',
-                 params: { 'agent_id' => 'agent-1', 'spending_cap_cents' => 'lots', 'spending_cap_currency' => 'eur' }
-      )
+    it 'saves a cap typed with decimals in minor units' do
+      dispatch(:update, method: 'POST',
+                        params: { 'agent_id' => 'agent-1', 'spending_cap' => '12.5', 'spending_cap_currency' => 'eur' })
 
-      expect(status).to eq(400)
-      expect(html).to include('must be an integer')
+      expect(con.bound(/UPDATE/i).first.last.first(2)).to eq([1250, 'eur'])
+    end
+
+    it 'rejects a cap that is not an amount in its currency with 400 and writes no UPDATE' do
+      [%w[lots eur], %w[-5 eur], %w[1.005 eur], %w[1.5 jpy]].each do |cap, currency|
+        status, html = dispatch(
+          :update, method: 'POST',
+                   params: { 'agent_id' => 'agent-1', 'spending_cap' => cap, 'spending_cap_currency' => currency }
+        )
+
+        expect(status).to eq(400)
+        expect(html).to include('Write the spending cap as an amount, such as 50 or 12.50.')
+      end
       expect(con.bound(/UPDATE/i)).to be_empty
     end
 
@@ -464,11 +482,11 @@ RSpec.describe 'AssistantsController' do
       ['', 'Euro', '978'].each do |currency|
         status, html = dispatch(
           :update, method: 'POST',
-                   params: { 'agent_id' => 'agent-1', 'spending_cap_cents' => '5000', 'spending_cap_currency' => currency }
+                   params: { 'agent_id' => 'agent-1', 'spending_cap' => '50', 'spending_cap_currency' => currency }
         )
 
         expect(status).to eq(400)
-        expect(html).to include('spending_cap_currency must be a three-letter ISO 4217 code')
+        expect(html).to include('Write the cap currency as a three-letter currency code, such as EUR.')
       end
       expect(con.bound(/UPDATE/i)).to be_empty
     end

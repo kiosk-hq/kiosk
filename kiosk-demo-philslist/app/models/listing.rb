@@ -8,7 +8,12 @@ class Listing < ApplicationRecord
   belongs_to :owner, class_name: 'User', inverse_of: :listings
   belongs_to :category
 
+  # The longest title, body and price text the board shows; the post_listing
+  # and edit_listing schemas hold the same limits.
+  MAX_LENGTH = { title: 120, body: 2000, price_text: 40 }.freeze
+
   validates :title, :body, presence: true
+  MAX_LENGTH.each { |field, maximum| validates field, length: { maximum: } }
 
   scope :own, -> { where(owner_id: Kiosk.current_user_id) }
 

@@ -37,4 +37,14 @@ class ListingOwnershipTest < ActiveSupport::TestCase
     end
     assert_equal 'Road bike', @listing.reload.title
   end
+
+  test 'a title, body or price text longer than the board shows is refused' do
+    Listing::MAX_LENGTH.each do |field, maximum|
+      @listing.assign_attributes(field => 'x' * (maximum + 1))
+
+      assert_not @listing.valid?
+      assert_equal ["is too long (maximum is #{maximum} characters)"], @listing.errors[field]
+      @listing.restore_attributes
+    end
+  end
 end

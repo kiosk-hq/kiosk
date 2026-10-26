@@ -37,11 +37,11 @@ module Kiosk
                    category_slug: { type: 'string',
                                     enum: -> { Category.order(:slug).pluck(:slug) },
                                     description: 'The section to post in.' },
-                   title: { type: 'string', description: 'Short headline.' },
-                   body: { type: 'string',
+                   title: { type: 'string', maxLength: Listing::MAX_LENGTH[:title], description: 'Short headline.' },
+                   body: { type: 'string', maxLength: Listing::MAX_LENGTH[:body],
                            description: 'The listing text, public to everyone. Buyers can contact the seller only ' \
                                         'through it, so ask the seller how they want to be contacted and include that.' },
-                   price_text: { type: 'string', description: 'Display price, e.g. "€300" or "Free".' }
+                   price_text: { type: 'string', maxLength: Listing::MAX_LENGTH[:price_text], description: 'Display price, e.g. "€300" or "Free".' }
                  },
                  required: %w[category_slug title body]
     output_schema type: 'object',
@@ -70,9 +70,9 @@ module Kiosk
                  additionalProperties: false,
                  properties: {
                    listing_id: { type: 'string', format: 'uuid', description: 'From my_listings or browse_listings.' },
-                   title: { type: 'string', description: 'New headline.' },
-                   body: { type: 'string', description: 'New listing text.' },
-                   price_text: { type: %w[string null], description: 'New display price, or `null` to clear it.' }
+                   title: { type: 'string', maxLength: Listing::MAX_LENGTH[:title], description: 'New headline.' },
+                   body: { type: 'string', maxLength: Listing::MAX_LENGTH[:body], description: 'New listing text.' },
+                   price_text: { type: %w[string null], maxLength: Listing::MAX_LENGTH[:price_text], description: 'New display price, or `null` to clear it.' }
                  },
                  required: ['listing_id']
     output_schema type: 'object',

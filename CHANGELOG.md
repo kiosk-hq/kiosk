@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The root README, CONTRIBUTING and SECURITY state the release process, the e2e prerequisites, what CI checks, the seeded demo passwords and the whole scope.
 - 2026-10-26: Demo READMEs match the code and tests: stylish shows no spending cap, a revoked tudu key gets 401, skooti lists A1, A, B, C, the getgrocery KYC submit is optional.
 - 2026-10-26: The KYC broker README says the broker proves only that the human holds a government account, and names the gap that leaves.
 - 2026-10-26: skooti's `unlock_url` description and before-after page say a phone app of the shop gives the token to the lock; the demo publishes no such app.

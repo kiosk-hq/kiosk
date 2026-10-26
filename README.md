@@ -1,6 +1,6 @@
 # Kiosk — OSS reference implementation
 
-Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service, and its Ruby reference implementation (REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail).
+Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets the AI assistants of visitors and customers discover, transact with, and pay an operator's service, and its Ruby reference implementation (one HTTP API, several assistants on one customer account, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail).
 
 ## Install
 
@@ -20,17 +20,18 @@ bin/rails db:migrate
 ```
 
 `kiosk-all` is `kiosk-core` + `kiosk-server` — the data plane, and nothing else.
-The RLS backstop, the PoW backends and the IdP/PSP adapters are deliberately
-separate gems you add per stack; `kiosk-all/README.md` says which and why.
+The RLS backstop, the proof-of-work toll (`kiosk-reputation` and
+`kiosk-pow-equihash`) and the identity and payment adapters are separate gems
+that you add for your stack; `kiosk-all/README.md` says which and why.
 
 ### What an adopting app needs before that line
 
 | Requirement | Why, and what it rules out |
 |---|---|
-| **Rails `~> 8.1`** | `kiosk-server` declares `railties`, `actionpack`, `actioncable`, `activerecord` and `activesupport` at `~> 8.1`, and `kiosk-pay-stripe` declares `activerecord` at `~> 8.1`. No other gemspec names a Rails gem. **That excludes Rails 7.x and 8.0.x** — bundler will refuse to resolve against an app on either, so this is a precondition and not a footnote. Older Rails lines are untested here, so they are not claimed; widening the floor means adding a CI leg first. |
+| **Rails `~> 8.1`** | `kiosk-server` declares `railties`, `actionpack`, `actioncable`, `activerecord` and `activesupport` at `~> 8.1`, and `kiosk-pay-stripe` declares `activerecord` at `~> 8.1`. No other gemspec names a Rails gem. **That excludes Rails 7.x and 8.0.x** — bundler will refuse to resolve against an app on either, so this is a precondition and not a footnote. Older Rails lines are untested here, so they are not claimed; widening the floor means adding a CI job first. |
 | **Ruby `>= 4.0`** | Every gemspec declares it, and CI runs on 4.0. |
 | **PostgreSQL** | Kiosk's `kiosk_*` tables and the optional RLS backstop are Postgres. No other database is supported. |
-| **An existing account model** | `c.user_model` names it, and `c.user_id_type` must match its primary key. Kiosk adds an assistant identity beside your users; it does not replace them. |
+| **An existing account model** | `c.user_model` names it, and `c.user_id_type` must match its primary key. Kiosk adds an assistant identity beside each account; it does not replace the account. |
 
 No toolchain pin ships in this repository, and that is a decision rather than an
 omission: `.ruby-version`, `mise.toml` and `.mise.toml` are gitignored so each
@@ -49,7 +50,7 @@ file that EXISTS from a file that is PACKAGED. Do not copy the `path:` form into
 app outside this repository.
 
 The step-by-step operator walkthrough — install through a served protocol, with a
-worked verb — is [kiosk.tech/onboarding.html](https://kiosk.tech/onboarding.html).
+worked operation — is [kiosk.tech/onboarding.html](https://kiosk.tech/onboarding.html).
 
 ## Layout
 
@@ -77,7 +78,7 @@ settled the `alpha` engine underneath it is.
 |---|---|---|
 | `kiosk-rls-rspec` | RSpec journey-test helpers for RLS policies | alpha |
 | `kiosk-rls-minitest` | Minitest journey-test helpers for RLS policies | alpha |
-| `kiosk-user-idp-devise` | User-IdP adapter (Devise) | alpha |
+| `kiosk-user-idp-devise` | Customer sign-in adapter (Devise) | alpha |
 | `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
 | `kiosk-kyc-prove` | KYC provider adapter — the Prove anonymizing broker | alpha |
 
@@ -86,7 +87,7 @@ settled the `alpha` engine underneath it is.
 | Gem | Algorithm | Solver memory | Default? |
 |---|---|---|---|
 | `kiosk-pow-equihash` | Equihash (n=168, k=7) | ~1.3 GiB | ✅ |
-| `kiosk-pow-argon2id` | Argon2id (D=0..256) | 64 MiB | legacy |
+| `kiosk-pow-argon2id` | Argon2id (D=0..256) | 64 MiB | no |
 | `kiosk-pow-cuckoo` | Cuckatoo29 | not measured | no |
 
 Each backend is built on `kiosk-pow`, which holds the shared BLAKE2b-256.
@@ -114,7 +115,7 @@ Each backend is built on `kiosk-pow`, which holds the shared BLAKE2b-256.
 
 `kiosk-demo-prove` is not an operator. It is the KYC broker: a service outside
 the operators. A demo connects to it to confirm facts about a customer, for
-example an age over 18 or a driving licence. It serves no Kiosk verb, and it
+example an age over 18 or a driving licence. It serves no Kiosk operation, and it
 deploys at `kyc.demo.kiosk.tech`.
 
 **`e2e/` is not in that table, because it is not an eighth operator.** It is the
@@ -157,9 +158,8 @@ file by file, with its reason, in the same script.
 
 Everything in this repo consumes the gems by `path:`, which serves the working
 tree — so nothing here can tell a file that EXISTS from a file that is
-PACKAGED, and kiosk-server shipped without its view templates for exactly that
-reason. Adding a non-`lib/` file a gem needs at runtime
-means adding it to that gem's `spec.files`.
+PACKAGED. A file outside `lib/` that a gem reads at runtime must be in that
+gem's `spec.files`, or the published gem does not carry it.
 
 ## Run the fleet in containers
 
@@ -192,7 +192,9 @@ What still differs from the deployed box, and why:
 ### The secrets of production mode
 
 `deploy/env/<app>.env.example` names each variable of an app. On the box,
-`deploy/rollout.sh` makes the missing ones. To make one by hand:
+`deploy/rollout.sh` makes each missing value except two: `STRIPE_SECRET_KEY` and
+`KIOSK_UNLOCK_SIGNING_KEY_PEM`. For these two it prints `MISSING`, and the
+operator supplies them. To make a value by hand:
 
 | Variable | What it is | How to make it |
 |---|---|---|
@@ -209,7 +211,7 @@ What still differs from the deployed box, and why:
 
 **[CONTRIBUTING.md](CONTRIBUTING.md)** is the whole of it: how to run one gem,
 one demo, the end-to-end harness, `bin/lint` (RuboCop, bundler-audit, Brakeman)
-and the `bin/check-*` guards; what the merge
+and the `bin/check-*` checks; what the merge
 gate is; and what this repository expects of a changelog entry and a comment.
 **A security flaw goes through a GitHub issue — read
 [SECURITY.md](SECURITY.md) first**, for which repository takes it and for the
@@ -221,9 +223,10 @@ protocol, every gem here and the published skill read the same MAJOR.MINOR.PATCH
 and a new cut of any one of them moves all of them. From 1.0 they share
 MAJOR.MINOR. The number is `Kiosk::Protocol::API_VERSION`, and the `~> MAJOR.MINOR.0`
 inter-gem constraints, the lockfiles, kiosk-server's `skill_url` and every demo's
-skill pin test follow it. Releases are cut as path-scoped git tags — the gem's
-directory name, then `/v` and the version — off each subdir's authoritative
-`*.gemspec`.
+skill pin test follow it. A release is a commit on `main` that moves every
+gemspec to the new version and gives each changelog the version heading. The
+maintainer then builds each gem from its `*.gemspec` and pushes it to RubyGems.
+No git tag marks a release.
 
 ## The two development keypairs this repo tracks on purpose
 
@@ -236,7 +239,8 @@ refuses to boot without an explicit key in the environment, and refuses again
 if the key it is given is the shipped one, compared on the public half in DER
 so a re-serialised copy cannot slip past.
 
-The Ed25519 one cannot be generated per machine: it is a KNOWN-ANSWER VECTOR.
+The skooti key, `dev_unlock_key.pem`, cannot be generated per machine: it is a
+KNOWN-ANSWER VECTOR.
 Its public half and one signature are reproduced in the lock firmware, in the C
 host test that firmware ships with, and in the demo's own known-answer test, and
 the crosscheck target signs a live message with the private half for the C

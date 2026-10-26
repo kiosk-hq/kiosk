@@ -4,13 +4,13 @@ Core abstractions for the [Kiosk](https://kiosk.tech) framework.
 
 ## What is Kiosk
 
-Kiosk is the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service. Its Ruby reference implementation is a Rails engine: REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail. Alpha. Apache-2.0.
+Kiosk is the standards-based open protocol that lets the AI assistants of visitors and customers discover, transact with, and pay an operator's service. Its Ruby reference implementation is a Rails engine: one HTTP API, several assistants on one customer account, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail. Alpha. Apache-2.0.
 
 ## What is kiosk-core
 
 The foundation. Defines:
 
-- **Value types** — `Kiosk::Identity`, `Kiosk::Mandate` (intent / cart / payment)
+- **Value types** — `Kiosk::Identity`, `Kiosk::Mandate::CheckoutMandate` and `Kiosk::Mandate::PaymentMandate` (the AP2 checkout and payment mandates)
 - **Abstract base classes** that adapter gems extend:
   - `Kiosk::AgentIdentityProviders::Base`
   - `Kiosk::UserIdentityProviders::Base`
@@ -24,7 +24,7 @@ The foundation. Defines:
   agent identifier onto a local uuid inside the adapter. `user_id`
   carries no such constraint — it follows `c.user_id_type` (`Kiosk.configuration.user_id_type`).
 - **Postgres GUC namespace constants** — `Kiosk::GUC`
-- **Canonical-uuid shape guard** — `Kiosk::UuidCheck` (`valid?`)
+- **Canonical-uuid shape check** — `Kiosk::UuidCheck` (`valid?`)
 - **Protocol-version surface** — `Kiosk::Protocol` (API version, min client, response header names, default mount path)
 - **Configuration** — `Kiosk.configure { |c| ... }`
 
@@ -36,7 +36,7 @@ No Rails dependency. Loadable in any Ruby app. Heavier `kiosk-server`, `kiosk-rl
 gem "kiosk-core"
 ```
 
-For the data plane (core + server), install the meta-gem — add RLS, payment, and IdP adapters per stack:
+For the data plane (core + server), install the meta-gem, then add RLS and the payment and identity adapters that your stack needs:
 
 ```ruby
 gem "kiosk-all"

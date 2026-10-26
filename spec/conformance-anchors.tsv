@@ -37,7 +37,7 @@ CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
 CHANGELOG.md	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
 CLAUDE.md	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
 README.md	Apache-2.0 for every gem in this repo.
-README.md	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service, and its Ruby reference implementation
+README.md	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets the AI assistants of visitors and customers discover, transact with, and pay an operator's service, and its Ruby reference implementation
 README.md	Customer reputation factors
 README.md	Equihash (n=168, k=7)
 README.md	Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is the whole list
@@ -47,7 +47,7 @@ README.md	PSP adapter — Stripe, AP2 mandate trail
 README.md	Rails engine, routes, OAuth client registration and DPoP token endpoint, executor
 README.md	Red-team scenarios, adversarial test harness
 README.md	app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth
-README.md	multi-assistant identity per user
+README.md	several assistants on one customer account
 README.md	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
 deploy/Caddyfile	atablefor.demo.kiosk.tech {
 deploy/Caddyfile	getgrocery.demo.kiosk.tech {
@@ -336,8 +336,8 @@ kiosk-core/README.md	- **Abstract base classes** that adapter gems extend:
 kiosk-core/README.md	- **Configuration** — `Kiosk.configure { |c| ... }`
 kiosk-core/README.md	- **Postgres GUC namespace constants** — `Kiosk::GUC`
 kiosk-core/README.md	- **Protocol-version surface** — `Kiosk::Protocol` (API version, min client, response header names, default mo
-kiosk-core/README.md	- **Value types** — `Kiosk::Identity`, `Kiosk::Mandate` (intent / cart / payment)
-kiosk-core/README.md	Kiosk is the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service. Its Ruby reference implementation is a Rails engine: REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail
+kiosk-core/README.md	- **Value types** — `Kiosk::Identity`, `Kiosk::Mandate::CheckoutMandate` and `Kiosk::Mandate::PaymentMandate` (the AP2 checkout and payment mandates)
+kiosk-core/README.md	Kiosk is the standards-based open protocol that lets the AI assistants of visitors and customers discover, transact with, and pay an operator's service. Its Ruby reference implementation is a Rails engine: one HTTP API, several assistants on one customer account, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail
 kiosk-core/README.md	No Rails dependency. Loadable in any Ruby app.
 kiosk-core/README.md	The foundation. Defines:
 kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `config.hosts` governs which Host

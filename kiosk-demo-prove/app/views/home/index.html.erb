@@ -3,8 +3,9 @@
   <p><strong>An anonymizing KYC broker.</strong></p>
   <p>
     This broker sits between the many government age and driving-licence services
-    and the many operators that need to gate a regulated action. A human
-    authorizes the broker once; it returns to the requesting operator a
+    and the many operators that need to gate a regulated action. The human
+    answers each check afresh, with nothing ticked in advance, and the broker
+    keeps no earlier answer. For each check it returns to the requesting operator a
     <strong>signed, anonymized, single-use</strong> claim — "over 18",
     "holds a category-A licence" — and <strong>nothing that identifies the
     person</strong>: not the name, date of birth, or licence number.
@@ -19,25 +20,22 @@
     <strong>Demo stub — this does not check anything yet.</strong> On the
     verification page you simply <em>self-assert</em> the facts (you click
     yes/no); the broker takes your word for it. The <strong>real</strong> broker
-    does two things this stub does not: first it verifies you actually
-    <strong>possess a government account</strong> — you log into a national
-    eID or a mobile driving licence (mDL) and authorize the broker to read your
-    date of birth and licence category — and later that
-    <strong>the account is genuinely yours</strong>, so it cannot be lent or
-    shared to vouch for other people's age or licence. This demo proves the
-    <em>protocol</em> (per-request binding, no replay, anti-mass-confirm,
-    signed anonymized callback) — <strong>not</strong> that the human is
-    actually over 18, and it makes no liveness claim.
+    verifies that you <strong>hold a government account</strong>: for each check
+    you log into a national eID or a mobile driving licence (mDL) and let the
+    broker read your date of birth and licence category. It proves that the
+    human holds such an account. It does <strong>not</strong> prove that the
+    account belongs to the person who uses it, so one person can confirm facts
+    for another. This demo proves the <em>protocol</em>: each request is bound
+    to one operator, is used once, is answered on its own, and comes back as a
+    signed answer that names nobody. It does <strong>not</strong> prove that the
+    human is actually over 18, and it makes no liveness claim.
   </p>
 
   <p class="stub">
-    <strong>Not a Kiosk operator.</strong> This broker is an <em>issuer</em>: it
-    mounts no Kiosk HTTP API at all &mdash; neither of the two
-    reserved endpoints (<code>GET &lt;endpoint&gt;/schema</code>,
-    <code>POST &lt;endpoint&gt;/pay</code>) and not one per-verb endpoint,
-    because it registers no verb &mdash; and it serves no discovery document.
-    This is a page for a human, reached from a link your assistant relays to
-    you.
+    <strong>Not a Kiosk operator.</strong> This broker signs facts about a
+    person for operators. An assistant has nothing to call here, and the broker
+    publishes no Kiosk discovery document. This is a page for a human, reached
+    from a link your assistant relays to you.
   </p>
 
   <p class="stub">

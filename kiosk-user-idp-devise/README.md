@@ -1,24 +1,24 @@
 # kiosk-user-idp-devise
 
-The Devise user-IdP adapter for [Kiosk](https://kiosk.tech) — for Rails providers that authenticate principals through Devise. Install it explicitly; it is not bundled by `kiosk-all`.
+The Devise sign-in adapter for [Kiosk](https://kiosk.tech) — for Rails operators that authenticate customers through Devise. Install it explicitly; it is not bundled by `kiosk-all`.
 
 ## What it does
 
 Reads the signed-in user from the incoming request's Warden proxy and returns a `Kiosk::Identity` for the human-side surfaces: the device-verify page, the linked-assistants page, and `POST /kiosk/auth/link` and `/kiosk/auth/unlink`. The protocol and the event stream never take it; they accept only the assistant's bearer token.
 
-The adapter is **agnostic about how the user logged in**: Devise's `database_authenticatable` and `omniauthable` modules both populate the request's Warden user, so the same read covers password login, passwordless magic-link, and every OmniAuth strategy (Google, GitHub, SAML, …).
+The adapter is **agnostic about how the customer signed in**: Devise's `database_authenticatable` and `omniauthable` modules both populate the request's Warden user, so the same read covers password sign-in, passwordless magic-link, and every OmniAuth strategy (Google, GitHub, SAML, …).
 
 **Lockable / confirmable handling is implicit.** Devise's `active_for_authentication?` already gates the Warden user, so a locked or unconfirmed user yields no signed-in user and the request fails as unauthenticated. No extra code in the adapter.
 
 ## Install
 
-Add the adapter explicitly — the `kiosk-all` meta-gem pulls in only `kiosk-core` and `kiosk-server`, so IdP adapters are opt-in per provider:
+Add the adapter explicitly — the `kiosk-all` meta-gem pulls in only `kiosk-core` and `kiosk-server`, so IdP adapters are opt-in per operator:
 
 ```ruby
 gem "kiosk-user-idp-devise"
 ```
 
-The adapter declares no hard runtime dependency on `devise` — it only reads the request's Warden user, and your provider's already-installed Devise satisfies the requirement.
+The adapter declares no hard runtime dependency on `devise` — it only reads the request's Warden user, and your app's already-installed Devise satisfies the requirement.
 
 ## Set up
 
@@ -72,11 +72,11 @@ end
 
 ## Request shape
 
-kiosk-server calls the adapter with an `ActionDispatch::Request` from the human-side page gate and from the link endpoints. The adapter reads the signed-in user from the Warden proxy of that request, `request.env["warden"].user`. Devise sets this proxy when its middleware has run. The adapter also accepts an object that has `#current_user`, such as a controller, and a bare Rack `env` Hash that has `env["warden"]`.
+kiosk-server calls the adapter with an `ActionDispatch::Request` from the human-side page gate and from the link paths. The adapter reads the signed-in user from the Warden proxy of that request, `request.env["warden"].user`. Devise sets this proxy when its middleware has run. The adapter also accepts an object that has `#current_user`, such as a controller, and a bare Rack `env` Hash that has `env["warden"]`.
 
 ## Status
 
-Pre-v1.0 alpha. API surface stable across pre-v1.0 minor bumps.
+Pre-v1.0 alpha: the API may change between releases.
 
 ## License
 

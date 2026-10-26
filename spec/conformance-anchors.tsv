@@ -1004,7 +1004,7 @@ kiosk-rls/README.md	**Prerequisite for real enforcement:** the application must 
 kiosk-rls/README.md	**RLS is not Kiosk's primary security model.**
 kiosk-rls/README.md	This gem emits DDL and ships no rake tasks.
 kiosk-rls/README.md	When you opt in, `enable_rls_on` emits both `ENABLE ROW LEVEL SECURITY` **and** `FORCE ROW LEVEL SECURITY`
-kiosk-rls/README.md	`kiosk-rls` is an **optional** companion for providers who want an additional DB-level row enforcement layer
+kiosk-rls/README.md	`kiosk-rls` is an **optional** companion for operators who want an additional DB-level row enforcement layer
 kiosk-rls/README.md	an app that uses this gem needs `config.active_record.schema_format = :sql`
 kiosk-rls/lib/generators/kiosk/rls/install/templates/create_kiosk_rls_functions.rb.tt	CREATE FUNCTION kiosk_current_user_id()
 kiosk-rls/lib/kiosk/rls/dsl.rb	def add_kiosk_policy_to(table_name, action, name: nil, using: nil, check: nil)
@@ -2078,8 +2078,8 @@ kiosk-test-support/spec/verb_reach_spec.rb	the reviewed inventory is exactly wha
 kiosk-user-idp-devise/README.md	**Lockable / confirmable handling is implicit.** Devise's `active_for_authentication?` already gates the Warden user, so
 kiosk-user-idp-devise/README.md	Add the adapter explicitly — the `kiosk-all` meta-gem pulls in only `kiosk-core` and `kiosk-server`, so IdP adapters are
 kiosk-user-idp-devise/README.md	Reads the signed-in user from the incoming request's Warden proxy and returns a `Kiosk::Identity` for the human-side surfaces
-kiosk-user-idp-devise/README.md	The Devise user-IdP adapter for [Kiosk](https://kiosk.tech) — for Rails providers that authenticate principals through D
-kiosk-user-idp-devise/README.md	The adapter is **agnostic about how the user logged in**: Devise's `database_authenticatable` and `omniauthable` modules
+kiosk-user-idp-devise/README.md	The Devise sign-in adapter for [Kiosk](https://kiosk.tech) — for Rails operators that authenticate customers through Devise.
+kiosk-user-idp-devise/README.md	The adapter is **agnostic about how the customer signed in**: Devise's `database_authenticatable` and `omniauthable` modules
 kiosk-user-idp-devise/README.md	kiosk-server calls the adapter with an `ActionDispatch::Request` from the human-side page gate
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	        Kiosk::Identity.new(
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	      def current_user_from(request)

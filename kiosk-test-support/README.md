@@ -116,7 +116,7 @@ end
 
 ## Identity checks in tests
 
-A real identity check is a human showing documents to a provider; a test cannot do that, so `Kiosk::TestHelpers::Kyc` stands in for the operator's KYC provider for the length of each test and the test says how the check ends. The engine receives the provider's callback and runs the operator's code exactly as it would in production:
+A real identity check is a human showing documents to a KYC provider; a test cannot do that, so `Kiosk::TestHelpers::Kyc` stands in for the operator's KYC provider for the length of each test and the test says how the check ends. The engine receives the provider's callback and runs the operator's code exactly as it would in production:
 
 ```ruby
 require "kiosk/test_helpers/kyc"

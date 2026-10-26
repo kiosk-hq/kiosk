@@ -1,18 +1,18 @@
 # kiosk-rls
 
-Optional DB-layer defense-in-depth for [Kiosk](https://kiosk.tech) providers.
+Optional DB-layer defense-in-depth for [Kiosk](https://kiosk.tech) operators.
 
 ## Security model overview
 
-**RLS is not Kiosk's primary security model.** Kiosk's isolation comes from the sanctioned verb surface: agents never send raw SQL, named queries enforce app-layer authz, and `Kiosk.current_user_id` scopes per-user reads in Ruby. That surface is sufficient.
+**RLS is not Kiosk's primary security model.** Kiosk's isolation comes from the declared operations: assistants never send raw SQL, named queries enforce authorization in the application, and `Kiosk.current_user_id` scopes each customer's reads in Ruby. That surface is sufficient.
 
-`kiosk-rls` is an **optional** companion for providers who want an additional DB-level row enforcement layer — belt-and-suspenders hardening. Calling `enable_rls_on` is opt-in; not calling it is the default and fully correct.
+`kiosk-rls` is an **optional** companion for operators who want an additional DB-level row enforcement layer — belt-and-suspenders hardening. Calling `enable_rls_on` is opt-in; not calling it is the default and fully correct.
 
 Policies and the `kiosk_current_*()` functions they call are not representable in `db/schema.rb`; an app that uses this gem needs `config.active_record.schema_format = :sql`.
 
 ## What it does
 
-`kiosk-rls` provides the Ruby DSL providers use inside their ActiveRecord migrations to declare RLS policies — and compiles those declarations to standard PostgreSQL DDL.
+`kiosk-rls` provides the Ruby DSL operators use inside their ActiveRecord migrations to declare RLS policies — and compiles those declarations to standard PostgreSQL DDL.
 
 When you opt in, `enable_rls_on` emits both `ENABLE ROW LEVEL SECURITY` **and** `FORCE ROW LEVEL SECURITY` so the policies actually enforce. Without `FORCE`, Postgres exempts the table owner from RLS — making it a no-op for the typical Rails setup where the app connects as the owner.
 
@@ -69,7 +69,8 @@ means adding the gem yourself:
 gem "kiosk-rls"
 ```
 
-A policy reads the principal of the request through four functions:
+A policy reads the customer and the assistant of the request through four
+functions:
 `kiosk_current_user_id()`, `kiosk_current_role()`, `kiosk_current_actor()` and
 `kiosk_current_agent_id()`. Each reads a GUC that kiosk-server sets with
 `SET LOCAL` in the request transaction. The install generator writes the
@@ -84,7 +85,7 @@ bin/rails db:migrate
 ## Rails integration
 
 Nothing to configure. The gem ships a railtie (`Kiosk::RLS::Railtie`) that adds the
-migration verbs used above to `ActiveRecord::Migration` on boot, so a
+migration methods used above to `ActiveRecord::Migration` on boot, so a
 migration can call `enable_rls_on` the moment the gem is in your `Gemfile`. Do
 **not** put `ActiveRecord::Migration.include(Kiosk::RLS::DSL)` in an
 initializer — the gem does that itself, and an application patching a

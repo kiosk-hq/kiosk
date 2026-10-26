@@ -54,7 +54,7 @@ module Kiosk
 
       # The Minitest assertion:
       #   include Kiosk::TestHelpers::SkillPin::Assertions
-      #   assert_kiosk_skill_pin hashed_version: '0.6.22'
+      #   assert_kiosk_skill_pin hashed_version: '0.6.23'
       module Assertions
         def assert_kiosk_skill_pin(hashed_version:)
           problem = SkillPin.problem(hashed_version:)

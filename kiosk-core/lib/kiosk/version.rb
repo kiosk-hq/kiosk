@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
 module Kiosk
-  VERSION = '0.6.22'
+  VERSION = '0.6.23'
 end

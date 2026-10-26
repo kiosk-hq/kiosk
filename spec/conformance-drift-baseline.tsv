@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-26 at a5a498fa
-# 2060 anchors.
+# recorded: 2026-10-26 at 8d35f68c
+# 2062 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	7def39e3	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	f917a3b8a01e4bef	7def39e3	        if: matrix.demo != 'kiosk-demo-proveli'
 .github/workflows/ci.yml	0a24a48db9aa7ca6	7def39e3	      - name: Red-team battery
@@ -729,24 +729,25 @@ kiosk-pay-stripe/README.md	4cdae0d988d2137b	7def39e3	adapter does not check whet
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	729f4224b9eb767c	7def39e3	Generate the migration for the kiosk_stripe_customers table of kiosk-pay-stripe.
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	b2c03d1cbc0143aa	7def39e3	class_option :user_id_type, type: :string, default: 'uuid'
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/templates/create_kiosk_pay_stripe_customers.rb.tt	84308cda7be7a55c	7def39e3	t.column :user_id, :<%= options[:user_id_type] %>, null: false
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ba113ada201bf41a	7def39e3	        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	5b04dafdcce6c835	7def39e3	      # A hosted Checkout page in `mode: "setup"`. An open setup session for the
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ec96ccc7fc6f50e6	7def39e3	      def initialize(api_key:, customer_resolver: nil, customer_saver: nil, api_base: nil)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	c775686fd797e9ae	7def39e3	      def refund(psp_reference:, amount_cents:, key:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	c009f5d889c98965	7def39e3	      def saved_method?(user_id:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	53007c73c8fa8d6a	7def39e3	      def setup_required?(user_id:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	95c9a611fd0c8010	7def39e3	      def setup_return_user_id(params)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	38df667c90b03a6c	7def39e3	      def setup_url(user_id:, return_url:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	e64bef54ecdc0b8a	7def39e3	@customer_resolver = customer_resolver || customer_record_method(:resolve)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	85086c3d6133c68b	7def39e3	@stripe = ::Stripe::StripeClient.new(api_key, api_base:).v1
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	5a346bac0e4af4d3	7def39e3	The SetupIntent the page creates
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	2188390c883ce950	7def39e3	def capture(checkout_mandate, **)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ec96ccc7fc6f50e6	7def39e3	def initialize(api_key:
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ec96ccc7fc6f50e6	7def39e3	def initialize(api_key:, customer_resolver: nil, customer_saver: nil, api_base: nil)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	c009f5d889c98965	7def39e3	def saved_method?(user_id:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	53007c73c8fa8d6a	7def39e3	def setup_required?(user_id:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	38df667c90b03a6c	7def39e3	def setup_url(user_id:, return_url:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	a37abe59772e8c32	7def39e3	mode: 'setup',
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ba113ada201bf41a	8d35f68c	        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	5b04dafdcce6c835	8d35f68c	      # A hosted Checkout page in `mode: "setup"`. An open setup session for the
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ec96ccc7fc6f50e6	8d35f68c	      def initialize(api_key:, customer_resolver: nil, customer_saver: nil, api_base: nil)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	c775686fd797e9ae	8d35f68c	      def refund(psp_reference:, amount_cents:, key:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	c009f5d889c98965	8d35f68c	      def saved_method?(user_id:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	53007c73c8fa8d6a	8d35f68c	      def setup_required?(user_id:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	95c9a611fd0c8010	8d35f68c	      def setup_return_user_id(params)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	38df667c90b03a6c	8d35f68c	      def setup_url(user_id:, return_url:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	e64bef54ecdc0b8a	8d35f68c	@customer_resolver = customer_resolver || customer_record_method(:resolve)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	85086c3d6133c68b	8d35f68c	@stripe = ::Stripe::StripeClient.new(api_key, api_base:).v1
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	5a346bac0e4af4d3	8d35f68c	The SetupIntent the page creates
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	2188390c883ce950	8d35f68c	def capture(checkout_mandate, **)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ec96ccc7fc6f50e6	8d35f68c	def initialize(api_key:
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ec96ccc7fc6f50e6	8d35f68c	def initialize(api_key:, customer_resolver: nil, customer_saver: nil, api_base: nil)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	c009f5d889c98965	8d35f68c	def saved_method?(user_id:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	53007c73c8fa8d6a	8d35f68c	def setup_required?(user_id:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	53007c73c8fa8d6a	8d35f68c	def setup_required?(user_id:) = !saved_method?(user_id: user_id)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	38df667c90b03a6c	8d35f68c	def setup_url(user_id:, return_url:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	a37abe59772e8c32	8d35f68c	mode: 'setup',
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	b63e3b9279cf0cb9	7def39e3	#{customer_id}-#{checkout_mandate.reference}-capture
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	1293e31a277b6a9d	7def39e3	confirm: true,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	1293e31a277b6a9d	7def39e3	off_session: true,
@@ -1037,11 +1038,12 @@ kiosk-server/lib/generators/kiosk/install/install_generator.rb	37eae6d005138c55	
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	b892a4c79898e057	7def39e3	def draw_wire_routes
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	81071421a497cc53	7def39e3	desc 'Generate the Kiosk initializer and its canonical base migrations. '
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	e7c362aab87b77e2	7def39e3	pow_spent revocations visits refunds].freeze
-kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	a539492ad548120b	7def39e3	create_table <%= table :agents %>, id: :uuid do |t|
-kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	448e1bd05a2dc774	7def39e3	index: { where: 'revoked_at IS NULL' }
-kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	e8ee5fb011f781da	7def39e3	name: 'kiosk_agents_spending_cap_currency_set'
-kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	5e88239cbaa40706	7def39e3	t.bigint :spending_cap_cents
-kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	5134e4cdfdf38c5d	7def39e3	t.index %i[issuer public_key], unique: true, where: 'revoked_at IS NULL'
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	890d7553bc95a187	8d35f68c	# The most one payment may charge. NULL: no cap. 0: no payments. A cap has its currency.
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	a539492ad548120b	8d35f68c	create_table <%= table :agents %>, id: :uuid do |t|
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	448e1bd05a2dc774	8d35f68c	index: { where: 'revoked_at IS NULL' }
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	e8ee5fb011f781da	8d35f68c	name: 'kiosk_agents_spending_cap_currency_set'
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	5e88239cbaa40706	8d35f68c	t.bigint :spending_cap_cents
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	5134e4cdfdf38c5d	8d35f68c	t.index %i[issuer public_key], unique: true, where: 'revoked_at IS NULL'
 kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_kyc_attributes.rb.tt	f268502b915f9c82	7def39e3	create_table <%= table :kyc_attributes %>, primary_key: %i[user_id name] do |t|
 kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_kyc_attributes.rb.tt	3408ac5606f77420	7def39e3	create_table <%= table :kyc_requests %>, id: :text do |t|
 kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_mandates.rb.tt	38157b409303eb37	7def39e3	class CreateKioskMandates

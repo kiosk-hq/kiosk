@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2060 anchors.
+# 2062 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-proveli'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -764,6 +764,7 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(api_key:
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(api_key:, customer_resolver: nil, customer_saver: nil, api_base: nil)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_required?(user_id:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_required?(user_id:) = !saved_method?(user_id: user_id)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_url(user_id:, return_url:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	mode: 'setup',
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	#{customer_id}-#{checkout_mandate.reference}-capture
@@ -1056,6 +1057,7 @@ kiosk-server/lib/generators/kiosk/install/install_generator.rb	MIGRATIONS = %w[i
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	def draw_wire_routes
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	desc 'Generate the Kiosk initializer and its canonical base migrations. '
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	pow_spent revocations visits refunds].freeze
+kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	# The most one payment may charge. NULL: no cap. 0: no payments. A cap has its currency.
 kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	create_table <%= table :agents %>, id: :uuid do |t|
 kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	index: { where: 'revoked_at IS NULL' }
 kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_identity_tables.rb.tt	name: 'kiosk_agents_spending_cap_currency_set'

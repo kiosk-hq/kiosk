@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.24] — 2026-10-26
+
+- 2026-10-26: Version 0.6.24, the tree cut that matches skill 0.6.24.
+
 ## [0.6.23] — 2026-10-26
 
 - 2026-10-26: Version 0.6.23, the tree cut that matches skill 0.6.23.

@@ -35,7 +35,7 @@ module Kiosk
         attr_writer :skill_url
 
         def skill_url
-          @skill_url ||= 'https://kiosk.tech/skill-v0.6.23.md'
+          @skill_url ||= 'https://kiosk.tech/skill-v0.6.24.md'
         end
 
         # The SHA-256 of the file at `skill_url`, as hex. Default nil: discovery

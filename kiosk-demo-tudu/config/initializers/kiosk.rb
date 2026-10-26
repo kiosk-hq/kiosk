@@ -13,7 +13,7 @@ Kiosk.configure do |c|
   c.registration_role = :customer
   c.owner             = { name: 'tudu (Kiosk demo)', support: 'demo@kiosk.tech' }
   # The SHA-256 of the skill file that kiosk-server gives. test/kiosk_skill_pin_test.rb says when to change it.
-  c.skill_sha256      = 'b44c355038498465d62f7350b2d7e96b3c8122350654e552bc48a2dd18431a97'
+  c.skill_sha256      = 'a4c9bf75a55bd1c98475e586e5deb004cf6ec879638bf37f0e52cd5c4446428e'
 
   # Demo only: checks every answer in production too. The generated default checks outside production only.
   c.validate_responses = true

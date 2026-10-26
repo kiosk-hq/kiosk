@@ -16,8 +16,7 @@ Gem::Specification.new do |spec|
     Automatically mixes the journey helpers (`as_agent_of`, `as_user`,
     `as_agent`, `as_anonymous`, `query`, `run_query`, `run_action`,
     `pay_action`, `kiosk_seed`) into any example group tagged
-    `type: :kiosk_journey` (or `type: :kiosk_agent`, the same DSL under a
-    second tag).
+    `type: :kiosk_journey`.
 
     Ships the matchers `be_rls_denied` and `be_quota_exceeded` for asserting
     the structured error classes.

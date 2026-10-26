@@ -10,8 +10,8 @@ require 'kiosk/rls_rspec/matchers'
 
 module Kiosk
   module RLSRSpec
-    # Metadata tags that pull in the same journey DSL; `:kiosk_agent` is a tag, not a live model.
-    JOURNEY_TYPES = %i[kiosk_journey kiosk_agent].freeze
+    # The metadata tag that pulls in the journey DSL.
+    JOURNEY_TYPES = %i[kiosk_journey].freeze
 
     # Runs on require; call it yourself only under an unusual load order.
     def self.install!(config = RSpec.configuration)

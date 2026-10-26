@@ -2,8 +2,8 @@
 
 RSpec.describe Kiosk::RLSRSpec do
   describe 'JOURNEY_TYPES' do
-    it 'declares both kiosk_journey and kiosk_agent' do
-      expect(described_class::JOURNEY_TYPES).to eq(%i[kiosk_journey kiosk_agent])
+    it 'declares kiosk_journey' do
+      expect(described_class::JOURNEY_TYPES).to eq(%i[kiosk_journey])
     end
   end
 
@@ -27,14 +27,6 @@ RSpec.describe Kiosk::RLSRSpec do
       as_agent_of(alice) { observed = Kiosk::TestHelpers.executor.current_identity }
       expect(observed.actor).to    eq('agent')
       expect(observed.user_id).to  eq('u-alice')
-    end
-  end
-
-  describe 'type: :kiosk_agent example group', type: :kiosk_agent do
-    it 'shares the same journey-DSL surface' do
-      # Ask the module for the whole surface: sampled names cannot tell a shared
-      # surface from a subset of it.
-      expect(self).to respond_to(*Kiosk::TestHelpers::Journey.public_instance_methods(false))
     end
   end
 

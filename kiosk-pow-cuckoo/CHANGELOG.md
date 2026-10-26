@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The README states the known-answer keys (76 zero bytes and LE32(20)), the seven rejected categories and the edgebits bound that the Rakefile states.
+
 ## [0.6.24] — 2026-10-26
 
 - 2026-10-26: Version 0.6.24, the tree cut that matches skill 0.6.24.

@@ -2,16 +2,15 @@
 
 Cuckatoo-Cycle proof-of-work backend for [Kiosk](https://kiosk.tech).
 
-> **Shelved / optional.** The shipped default PoW backend is
-> [`kiosk-pow-equihash`](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-pow-equihash) — one PoW backend, Equihash.
+> **Opt-in.** The shipped default proof-of-work backend is
+> [`kiosk-pow-equihash`](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-pow-equihash).
 > Cuckatoo meets the asymmetric-verify bar, but its production parameters need
 > a native solver (this gem ships only a toy solver),
-> so it is not the default. It stays in the repo as an opt-in backend and may
-> return as a first-class extension; no demo, harness or deploy runbook uses it.
+> so it is not the default. No demo, harness or deploy runbook uses it.
 
 ## What this is
 
-An optional (shelved) PoW backend with a large solve:verify asymmetry — solving
+An opt-in proof-of-work backend with a large solve:verify asymmetry — solving
 requires finding a cycle in a large random bipartite graph (gigabytes of RAM,
 seconds of CPU), while verifying is a handful of operations: `proofsize` SipHash
 evaluations plus a cycle-walk (no wall-clock verify figure is benchmarked here).
@@ -24,8 +23,7 @@ for small edgebits and reduced proofsize only — see Solver section below.
 
 ## Install
 
-This backend is shelved and opt-in (see the note at the top): nothing installs
-it for you.
+This backend is opt-in (see the note at the top): nothing installs it for you.
 
 ```ruby
 gem "kiosk-pow-cuckoo"
@@ -34,7 +32,7 @@ gem "kiosk-pow-cuckoo"
 The verifier is pure Ruby. Its one runtime dependency is `kiosk-pow`, the
 pure-Ruby base that holds BLAKE2b-256. It needs no `kiosk-core`, no Rails and no
 native extension. Requiring it defines the backend; registering
-it is a separate, explicit step, because no PoW gem self-registers on require.
+it is a separate, explicit step, because no proof-of-work gem registers itself on require.
 The registry lives in `kiosk-reputation`, which an origin adds to its Gemfile
 the same way:
 
@@ -47,8 +45,8 @@ Kiosk::Reputation::Backends.register(Kiosk::Pow::Cuckoo::NAME, Kiosk::Pow::Cucko
 
 The reference solver `solve_cuckoo.py` ships inside the package and is the one
 part with a prerequisite outside Ruby: **`python3` with `numpy`**
-(`pip install -r requirements.txt`, which ships beside it). A provider only
-ever verifies, so a provider never needs it — read the Solver section below
+(`pip install -r requirements.txt`, which ships beside it). An operator only
+verifies, so an operator never needs it — read the Solver section below
 for what that solver can and cannot do before you reach for it.
 
 ## Algorithm: Cuckatoo Cycle
@@ -74,8 +72,10 @@ SipHash spec).
 ## Known-answer validation
 
 The verifier is validated against Grin's Cuckatoo29 CI test vector:
-- `edgebits=29`, header = 80 zero bytes keyed with `nonce=20`, `proofsize=42`
-- 42-cycle accepted; five categories of bad inputs rejected
+- `edgebits=29`, `proofsize=42`, keys = BLAKE2b-256 of 76 zero bytes and
+  LE32(20), which is Grin's 80-byte zero header with header nonce 20
+- the 42-cycle is accepted; seven categories of bad cycles, (a) to (g), are
+  rejected
 
 Run: `bundle exec rspec` — all green.
 
@@ -131,21 +131,21 @@ edgebits and reduced proofsize only**.
 | Status   | Reference/toy — NOT production |
 | Purpose  | Mechanism demonstration at small sizes |
 | Tested at | edgebits=10, proofsize=12 |
-| Memory guard | Built-in `_enforce_memory_budget`: refuses oversized edgebits |
+| Memory check | Built-in `_enforce_memory_budget`: refuses oversized edgebits |
 | Safety wrapper | `KIOSK_POW_MAX_BYTES=536870912 timeout 30 nice -n 19 python3 solve_cuckoo.py` |
 
 **Why edgebits=10 for proofsize=12:**
 A valid Cuckatoo proofsize=12 cycle exists in the bipartite pair-graph only when
 the pair-graph girth ≤ 12. With N/2 = 2^(edgebits-1) pair values per side and
 mean pair-degree 2, the expected girth is approximately log₂(N/2). For
-proofsize=12, this requires edgebits ≤ 12-13. At edgebits=10 (N/2=512) cycles
-exist and the bundled `solve_cuckoo.py` finds them. At edgebits ≥ 14,
-12-cycles essentially vanish.
+proofsize=12, this requires edgebits of 12 or less. At edgebits=10 (N/2=512)
+cycles exist and the bundled `solve_cuckoo.py` finds them. From edgebits 13 up,
+12-cycles practically do not occur.
 
 **Cannot solve production Cuckatoo** (L=42, edgebits≥29). Pure Python cannot
 hold the graph: the bundled solver uses ~118 bytes per edge (peak RSS at
 edgebits 22 and 24, one Apple M3 core), so edgebits=29 needs ~59 GiB, and its
-memory guard refuses it. Production requires a native solver (C/C++ like
+memory check refuses it. Production requires a native solver (C/C++ like
 Tromp's `lean`/`mean` miner). No native solver's memory is measured here.
 
 ### Cross-impl parity gate
@@ -166,7 +166,7 @@ Production Cuckatoo (edgebits≥29, proofsize=42) requires clients with a native
 solver.  Options:
 - **Tromp's C miner** (`lean`/`mean`, `simple`): fast, FAIR-MINING/GPLv2+ license
 - **GPU solvers**: faster still; CUDA-only
-- Provider mandates the algorithm; clients that cannot solve are denied
+- The operator mandates the algorithm; clients that cannot solve are denied
 
 ## Difficulty target
 
@@ -201,10 +201,10 @@ proof.
 ## Caveats
 
 - Cuckatoo is NOT ASIC-proof (1 GB-SRAM ASICs exist for edgebits=31+). The
-  provider mandates it; clients that cannot solve are denied. This is
+  operator mandates it; clients that cannot solve are denied. This is
   intentional: it raises the cost of abuse.
 - **Equihash** (`kiosk-pow-equihash`) is the shipped default.
-  Argon2id (`kiosk-pow-argon2id`) remains as a legacy backend. Use Cuckatoo only when the
+  Argon2id (`kiosk-pow-argon2id`) is another opt-in backend. Use Cuckatoo only when the
   extreme solve:verify asymmetry (GB-RAM solver vs. a few-hash verifier) is
   specifically required.
 - `proofsize < 42` is a deviation from production Cuckatoo (L=42 per Grin/Tromp

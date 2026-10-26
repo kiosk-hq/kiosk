@@ -800,7 +800,7 @@ kiosk-pow-cuckoo/README.md	**Cannot solve production Cuckatoo** (L=42, edgebitsâ
 kiosk-pow-cuckoo/README.md	**TOY MECHANISM DEMO â€” proofsize 12 at edgebits 10; NOT production difficulty.**
 kiosk-pow-cuckoo/README.md	**This gem ships the VERIFIER only.**  The verifier is production-correct,
 kiosk-pow-cuckoo/README.md	- **Equihash** (`kiosk-pow-equihash`) is the shipped default.
-kiosk-pow-cuckoo/README.md	> **Shelved / optional.** The shipped default PoW backend is
+kiosk-pow-cuckoo/README.md	> **Opt-in.** The shipped default proof-of-work backend is
 kiosk-pow-cuckoo/README.md	validated against Grin's Cuckatoo29 L=42 known-answer test vector.
 kiosk-pow-cuckoo/Rakefile	task :solve_parity do
 kiosk-pow-cuckoo/lib/kiosk/pow/cuckoo.rb	      NAME = 'cuckatoo'

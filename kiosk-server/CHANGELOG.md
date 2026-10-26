@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The PoW gate and the auth toll raise their ConfigurationError when kiosk-reputation or kiosk-pow-equihash is not required and only its version file is loaded.
+
 ## [0.6.25] — 2026-10-26
 
 - 2026-10-26: Version 0.6.25, the tree cut that matches skill 0.6.25.

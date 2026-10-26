@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: kiosk-server: the PoW gate and the auth toll raise their ConfigurationError when only a gem's version file is loaded, as a path bundle loads it, and no NoMethodError or NameError.
 - 2026-10-26: kiosk-reputation: `RecentSpend` asks the Equihash params only when the gem is loaded, so a path bundle that loads only its version file gets n=168, k=7 and no NoMethodError.
 
 ## [0.6.25] — 2026-10-26

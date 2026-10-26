@@ -39,7 +39,7 @@ module Kiosk
       end
 
       def pow_secret!(config)
-        unless defined?(::Kiosk::Reputation)
+        unless defined?(::Kiosk::Reputation::Challenge)
           raise Errors::ConfigurationError,
                 'Kiosk::Server: reputation_policy is set but kiosk-reputation is not loaded. ' \
                 "Add `require 'kiosk/reputation'` (and `gem 'kiosk-reputation'`) to your app."

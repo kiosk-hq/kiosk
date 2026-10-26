@@ -26,7 +26,7 @@ module Kiosk
       end
 
       def secret!(config)
-        unless defined?(::Kiosk::Reputation) && defined?(::Kiosk::Pow::Equihash)
+        unless defined?(::Kiosk::Reputation::Challenge) && defined?(::Kiosk::Pow::Equihash.params)
           raise Errors::ConfigurationError,
                 'registration_pow_count > 0 requires kiosk-reputation and kiosk-pow-equihash. ' \
                 'Add both gems (and `require` them) to your app.'

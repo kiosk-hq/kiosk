@@ -290,6 +290,23 @@ RSpec.describe Kiosk::Server::PowGate do
     end
   end
 
+  describe 'configuration guard: policy set but only the kiosk-reputation version file loaded' do
+    include PowGateSpecHelpers
+
+    # A gemspec in a path bundle loads the version file only, so the gem's namespace exists without the gem.
+    it 'raises ConfigurationError naming kiosk-reputation' do
+      configure_with_policy(always_challenge_policy)
+      RSpec::Mocks.with_temporary_scope do
+        hide_const('Kiosk::Reputation')
+        stub_const('Kiosk::Reputation::VERSION', '0.6.25')
+
+        expect do
+          described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
+        end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /kiosk-reputation is not loaded/)
+      end
+    end
+  end
+
   # ── K-843: a policy may not demand a difficulty no proof could satisfy ─────
   #
   # The reputation half of the same guard. `Policy#challenge_for` returns

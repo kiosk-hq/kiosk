@@ -128,6 +128,19 @@ RSpec.describe Kiosk::Server::AuthToll do
     end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /pow_secret/)
   end
 
+  # A gemspec in a path bundle loads the version file only, so the gem's namespace exists without the gem.
+  %w[Kiosk::Reputation Kiosk::Pow::Equihash].each do |gem_namespace|
+    it "raises ConfigurationError when only the #{gem_namespace} version file is loaded" do
+      configure(count: 1)
+      RSpec::Mocks.with_temporary_scope do
+        hide_const(gem_namespace)
+        stub_const("#{gem_namespace}::VERSION", '0.6.25')
+        expect { register_toll(nil) }
+          .to raise_error(Kiosk::Server::Errors::ConfigurationError, /requires kiosk-reputation and kiosk-pow-equihash/)
+      end
+    end
+  end
+
   it 'names the algorithm and the offending parameters in the message' do
     configure_at({ n: 0, k: 7 })
     expect do

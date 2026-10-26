@@ -8,18 +8,19 @@ Gem::Specification.new do |spec|
   spec.authors       = ['Phil Pirozhkov']
   spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = 'Adversarial regression harness for Kiosk providers'
+  spec.summary       = 'Adversarial regression harness for Kiosk operators'
   spec.description   = <<~DESC
-    kiosk-redteam drives hostile HTTP scenarios against any Kiosk provider
-    and asserts each attack is correctly blocked — a deliberate refusal, never
+    kiosk-redteam drives hostile HTTP scenarios against a Kiosk origin that
+    mounts the engine at /kiosk, and asserts each attack is correctly blocked — a deliberate refusal, never
     a crash and never a toll the harness could not settle.  A scenario that
     finds a real breach fails loudly.
 
     Ships a Scenario/Verdict/Runner framework and a library of generic attack
-    scenarios parameterised by a per-provider Profile. It attacks through the
+    scenarios parameterised by a Profile of the origin. It attacks through the
     assistant client kiosk-test-support ships.
 
-    No dependency on Rails.
+    `require "kiosk/redteam"` loads no Rails. Through kiosk-test-support,
+    installing the gem installs Rails.
   DESC
   spec.homepage      = 'https://kiosk.tech'
   spec.license       = 'Apache-2.0'

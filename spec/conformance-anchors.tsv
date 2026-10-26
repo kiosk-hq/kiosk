@@ -886,7 +886,7 @@ kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	production params (n=168, k=7
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	rejects a valid solution with 2**64 added to an index, without hashing
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	returns n:168, k:7 by default
 kiosk-pow-equihash/spec/readme_lever_spec.rb	README's own benchmarks give, or state that it is unbenched.
-kiosk-redteam/README.md	Adversarial regression harness for [Kiosk](https://kiosk.tech) providers — it
+kiosk-redteam/README.md	Adversarial regression harness for [Kiosk](https://kiosk.tech) operators — it
 kiosk-redteam/README.md	attack is correctly blocked.
 kiosk-redteam/README.md	drives hostile HTTP scenarios against a running Kiosk origin and asserts each
 kiosk-redteam/README.md	finds a real breach fails loudly: `Battery#report!` answers 1 and the

@@ -1,22 +1,25 @@
 # kiosk-redteam
 
-Adversarial regression harness for [Kiosk](https://kiosk.tech) providers — it
+Adversarial regression harness for [Kiosk](https://kiosk.tech) operators — it
 drives hostile HTTP scenarios against a running Kiosk origin and asserts each
 attack is correctly blocked.
 
 ## What it does
 
-A scenario registers its own principals over HTTP, stages whatever state the
+A scenario registers its own assistants over HTTP, stages whatever state the
 attack needs, then performs the attack and returns a `Verdict`. A scenario that
 finds a real breach fails loudly: `Battery#report!` answers 1 and the
-caller exits non-zero. Fix the provider, keep the scenario as a permanent
+caller exits non-zero. Fix the origin, keep the scenario as a permanent
 regression.
 
-**No Rails.** The harness speaks the protocol and nothing else, so
-it can be pointed at any Kiosk origin — your own app in CI, or a third party's
-deployment. Everything provider-specific (which verbs exist, how to create an
-owned row, which checkout pays for it) lives in a `Profile` you supply; no provider
-name is hard-coded in the gem.
+**Rails is installed, not loaded.** `require "kiosk/redteam"` loads no Rails:
+the harness speaks the protocol and nothing else. The gem depends on
+kiosk-test-support, which depends on kiosk-server, so installing it installs
+Rails. It can be pointed at any Kiosk origin that mounts the engine at the
+default path `/kiosk` — your own app in CI, or a third party's deployment: the
+scenarios call the `/kiosk/...` paths. Everything that differs per operator
+(which operations exist, how to create an owned row, which checkout pays for
+it) lives in a `Profile` you supply; no operator name is hard-coded in the gem.
 
 **`http` or `https` is decided by the base URL you pass and by nothing else.**
 There is no TLS flag and no environment variable: the scenarios attack through
@@ -25,14 +28,14 @@ There is no TLS flag and no environment variable: the scenarios attack through
 "http://127.0.0.1:3000"` is a local app and `base_url:
 "https://example.com"` is that deployment, with the same code and the same
 profile. Point it at a deployment you do not own and remember what a battery
-is: scenarios REGISTER principals and STAGE the state their attack needs, so
+is: scenarios REGISTER assistants and STAGE the state their attack needs, so
 run it against something you are willing to have written to.
 
 ### Blocked, breached, untested, skipped — the four states
 
 | Verdict | Means | Printed |
 |---|---|---|
-| **blocked** | the provider refused this attack | `BLOCKED ✓ <name> (HTTP <status>)` |
+| **blocked** | the origin refused this attack | `BLOCKED ✓ <name> (HTTP <status>)` |
 | **breach** | the attack was NOT refused — a real finding | `BREACH  ✗ <name> — <detail>` |
 | **untested** | a setup step or the environment failed, so the attack never reached its gate | `UNTESTED ! <name> — <detail>` |
 | **skipped** | the profile lacks the surface this scenario needs | `SKIP    — <name> (<reason>)` |
@@ -67,11 +70,11 @@ The registration toll is real Equihash: the assistant client solves the server's
 402 challenges with the reference solver that ships inside `kiosk-pow-equihash`.
 The bundle that runs the battery holds that gem, as the origin's bundle does,
 and the machine needs **`python3` with `numpy`** on `PATH`. Point a battery at an
-origin whose PoW is off and nothing is solved and nothing is needed.
+origin whose toll is off and nothing is solved and nothing is needed.
 
 ## Usage
 
-Describe the provider once, hand the runner a list of scenarios, exit on the
+Describe the origin once, hand the runner a list of scenarios, exit on the
 verdict:
 
 ```ruby
@@ -90,7 +93,7 @@ profile = Kiosk::Redteam::Profile.new(
   # response object (they often differ).
   row_id_key:     "id",
   result_id_key:  "order_id",
-  # Create a row owned by `principal`; must return a Hash with at least :id.
+  # Create a row owned by the assistant's customer; must return a Hash with at least :id.
   create_owned:   ->(client, principal) {
     resp = client.run(principal, name: "create_order", items: [{ sku: "SKU-1", qty: 1 }])
     raise "create_order failed (#{resp.status}): #{resp.body.inspect}" unless resp.status == 200
@@ -117,7 +120,7 @@ exit battery.report!
 
 Every field of `Profile` is optional; a scenario whose field is `nil` skips
 itself rather than inventing a surface. That is what lets one battery cover a
-commerce provider and a non-commerce one. `suites/` holds one battery per
+commerce operator and a non-commerce one. `suites/` holds one battery per
 operator demo in this repo, built on this API — read one of those for a worked,
 running profile against a real origin. Each runs in its demo's directory, with
 that demo's bundle. A demo that takes payments charges a stripe-mock: start the
@@ -135,7 +138,7 @@ scenarios share:
 
 | Scenario | Asserts |
 |---|---|
-| `CrossTenantRead` | B's per-user query must not return rows owned by A |
+| `CrossTenantRead` | B's query of its own rows must not return rows owned by A |
 | `ForgedUserId` | a caller-supplied `user_id` never decides ownership |
 | `PrivilegeSelfSelection` | a role in the registration body does not reach the client's token — the role is server-pinned |
 | `DeviceGrantRoleSelfSelection` | the claim ceremony's opening request, signed by a registered client, refuses `role`, at a DECLARED value as well as an invented one |
@@ -158,20 +161,20 @@ Beside them the gem ships `Profile`, `Scenario`, `Verdict`, `Runner`,
 own vocabulary, discounting needles the attack itself supplied. A scenario
 receives a `Kiosk::TestHelpers::Assistant` — register, token, query, run, pay
 with closed AP2 mandates, kyc, and the device-authorization request — and its
-`events(principal)` is the assistant's side of `<endpoint>/events`.
+`events(principal)`, for one registered assistant, is the assistant's side of `/kiosk/events`.
 
 ## Your own beats, in the same battery
 
-No provider's battery is all library. The scenarios above are the attacks every
+No operator's battery is all library. The scenarios above are the attacks every
 Kiosk origin has to survive; the interesting half is always the attacks on
-*your* verbs — your enum filters, your price arithmetic, your ownership joins.
+*your* operations — your enum filters, your price arithmetic, your ownership joins.
 Two classes carry that half, and they are the reason a hand-written beat and a
 library scenario can sit in one run.
 
-`Kiosk::TestHelpers::Wire` is the raw wire: an arbitrary method at an arbitrary path with arbitrary
-headers, which is what an attack on the REQUEST rather than on the principal
-needs — a forged or absent `Authorization`, a token without its key, a verb nobody registered, the wrong
-method at a real verb's path, an assertion on `Allow:` rather than on a body. A
+`Kiosk::TestHelpers::Wire` is the raw transport: an arbitrary method at an arbitrary path with arbitrary
+headers, which is what an attack on the REQUEST rather than on the assistant
+needs — a forged or absent `Authorization`, a token without its key, an
+operation nobody declared, the wrong method at a real operation's path, an assertion on `Allow:` rather than on a body. A
 body that is not JSON reads as `{}` and a connection error reads as status `0`,
 so a hostile answer is asserted on instead of crashing the run; the bytes stay
 available on `raw_body` for a `LeakScan`.
@@ -184,7 +187,7 @@ wire    = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
 client  = Kiosk::TestHelpers::Assistant.new(base_url: SERVER)
 battery = Kiosk::Redteam::Battery.new
 
-# your own beat, against your own verb
+# your own beat, against your own operation
 status, rows = wire.get_json("/kiosk/my_listings", {}, wire.dpop(bob.token, bob.key))
 battery.record("CrossTenantRead", status == 200 && !ids(rows).include?(alice_row),
                "Bob's rows #{ids(rows).inspect} exclude Alice's #{alice_row}")
@@ -208,7 +211,7 @@ scenario, and that must not pass as a clean run.
 
 Pass `on_skip: :breach` for a scenario whose surface this origin definitely
 has: there, a skip is a defect of the harness rather than a property of the
-provider, and a quiet skip is how a beat that stopped running goes unnoticed.
+origin, and a quiet skip is how a beat that stopped running goes unnoticed.
 
 Pass `untested: true` to `record` when a setup step of your beat failed. The
 attack did not reach its gate, so the beat is UNTESTED and the run fails with
@@ -220,23 +223,22 @@ Subclass `Scenario`, name what you are attacking, and return a `Verdict` that
 says which gate you demanded:
 
 ```ruby
-class UnknownVerbIs404 < Kiosk::Redteam::Scenario
+class UnknownOperationIs404 < Kiosk::Redteam::Scenario
   def initialize
-    super(name: "UnknownVerbIs404")
+    super(name: "UnknownOperationIs404")
   end
 
   def call(client, profile)
     principal = client.register!
-    verdict_from(client.query(principal, name: "no_such_verb"), expect: 404)
+    verdict_from(client.query(principal, name: "no_such_operation"), expect: 404)
   end
 end
 ```
 
 ## Status
 
-Pre-v1.0 alpha. The `Scenario` / `Profile` / `Verdict` surface is stable across
-pre-v1.0 minor bumps; the scenario library grows as gates are added
-(`CHANGELOG.md` tracks).
+Pre-v1.0 alpha: the `Scenario` / `Profile` / `Verdict` surface may change
+between releases (`CHANGELOG.md` tracks each change).
 
 ## License
 

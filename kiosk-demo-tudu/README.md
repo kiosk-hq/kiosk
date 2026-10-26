@@ -1,27 +1,25 @@
 # tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
 
-A multi-user collaborative todo app, Kiosk-enabled. Like philslist it proves
+A collaborative to-do app for several accounts, Kiosk-enabled. Like philslist it proves
 Kiosk is **not only for commerce** — no money in the protocol at all — but where
-philslist shows owner-scoped isolation on a public board, tudu shows the shape
-critics claim GUC-style patterns can't handle: **membership-based many-to-many
-access**, **AI-assistant→AI-assistant collaboration expressed entirely at the app layer**, and
-the **W5 account-link rebind** that migrates an assistant's work to a human.
+philslist shows owner-scoped isolation on a public board, tudu shows
+**membership-based many-to-many access**, **AI-assistant→AI-assistant collaboration expressed entirely at the app layer**, and
+the **account-link rebind** that moves an assistant's work to a human.
 
 Demonstrates:
 
 - **Membership-based isolation** — not "my rows" but "rows of lists I'm a member
   of". Every list/todo query & action gates on
-  a membership of `Kiosk.current_user_id` (`Membership.own`); a non-member gets `403`, not `404`, so probing
-  can't enumerate ids.
+  a membership of `Kiosk.current_user_id` (`Membership.own`); a non-member gets `403`, not `404`, so a stranger
+  cannot enumerate ids.
 - **AI-assistant→AI-assistant invites, pure app-layer** — an owner mints a single-use, TTL'd,
   hashed collaboration code (`invite`); the recipient's assistant redeems it
   (`accept_invite`) to join as a member; `remove_member` cuts access instantly.
-  The spec stays silent on invites *by design* — this proves the per-verb endpoints
-  is expressive enough for collaboration with **zero protocol change**.
-- **W5 rebind + domain migration** — an assistant works as a HEADLESS account
+  The specification defines no invites: the ordinary operations carry
+  collaboration with **zero protocol change**.
+- **Account-link rebind + domain migration** — an assistant works as a HEADLESS account
   (creates the "Hike" list), the human links it, and the shipped
-  `assistant_claimed` hook **migrates the list to the human**. First real use of
-  the hook in the repo. After linking, one human account holds **≥2
+  `assistant_claimed` hook **migrates the list to the human**. After linking, one human account holds **≥2
   independently-revocable assistants** (multi-assistant identity).
 - **Attribution in a shared space** — each todo records the AI assistant that added it
   (`created_by_agent_id`): "who added the tent? — Bob's assistant."
@@ -31,9 +29,10 @@ Demonstrates:
   an authenticated caller with `501 module_not_served`; nothing advertises it.
   The mandate and settlement tables ARE installed and stay empty: every demo
   runs the same unmodified `kiosk:install`, so the absence of payments here is
-  the absence of a provider, not of schema and not of a path.
+  the absence of a payment provider, not of schema and not of a path.
 - **Full human web UI** (NOT api_only) — the tutorial-plain scaffold (lists,
-  todos, invite, the manage-assistants page) is the video centerpiece.
+  todos, invite, the manage-assistants page) calls the same Operations as the
+  HTTP API.
 
 ## Running it
 
@@ -64,7 +63,7 @@ assistant does.
 
 ### Collaboration (`test/stories/household_test.rb`)
 
-Two PoP-registered AI assistants share a list with no spec change: Alice's AI assistant
+Two registered AI assistants share a list with no spec change: Alice's AI assistant
 creates "Hike" and mints an invite; Bob's AI assistant accepts it and joins as a
 member; both add todos. Asserts both AI assistants see the shared list, each todo is
 attributed to the AI assistant that added it, and the list has an owner + a member.
@@ -92,13 +91,13 @@ arrives on reconnecting with `since`, Bob ticking off Alice's todo arrives live 
 own subscription to the list is withdrawn (`unsubscribed`, `reach_revoked`).
 Every event the story waits for is checked against the `payload_schema` the origin serves.
 
-### W5 rebind + list transfer (`test/stories/link_test.rb`)
+### Account-link rebind + list transfer (`test/stories/link_test.rb`)
 
 An assistant registers **headless** and creates the "Hike" list; Alice signs in
 through the real Devise form, mints a link code, and the assistant's key redeems
 it → **rebind**: the `assistant_claimed` hook migrates the list to Alice. Every
 pre-link token stops verifying, including one minted in the rebind's own second;
-the assistant re-logs in and sees the list under Alice; Alice's browser sees it
+the assistant requests a new token and sees the list under Alice; Alice's browser sees it
 too; a second linked AI assistant leaves the first one bound. Re-linking an
 assistant already bound to Alice moves nothing and destroys nothing.
 
@@ -118,12 +117,13 @@ read → 403.
 Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
 (the forged `account_id` is refused `400`, not accepted-and-ignored),
 `MalformedUuidArg` (400, no SQL internals), `MissingAuth` (401), `GarbageToken`
-(401), `UnknownQuery` (404), `UnknownAction` (404),
-`UnregisteredVerbIsOrdinaryRefusal` (a POST to a name no verb registers draws
+(401), `StolenToken` (401: a copied token without its key, as a bearer or with
+another key's DPoP proof), `UnknownQuery` (404), `UnknownAction` (404),
+`UnregisteredVerbIsOrdinaryRefusal` (a POST to a name no operation registers draws
 no route: the ordinary 404 any undrawn path gets, token or not),
 `MethodMismatch` (a `GET` at an action's path draws no route either, so it is
 the same plain 404 and the write never runs), plus tudu beats —
-`InviteCodeReplay` (403), `RevokedMemberAccess` (403), `RevokedAgentKey` (404),
+`InviteCodeReplay` (403), `RevokedMemberAccess` (403), `RevokedAgentKey` (401 `invalid_client`),
 `PreLinkTokenAfterLink` (401), `NoLoginAddressOnTheRoster` (an assistant bound
 to Alice reads the seeded household's roster: display names only, and no
 account address anywhere in the body — headless accounts read as an opaque
@@ -151,12 +151,12 @@ as one instant.
 
 ## AI-assistant surface
 
-Every verb gets its own endpoint. A query is a `GET` whose arguments are the
+Every operation has its own path. A query is a `GET` whose arguments are the
 query string and whose success body is a bare JSON array; an action is a `POST`
 whose arguments are the JSON body and whose success body is its own object. A
 refusal is an RFC 9457 problem document — branch on its top-level `code`.
 
-| Endpoint | Name | What it does |
+| Path | Name | What it does |
 |---|---|---|
 | `GET /kiosk/whoami` | `whoami` | The signed-in member + acting AI assistant |
 | `GET /kiosk/my_lists` | `my_lists` | Lists the caller is a member of (owner or member) |
@@ -169,8 +169,8 @@ refusal is an RFC 9457 problem document — branch on its top-level `code`.
 | `POST /kiosk/accept_invite` | `accept_invite(code)` | Redeem a code → join as a member |
 | `POST /kiosk/remove_member` | `remove_member(list_id, account_id)` | Owner-only: cut a member's access |
 
-Human↔assistant linking is **not** one of the verbs in the table above — it's
-the W5 ceremony (`POST /kiosk/auth/link` mint → `POST /kiosk/auth/claim`
+Human↔assistant linking is **not** one of the operations in the table above — it is
+the link ceremony (`POST /kiosk/auth/link` mint → `POST /kiosk/auth/claim`
 redeem), driven by `test/stories/link_test.rb`.
 
 ### Watch it work
@@ -193,7 +193,7 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | `db/migrate/` | The canonical kiosk migrations: the full `kiosk:install` set — every demo ships that output unmodified, so mandates, settlements and refunds are installed here and never written — plus `users`, Action Cable's table and `create_tudu_domain` (lists/memberships/todos/invites) |
 | `app/models/{user,list,membership,todo,invite}.rb` | `User` is a member's account (Devise, reused for headless assistant accounts); `memberships` is the many-to-many access surface |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_claimed` hook — configuration only; the handler controllers live in `app/controllers/kiosk/` |
-| `app/controllers/kiosk/lists_controller.rb` | `my_lists` and `create_list` — an ordinary Rails controller with `include Kiosk::Handler`, each verb marked `kind :query` or `kind :action`. Handlers are reached only through the protocol |
+| `app/controllers/kiosk/lists_controller.rb` | `my_lists` and `create_list` — an ordinary Rails controller with `include Kiosk::Handler`, each operation marked `kind :query` or `kind :action`. Handlers are reached only through the protocol |
 | `app/controllers/kiosk/todos_controller.rb` | `list_todos`, `add_todo`, `complete_todo` and the `todo` topic |
 | `app/controllers/kiosk/memberships_controller.rb` | `whoami`, `list_members`, `remove_member` and the `list_membership` topic. An Operation refuses by raising a `Kiosk::Server::Errors` class, which the protocol renders as a problem document |
 | `app/controllers/kiosk/invites_controller.rb` | `invite` and `accept_invite`: the single-use code that adds a member to a list |
@@ -205,13 +205,13 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 
 The demo bakes in shortcuts production operators replace:
 
-- **Synthetic accounts (Alice, Bob)** → your real user table (the demo already
+- **Synthetic accounts (Alice, Bob)** → your real accounts (the demo already
   gives them real Devise credentials so the link walkthrough signs in like a
   person would).
 - **Nothing in the AI-assistant channel** → there is nothing to replace. This
   demo configures no `c.agent_idp`, so the engine verifies its own access
   tokens through `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp`; set
-  one only to front an EXTERNAL agent-identity issuer. The human session
+  one only to front an EXTERNAL issuer of assistant identities. The human session
   channel already runs the real `kiosk-user-idp-devise` adapter.
 
 ## License

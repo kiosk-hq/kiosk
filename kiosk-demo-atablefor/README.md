@@ -1,7 +1,7 @@
 # kiosk-demo-atablefor
 
-Restaurant table-booking demo operator for Kiosk — the flagship of the demo
-redesign and the reference for the **viewable board** sharing pattern.
+Restaurant table-booking demo operator for Kiosk, and the reference for the
+**viewable board** sharing pattern.
 
 `atablefor` is a fake-but-realistic restaurant **aggregator** — a handful of
 coined Lisbon restaurants across a few neighbourhoods (Alfama, Graça, Bairro
@@ -16,7 +16,7 @@ past ones filtered), for today and the next 13 days, so it is never stale — ye
 seating is honestly **sold out** (availability legitimately empty for it).
 
 The home page is **protocol-primary**: it tells a visitor (and an assistant
-scanning it) that this is a Kiosk endpoint to point an assistant at — not a
+scanning it) that this is a Kiosk origin to point an assistant at — not a
 human web-booking form. A human diner *does* have a **real account** at the
 restaurant (Devise sign-in, promoted as **Diner sign-in**) and can **link their AI
 assistant** to it: the diner signs in, gets a link code, the assistant uses
@@ -30,7 +30,7 @@ diner's name.
 
 ## HTTP API
 
-One endpoint per verb: a query is a `GET` whose arguments are the query string,
+One path per operation: a query is a `GET` whose arguments are the query string,
 an action is a `POST` whose arguments are the JSON body, and a success body IS
 the result (no envelope).
 
@@ -54,14 +54,14 @@ the same string in `availability`, `book_table` and `my_bookings`.
 
 There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 
-The verbs above are ordinary Rails controllers, one per resource:
+The operations above live in ordinary Rails controllers, one per resource:
 `app/controllers/kiosk/tables_controller.rb` serves `availability` and
 `app/controllers/kiosk/bookings_controller.rb` serves `my_bookings`,
 `book_table` and `cancel_booking`. Both `include Kiosk::Handler`, and each
-declaration says which kind of verb it is with `kind :query` / `kind :action`.
+declaration says which kind of operation it is with `kind :query` / `kind :action`.
 Each is declared with the class-level descriptor macros. A refusal is a raised
 `Kiosk::Server::Errors` error or a failed model validation, which the protocol turns
-into the RFC 9457 problem document an assistant branches on. Every verb's
+into the RFC 9457 problem document an assistant branches on. Every operation's
 `input_schema` is validated on every call, so an undeclared argument is a typed
 `400` naming it. A handler is reached only through the protocol.
 `config/initializers/kiosk.rb` is configuration only.

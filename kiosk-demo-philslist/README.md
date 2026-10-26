@@ -2,7 +2,7 @@
 
 A free classifieds board, Kiosk-enabled. This is the demo that proves Kiosk is
 **not only for commerce**: it exercises the full query + action + `schema` +
-identity-binding surface with **no money in the protocol at all** — no `pay` verb,
+identity-binding surface with **no money in the protocol at all** — no `pay` operation,
 no PSP adapter, no `payment_setup_required` gate, and `pay` absent from
 `capabilities`.
 
@@ -10,7 +10,7 @@ The AP2 mandate and settlement TABLES are present and empty, and that is the
 canonical install rather than an oversight: every demo runs the same unmodified
 `rails g kiosk:install`, so philslist carries the three
 mandate/settlement tables and the KYC tables alongside the identity ones.
-`db/migrate/` is that install's output plus the users and classifieds tables,
+`db/migrate/` is that install's output plus the `users` and classifieds tables,
 each created in its final shape.
 Nothing writes them here: `POST /kiosk/pay` is drawn like everywhere else —
 the mount draws the whole protocol plane — but no `payment_provider` is
@@ -24,7 +24,7 @@ Demonstrates:
 
 - `/.well-known/kiosk.json` discovery **with `pay` absent** from capabilities —
   the honest signal this operator takes no money
-- Authenticated REST API — one endpoint per verb
+- Authenticated REST API — one path per operation
   (`GET /kiosk/browse_listings`, `GET /kiosk/my_listings`,
   `POST /kiosk/post_listing`, `POST /kiosk/edit_listing`,
   `POST /kiosk/close_listing`) beside the public `GET /kiosk/schema` — and
@@ -35,8 +35,8 @@ Demonstrates:
 - App-layer data isolation on an **owned resource**: any signed-in assistant may
   `browse_listings` across all sellers, but `my_listings` /
   `edit_listing` / `close_listing` are scoped to
-  `owner_id = Kiosk.current_user_id` (`Listing.own`) — the first demo where cross-owner
-  **write** denial (not just read exclusion) is the headline
+  `owner_id = Kiosk.current_user_id` (`Listing.own`), so the headline is
+  cross-owner **write** denial as well as read exclusion
 - `post_listing` / `edit_listing` / `close_listing` actions (owner-only writes)
 - A **public, read-only classifieds board** at `/` and `/listings` (open
   listings across all owners — title · category · €price · poster). Classifieds
@@ -48,7 +48,7 @@ Demonstrates:
   account id — never an address — and the same pseudonym in the protocol and on the
   web page. It is **per-seller**, so two listings under one handle are one
   seller (which is what makes the household visible), and reversible by nobody:
-  there is no verb that turns a handle back into a person. Contact happens
+  no operation turns a handle back into a person. Contact happens
   through whatever contact detail a seller chose to put in their own listing
   text, so the operator publishes nothing about a seller they did not write
   themselves
@@ -63,8 +63,8 @@ Demonstrates:
 Today you post to a classifieds site through its web form and answer email; a
 personal assistant can't. (The craigslist pattern is the shape here — named
 only as this contrast, never as the demo.) With Kiosk, the same board exposes
-browse / post / edit / close to your assistant as named verbs, one
-endpoint each — and it can only touch listings you own.
+browse / post / edit / close to your assistant as named operations, each on
+its own path — and it can only touch listings you own.
 
 `price_text` is a plain nullable **string** (`"€300"`, `"Free"`, or `NULL`)
 — display metadata the board never transacts on. A reviewer looking for a
@@ -111,12 +111,11 @@ The stories in `test/stories/` show it:
 - **Red team** — `../kiosk-redteam/suites/philslist.rb` attacks the live origin and every
   scenario must be BLOCKED: `CrossTenantRead`, `ForgedUserId`, `CrossOwnerEdit`,
   `CrossOwnerClose`, `MalformedUuidArg`, `MissingAuth`, `GarbageToken`,
-  `SelfAssertedTokenForgery`, `UnknownQuery`, `UnknownAction`,
+  `StolenToken`, `SelfAssertedTokenForgery`, `UnknownQuery`, `UnknownAction`,
   `UnregisteredVerbIsOrdinaryRefusal`, `MethodMismatch`,
   `OutOfEnumFilterIsNotSilentlyReinterpreted`, `LikeMetacharactersAreEscaped`,
-  `NoSellerPiiOnTheOpenBoard`, `ContactDetailsStayOutOfTheRequestLog`, the shared
-  `CallToll`, and the
-  shared `DeviceGrantRoleSelfSelection`.
+  `NoSellerPiiOnTheOpenBoard`, `ContactDetailsStayOutOfTheRequestLog`, and the
+  shared `CallToll` and `DeviceGrantRoleSelfSelection`.
 - **Not only commerce** — the capabilities are `schema`, `queries` and `actions`
   only: no `pay`, no `events`; the catalogue is public, and its examples satisfy their own schemas.
 - **Registration toll** — registering without a proof is **402 `pow_required`**,
@@ -146,23 +145,24 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 |---|---|
 | `db/migrate/` | The canonical `kiosk.*` migrations the install generator emits, unpruned (schema, identity tables, device_authorizations, mandates and settlements, KYC attributes, events, pow_spent, revocations, visits, refunds) — philslist takes no money and gates on no attestation, so the payment and KYC tables sit EMPTY here rather than being edited out — plus `users`, Action Cable's table and `categories` + `listings` |
 | `app/models/{user,category,listing}.rb` | `User` is a seller's account and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
-| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; the handler controller is separate |
-| `app/controllers/kiosk/listings_controller.rb` | Every verb on listings: the `browse_listings` / `my_listings` queries and the `post_listing` / `edit_listing` / `close_listing` actions — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query` or `kind :action`, reached only through the protocol. A refusal raises a `Kiosk::Server::Errors` error (`Listing.own!` does), which the protocol renders as the RFC 9457 problem document an assistant branches on |
-| *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the DPoP-bound access token this engine's token endpoint (`/kiosk/oauth/token`) minted, verified by the `DefaultAgentIdp` the engine has always shipped as its fallback. This demo ships no IdP of its own and recognises no dev-only identity shape: an identity here is a verified JWT or it is nothing |
+| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; the handler controllers are separate |
+| `app/controllers/kiosk/board_controller.rb` | The `browse_listings` query: the open board across all sellers |
+| `app/controllers/kiosk/listings_controller.rb` | The seller's own listings: the `my_listings` query and the `post_listing` / `edit_listing` / `close_listing` actions. Both are ordinary Rails controllers with `include Kiosk::Handler`, each declaration marked `kind :query` or `kind :action`, reached only through the protocol. A refusal raises a `Kiosk::Server::Errors` error (`Listing.own!` does), which the protocol renders as the RFC 9457 problem document an assistant branches on |
+| *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the DPoP-bound access token this engine's token endpoint (`/kiosk/oauth/token`) minted, verified by the `DefaultAgentIdp` the engine ships as its fallback. This demo ships no IdP of its own and recognises no dev-only identity shape: an identity here is a verified JWT or it is nothing |
 | `test/` | Minitest tests, run by `bin/rails test`; `test/stories/` drives the origin over HTTP as sellers' assistants |
 
 ## Make it real
 
 The demo bakes in shortcuts production operators replace:
 
-- **Synthetic accounts (Alice, Bob)** → your real user table (the demo already
+- **Synthetic accounts (Alice, Bob)** → your real accounts (the demo already
   gives them real Devise credentials, and every driver here signs in through the
   real form like a person would).
 - **The AI-assistant channel** (`c.agent_idp`) is **not** a shortcut here: this
   demo sets nothing, so the engine's own `DefaultAgentIdp` verifies the
   access tokens it minted, in every environment, and nothing accepts a
-  self-asserted bearer. Swap this seam only to front
-  an EXTERNAL agent-identity issuer (Entra Agent ID, Okta, an ID-JAG-style
+  self-asserted bearer. Set it only to front
+  an EXTERNAL issuer of assistant identities (Entra Agent ID, Okta, an ID-JAG-style
   broker), by subclassing `Kiosk::AgentIdentityProviders::Base`; its one hard
   constraint is that the `agent_id` you return must be a **UUID**.
 - **The human session channel** (`c.user_idp`) already runs the real

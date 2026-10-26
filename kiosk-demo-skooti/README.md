@@ -16,15 +16,15 @@ simulation of the firmware in `firmware/`.
 
 ## HTTP API
 
-One endpoint per verb: a read is a `GET` at its own name with arguments in the
+One path per operation: a read is a `GET` at its own name with arguments in the
 query string, a write is a `POST` at its own name with a JSON body. Success is
 the handler's payload with no envelope around it (a query always answers an
 array); a refusal is an RFC 9457 problem document whose `code` is a flat
-member. A path that names no registered verb draws no route at all, so it is
+member. A path that names no registered operation draws no route at all, so it is
 the ordinary 404 any undrawn path gets — token or not, because a routing miss
 is decided before any credential is read.
 
-| Endpoint | Verb | What it does |
+| Path | Operation | What it does |
 |---|---|---|
 | `GET /kiosk/scooters_available` | `scooters_available` | The vehicles no other rider holds (scooters and motorcycles); `licence_category` names the licence a motorcycle needs, A1 or A |
 | `GET /kiosk/my_reservations` | `my_reservations` | The signed-in customer's reservations and where each one's payment stands |
@@ -34,16 +34,16 @@ is decided before any credential is read.
 | `POST /kiosk/rent_motorcycle` | `rent_motorcycle(reservation_id)` | The same for a motorcycle, once the customer is attested `age_over_18` and the licence attribute of its category (`licence_a1` or `licence_a`) |
 | `POST /kiosk/request_kyc` | `request_kyc` | Hand back the broker link the human completes; the `kyc_verification` event then carries the signed attestation |
 
-Plus the two reserved endpoints every origin serves: `POST /kiosk/pay` —
+Plus the two reserved paths every origin serves: `POST /kiosk/pay` —
 pay the checkout with the closed AP2 checkout and payment mandates through Stripe — and
 `GET /kiosk/schema`, the public catalog of everything above (no token, no
 toll), with `GET /kiosk/openapi.json` rendering the same registry as OpenAPI.
 
 Advertised capabilities are `[schema, queries, actions, pay, events]` — the MODULES
-this origin serves, never the registered verb names. That is a MODELLING rule,
+this origin serves, never the registered operation names. That is a MODELLING rule,
 not a security one (spec §4.2): `GET /kiosk/schema` is public, so there is
 nothing to withhold — this document is a POINTER and the catalog is the
-CONTRACT, and a second copy of the verb list would be a second source of truth
+CONTRACT, and a second copy of the operation list would be a second source of truth
 for it. Registration is priced
 with one Equihash proof-of-work at the gem's default n=168 k=7 — the "I'm not a
 fly-by bot" cost. After that, the assistant solves the toll again on every 10th
@@ -54,7 +54,7 @@ additionally demands a signed KYC attestation carrying the required boolean
 attributes; the operator records only the booleans, never the underlying
 documents. The fleet has two motorcycles: MC-002 needs category A1 and MC-001
 needs category A. On the broker's page the human chooses a licence category: A1,
-A, B1, B or none. A licence of category A covers both motorcycles, one of
+A, B, C or none. A licence of category A covers both motorcycles, one of
 category A1 covers only MC-002, and the other choices cover neither.
 
 **What this KYC proves, and what it deliberately does not (honest scope).** The
@@ -109,10 +109,11 @@ assistant does; the KYC tests stand in for the broker with
 `Kiosk::TestHelpers::Kyc`. CI's red-team battery (`../kiosk-redteam/suites/skooti.rb`)
 runs against the live broker in `kiosk-demo-prove`.
 
-Two more entry points are hardware-side: `bin/make-qr` renders the scooter QR
-codes, and `bin/ble-unlock` writes a rental token to a flashed ESP32-C3 lock
-over BLE from a laptop. Both are documented in `firmware/README.md`;
-`bin/ble-unlock` is UNVERIFIED until it is run against a real board.
+Two more entry points are hardware-side. `bin/make-qr` renders the unlock QR of
+one rental from its token: the QR the `unlock_url` page shows. Its usage is in
+its own header and in `bin/make-qr --help`. `bin/ble-unlock` writes a rental
+token to a flashed ESP32-C3 lock over BLE from a laptop. `firmware/README.md`
+documents it, and it is UNVERIFIED until it is run against a real board.
 
 ### Watch it work
 

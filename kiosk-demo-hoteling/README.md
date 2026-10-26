@@ -11,7 +11,7 @@ declines is refunded to the card that paid.
 
 ## HTTP API
 
-One endpoint per verb: a query is `GET /kiosk/<query-name>` with
+One path per operation: a query is `GET /kiosk/<query-name>` with
 its arguments in the query string, an action is `POST /kiosk/<action-name>` with
 its arguments as the JSON body. A success body IS the result — a bare array of
 rows from a query, the action's own object from an action — and an error is an
@@ -24,7 +24,7 @@ RFC 9457 problem document.
   status, its payment state and, once the hotel confirms it, its six-digit
   confirmation code
 - `GET /kiosk/search_hotels?...` — paginated search over the ~100-hotel
-  catalogue; the only paginating verb here, and since RFC 8288 it answers the
+  catalogue; the only paginating operation here, and since RFC 8288 it answers the
   same bare array as the rest — a truncated page says so in a `Link: <…>;
   rel="next"` header, with `X-Total-Count` carrying the matching total
 - `GET /kiosk/hotel_detail?property_id=` — ONE property in full, as a one-row
@@ -41,14 +41,14 @@ RFC 9457 problem document.
   tooling; the catalog at `/kiosk/schema` stays canonical
 
 Advertised capabilities are `[schema, queries, actions, pay, events]` — the MODULES
-this origin serves, never the registered verb names. That is a MODELLING rule,
+this origin serves, never the registered operation names. That is a MODELLING rule,
 not a security one (spec §4.2): `GET /kiosk/schema` is public, so there is
 nothing to withhold — this document is a POINTER and the catalog is the
-CONTRACT, and a second copy of the verb list would be a second source of truth
+CONTRACT, and a second copy of the operation list would be a second source of truth
 for it. **Registration is
 always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
-new agent key pays one solve to register. After that, the assistant pays one
-more solve on every 10th call with no recent spend, on every 20th at 50 euros
+new assistant key solves one toll to register. After that, the assistant solves
+the toll again on every 10th call with no recent spend, on every 20th at 50 euros
 paid here in the past week, and on none from 100 euros.
 
 ## The human channel

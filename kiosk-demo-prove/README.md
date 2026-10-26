@@ -17,15 +17,15 @@ deploy origin.
 ## Not a Kiosk operator — an ISSUER
 
 The broker mounts **no** Kiosk HTTP API at all — neither of the two reserved
-endpoints (`GET <endpoint>/schema`, `POST <endpoint>/pay`) and not one
-per-verb endpoint, because it registers no verb. It has no toll, and it
+paths (`GET <endpoint>/schema`, `POST <endpoint>/pay`) and no operation's
+path, because it registers no operation. It has no toll, and it
 serves no `/.well-known/kiosk.json`. It is the mirror ISSUER
 side of the Kiosk trust primitives an operator's `Kiosk::Server::KycVerifier`
 already accepts: it signs anonymized attestations that the operator trusts
 through its `c.kyc_provider` (`Kiosk::KycProviders::Prove`, which names this
 broker's issuer and public key) — no new framework surface. It depends on **no** kiosk gem.
 
-## The three legs
+## The three steps
 
 | Route | Who → who | Shape |
 |-------|-----------|-------|
@@ -73,26 +73,25 @@ The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
   un-confirmable.
 - **No replay across operators.** The claim carries `operator`/`aud`; the
   operator's callback handler rejects a claim not addressed to it. The engine
-  `KycVerifier` **also** enforces this at the endpoint: every
+  `KycVerifier` **also** enforces this in the protocol: every
   `POST /kiosk/agents/kyc` rejects a claim whose `aud` != the audience of the
   operator's KYC provider, so the cross-operator check lives in BOTH the operator
   callback layer and the normative protocol.
 - **No replay across subjects.** `sub` is the operator's `user_id` for the
-  requesting agent; the operator's `KycVerifier` rejects a `sub` mismatch (the
+  requesting AI assistant; the operator's `KycVerifier` rejects a `sub` mismatch (the
   `IssuedKycJwsTheft` defense, inherited).
 - **Anti-mass-confirm.** A confirmer can only ever produce a claim bound to the
-  subject the operator named — useful only to that agent at that operator. A
+  subject the operator named — useful only to that assistant at that operator. A
   leaked link is a confined per-subject capability, not a claim factory.
-- **SSRF / open-relay guard.** The broker only POSTs to an operator's
+- **SSRF / open-relay check.** The broker only POSTs to an operator's
   pre-registered callback host (allow-list), never to a free-form URL a caller
   supplies.
 - **Request-state-only DB, no re-KYC pre-fill.** `prove_requests` stores only
   per-request STATE (single-use / TTL / no-replay) — never the human's identity
   or prior answers. Each verification is INDEPENDENT: a re-verification (e.g.
-  after an agent reset) opens a fresh row with empty checkboxes and the human
-  re-asserts every fact. Deliberate — a "verified-once, reuse" store is exactly
-  the account-sharing hole the real account-to-person check must prevent, so the
-  stub does not model it.
+  after an assistant reset) opens a fresh row with empty checkboxes and the human
+  re-asserts every fact. A "verified-once, reuse" store would let one approval
+  vouch again with no human present, so the broker keeps none.
 
 ## Demo stub vs. production
 
@@ -102,12 +101,10 @@ anti-mass-confirm, signed anonymized callback — not that the human is actually
 over 18, and it makes **no liveness claim**. In production the verification page
 is replaced by a **government identity service** login (an mDL / ISO-18013-5
 mobile driving licence, an EUDI wallet, or a national IdP), from which the broker
-derives the booleans it was asked for. The real broker closes two gaps the stub
-leaves open: it verifies the human **possesses a government account** (the
-account-possession assurance level adopted for now, after a survey of the
-government-IdP / mDL landscape), and later that **the account is
-actually theirs** — so a person cannot lend or share their account to vouch for
-other people's age or licence. The broker↔operator interface (intake → per-request binding → signed
+derives the booleans it was asked for. The real broker proves only that the
+human **holds a government account**. It does not prove liveness, or that the
+account belongs to the person who uses it: a person can lend their account and
+vouch for another person's age or licence. Kiosk accepts this gap. The broker↔operator interface (intake → per-request binding → signed
 anonymized callback) is identical, which is why the stub is a faithful proof.
 This production path is **research-gated and provisional**: the broker issues
 no attestation from an mDL, no named government service is integrated, and no

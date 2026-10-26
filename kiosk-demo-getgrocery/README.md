@@ -109,8 +109,8 @@ to. Every one of them is in Dublin today, so a slot labelled `08:00–10:00
 `slot_at` carries the real offset (`+01:00` in summer IST, `+00:00` in winter
 GMT). What matters is that it is a **map**: an operator does not answer from
 one zone configured on the origin, because an operator may serve places in more
-than one, and a depot opened elsewhere is one new row rather than an edit to a
-verb. `Europe/Dublin` survives in `DeliverySlots` only as the default that
+than one, and a depot opened elsewhere is one new row rather than an edit to an
+operation. `Europe/Dublin` survives in `DeliverySlots` only as the default that
 dates a published example, which addresses no district. The real IANA zone is
 used — not a fixed offset — so DST is handled automatically
 (`app/models/delivery_slots.rb`).
@@ -129,7 +129,7 @@ no clock named — a customer three hours away hears their own 08:00. So the row
 carries `timezone` beside the label. It also carries `district` (the served
 postal district, `D02`), which is a routing key.
 
-**Every verb that publishes this window publishes it the same way.**
+**Every operation that publishes this window publishes it the same way.**
 `delivery_slots` offers a window, `create_order` books it,
 `reschedule_delivery` moves it, and `my_orders` reads it back after the fact —
 one field, one clock: the instant carries the DELIVERY zone's offset in every
@@ -137,7 +137,7 @@ one of the four, and a zone-bearing label from the one writer
 (`DeliverySlots.label`) travels beside it in every one of the four (`label` on a
 slot row, `slot_label` on an order and on the booking, `rescheduled_label` on
 the move). An instant published with no clock named beside it is the same
-instant in a second spelling, and `my_orders` is the verb §11.6 sends an
+instant in a second spelling, and `my_orders` is the operation §11.6 sends an
 assistant to after a `pay` whose response was lost — which is exactly the row a
 human hears read back.
 
@@ -174,11 +174,13 @@ event), and `Rails.error` gets the error. Nothing spends the credit.
 ## Age-restricted purchases (anonymized KYC)
 
 One catalog item is age-restricted (a coined wine — no real brand). An order
-containing it can only be ordered (`create_order`) by an agent that has
+containing it can only be ordered (`create_order`) by an AI assistant that has
 completed an 18+ anonymized-KYC check via the shared **KYC broker** (kyc.demo.kiosk.tech)
 (`POST /kiosk/request_kyc` → human approves a broker link → the broker signs
-an anonymized `{age_over_18}` claim → the `kyc_verification` event carries it →
-submit it to `POST /kiosk/agents/kyc`).
+an anonymized `{age_over_18}` claim and posts it to the shop, which records it →
+the `kyc_verification` event tells the assistant → `create_order` takes the wine).
+The event carries the signed claim; the assistant may also submit it to
+`POST /kiosk/agents/kyc`, but it does not have to.
 Non-restricted groceries need no KYC. `test/stories/age_check_test.rb` drives that
 flow with `Kiosk::TestHelpers::Kyc` standing in for the broker.
 
@@ -201,7 +203,7 @@ there.
 
 The human side of the claim ceremony (verify page, link mint, unlink)
 authenticates through a **real Devise session** — `kiosk-user-idp-devise`
-reading the Warden user, the same channel every other demo uses. The seeded
+reading the Warden session, the same channel every other demo uses. The seeded
 shopper `hana@example.com` signs in at `/users/sign_in`, and
 `test/stories/claim_test.rb` drives that form rather than asserting a bearer. Assistants never touch this
 channel — their own key, by a client assertion and a DPoP-bound token, is their only credential.

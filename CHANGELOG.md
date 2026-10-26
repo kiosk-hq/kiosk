@@ -11,7 +11,10 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: Demo READMEs match the code and tests: stylish shows no spending cap, a revoked tudu key gets 401, skooti lists A1, A, B, C, the getgrocery KYC submit is optional.
+- 2026-10-26: The KYC broker README says the broker proves only that the human holds a government account, and names the gap that leaves.
 - 2026-10-26: skooti's `unlock_url` description and before-after page say a phone app of the shop gives the token to the lock; the demo publishes no such app.
+- 2026-10-26: Demo READMEs and compose files carry no history or internal labels, and name operations and their paths.
 - 2026-10-26: Demo error pages and footers call the operator «this site» or «a demo»; tudu has one footer; the GetGrocery logo and its Start shopping link are fixed.
 - 2026-10-26: The KYC broker page says it proves that the human holds a government account, and that the human answers each check afresh.
 - 2026-10-26: atablefor names diners as the people who sign in, in its header link, its note and its signed-in label.

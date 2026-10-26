@@ -347,7 +347,7 @@ kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value 
 kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.6.
 kiosk-core/spec/kiosk/kyc_providers/base_spec.rb	refuses a key that is not Ed25519
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
-kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
+kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk, and the reference for the
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 kiosk-demo-atablefor/README.md	rollingly on the restaurant's own clock; "tonight at 8" lands on an open 2-top at 20:00.
 kiosk-demo-atablefor/app/controllers/home_controller.rb	include Kiosk::SkillLink
@@ -470,7 +470,7 @@ kiosk-demo-hoteling/README.md	always gated by Equihash proof-of-work** (`registr
 kiosk-demo-hoteling/README.md	bin/rails db:reset     # DROPS and recreates kiosk_hoteling_development, then seeds the hotels
 kiosk-demo-hoteling/README.md	bundle exec rspec      # the tests; CI runs exactly this
 kiosk-demo-hoteling/README.md	customer, for 15 minutes; a hold left unpaid past that time is cancelled and
-kiosk-demo-hoteling/README.md	this origin serves, never the registered verb names. That is a MODELLING rule,
+kiosk-demo-hoteling/README.md	this origin serves, never the registered operation names. That is a MODELLING rule,
 kiosk-demo-hoteling/app/controllers/kiosk/hotel_search_controller.rb	def search_hotels
 kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	  def hotel_detail
 kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	@property = Property.find(params.expect(:property_id))
@@ -515,13 +515,13 @@ kiosk-demo-hoteling/spec/stories/timezone_note_spec.rb	tells a guest on another 
 kiosk-demo-philslist/README.md	  **deliberately no payments**: philslist configures no `payment_provider`, so
 kiosk-demo-philslist/README.md	  `owner_id` on `post_listing` is **refused `400 bad_request`** naming it, and a
 kiosk-demo-philslist/README.md	  scenario must be BLOCKED: `CrossTenantRead`, `ForgedUserId`, `CrossOwnerEdit`,
-kiosk-demo-philslist/README.md	  shared `DeviceGrantRoleSelfSelection`.
+kiosk-demo-philslist/README.md	  shared `CallToll` and `DeviceGrantRoleSelfSelection`.
 kiosk-demo-philslist/README.md	  the caller's; editing or closing another seller's listing is **403**; a forged
 kiosk-demo-philslist/README.md	# philslist — Kiosk reference demo (NON-COMMERCE)
 kiosk-demo-philslist/README.md	**not only for commerce**: it exercises the full query + action + `schema` +
 kiosk-demo-philslist/README.md	- **Red team** — `../kiosk-redteam/suites/philslist.rb` attacks the live origin and every
 kiosk-demo-philslist/README.md	The AP2 mandate and settlement TABLES are present and empty, and that is the
-kiosk-demo-philslist/README.md	identity-binding surface with **no money in the protocol at all** — no `pay` verb,
+kiosk-demo-philslist/README.md	identity-binding surface with **no money in the protocol at all** — no `pay` operation,
 kiosk-demo-philslist/app/controllers/kiosk/board_controller.rb	reach :published
 kiosk-demo-philslist/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-philslist/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-philslist
@@ -546,11 +546,11 @@ kiosk-demo-philslist/test/stories/privacy_test.rb	one seller can neither edit no
 kiosk-demo-philslist/test/stories/privacy_test.rb	only the board is public; every question about the seller's own listings shows nothing of anyone else's
 kiosk-demo-philslist/test/stories/privacy_test.rb	test "one seller can neither edit nor close another's listing" do
 kiosk-demo-philslist/test/stories/selling_test.rb	a seller who retitles a listing keeps its price, and clears the price only by saying so
-kiosk-demo-prove/README.md	  `KycVerifier` **also** enforces this at the endpoint: every
+kiosk-demo-prove/README.md	  `KycVerifier` **also** enforces this in the protocol: every
 kiosk-demo-prove/README.md	  per-request STATE (single-use / TTL / no-replay) — never the human's identity
 kiosk-demo-prove/README.md	"attributes": { "age_over_18": true, "licence_a1": true, "licence_a": true }, "iat": …, "exp": … }
 kiosk-demo-prove/README.md	# kiosk-demo-prove
-kiosk-demo-prove/README.md	## The three legs
+kiosk-demo-prove/README.md	## The three steps
 kiosk-demo-prove/README.md	- **Bound, single-use, TTL'd claim.** The claim binds to (subject + operator +
 kiosk-demo-prove/README.md	- **No replay across operators.** The claim carries `operator`/`aud`; the
 kiosk-demo-prove/README.md	The broker mounts **no** Kiosk HTTP API at all — neither of the two reserved
@@ -640,11 +640,11 @@ kiosk-demo-skooti/test/stories/unstarted_ride_test.rb	test 'a paid hold whose ri
 kiosk-demo-skooti/test/stories/unstarted_ride_test.rb	test 'an unpaid hold holds the vehicle three minutes, and a lapsed one cannot be paid for' do
 kiosk-demo-skooti/test/test_helper.rb	def the_lock_on(vehicle) = LockSim.new(
 kiosk-demo-stylish/README.md	- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and
-kiosk-demo-stylish/README.md	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** one of them: this demo sets **nothing**
+kiosk-demo-stylish/README.md	- **The assistant identity adapter** (`c.agent_idp`) is **not** a shortcut: this demo sets **nothing**
 kiosk-demo-stylish/README.md	- A `book_appointment` Action + a `service_menu` query — an **evergreen service menu**: a small set of services
-kiosk-demo-stylish/README.md	- App-layer data isolation (two users, two views of the same table)
-kiosk-demo-stylish/README.md	- Authenticated REST API — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its
-kiosk-demo-stylish/README.md	- Authenticated REST API — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its arguments in the query string
+kiosk-demo-stylish/README.md	- App-layer data isolation (two customers, two views of the same table)
+kiosk-demo-stylish/README.md	- Authenticated REST API — **one path per operation**: a query is a `GET /kiosk/<query-name>` with its
+kiosk-demo-stylish/README.md	- Authenticated REST API — **one path per operation**: a query is a `GET /kiosk/<query-name>` with its arguments in the query string
 kiosk-demo-stylish/README.md	- Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, asserted by `test/stories/linking_test.rb`
 kiosk-demo-stylish/README.md	- JWKS endpoint for JWT verification
 kiosk-demo-stylish/README.md	- `/.well-known/kiosk.json` discovery
@@ -701,8 +701,8 @@ kiosk-demo-tudu/README.md	Asserts every attack is BLOCKED (0 BREACH): `CrossTena
 kiosk-demo-tudu/README.md	The human web UI, calling the same Operations as the HTTP API; a refusal becomes a flash
 kiosk-demo-tudu/README.md	`PreLinkTokenAfterLink` (401), `NoLoginAddressOnTheRoster` (an assistant bound
 kiosk-demo-tudu/README.md	access**, **AI-assistant→AI-assistant collaboration expressed entirely at the app layer**, and
-kiosk-demo-tudu/README.md	critics claim GUC-style patterns can't handle: **membership-based many-to-many
-kiosk-demo-tudu/README.md	the **W5 account-link rebind** that migrates an assistant's work to a human.
+kiosk-demo-tudu/README.md	philslist shows owner-scoped isolation on a public board, tudu shows
+kiosk-demo-tudu/README.md	the **account-link rebind** that moves an assistant's work to a human.
 kiosk-demo-tudu/README.md	| `app/controllers/kiosk/invites_controller.rb` | `invite` and `accept_invite`
 kiosk-demo-tudu/README.md	| `app/controllers/kiosk/lists_controller.rb` | `my_lists` and `create_list`
 kiosk-demo-tudu/README.md	| `app/controllers/kiosk/memberships_controller.rb` | `whoami`, `list_members`, `remove_member` and the `list_membership` topic

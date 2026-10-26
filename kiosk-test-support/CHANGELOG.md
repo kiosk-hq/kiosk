@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.25] — 2026-10-26
+
+- 2026-10-26: Version 0.6.25, the tree cut that matches skill 0.6.25.
 - 2026-10-26: The README DSL example seeds, then reads, and says that the assistant helpers call the default mount path `/kiosk`.
 
 ## [0.6.24] — 2026-10-26

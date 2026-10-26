@@ -4,7 +4,7 @@ require 'rspec/expectations'
 
 require 'kiosk/test_helpers/skill_pin'
 
-# `expect(Kiosk.configuration).to pin_the_served_skill(hashed_version: '0.6.24')`
+# `expect(Kiosk.configuration).to pin_the_served_skill(hashed_version: '0.6.25')`
 # The matcher DSL gives the keywords to the block as one Hash.
 RSpec::Matchers.define :pin_the_served_skill do |options|
   match do |configuration|

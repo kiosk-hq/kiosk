@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.25] — 2026-10-26
+
+- 2026-10-26: Version 0.6.25, the tree cut that matches skill 0.6.25.
 - 2026-10-26: The `type: :kiosk_agent` tag is removed; `type: :kiosk_journey` is the one tag. The README example seeds, then reads, and a spec runs it against Postgres.
 
 ## [0.6.24] — 2026-10-26

@@ -3,7 +3,7 @@
 module Kiosk
   module PaymentProviders
     module StripeVersion
-      VERSION = '0.6.24'
+      VERSION = '0.6.25'
     end
   end
 end

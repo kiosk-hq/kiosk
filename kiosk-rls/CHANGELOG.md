@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.25] — 2026-10-26
+
+- 2026-10-26: Version 0.6.25, the tree cut that matches skill 0.6.25.
 - 2026-10-26: The README names operators, customers and the declared operations.
 
 ## [0.6.24] — 2026-10-26

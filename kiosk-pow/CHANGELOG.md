@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.25] — 2026-10-26
+
+- 2026-10-26: Version 0.6.25, the tree cut that matches skill 0.6.25.
 - 2026-10-26: The backend guide says kiosk-server parses the nonce with Symbol keys, and its example returns false for a nonce that is not an object; a spec runs it.
 
 ## [0.6.24] — 2026-10-26

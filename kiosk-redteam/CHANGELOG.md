@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.25] — 2026-10-26
+
+- 2026-10-26: Version 0.6.25, the tree cut that matches skill 0.6.25.
 - 2026-10-26: The README and gemspec say the harness loads no Rails but installs it, and that the scenarios call the default mount path `/kiosk`.
 
 ## [0.6.24] — 2026-10-26

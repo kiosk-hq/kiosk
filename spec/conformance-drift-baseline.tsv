@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-26 at d998bf1a
+# recorded: 2026-10-26 at 6af94b92
 # 2073 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	49c865ab	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	49c865ab	        if: matrix.demo != 'kiosk-demo-prove'
@@ -326,7 +326,7 @@ kiosk-core/lib/kiosk/configuration.rb	f93913e953f166ea	49c865ab	    # to the iss
 kiosk-core/lib/kiosk/configuration.rb	26e6c45479a4cc5c	49c865ab	A table that Rails made with its default key is :bigint.
 kiosk-core/lib/kiosk/configuration.rb	eb55ac83bee281d4	49c865ab	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	0b9b9bb8049ae29f	49c865ab	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	09be4c7fcad2a04e	d998bf1a	API_VERSION = '0.6.
+kiosk-core/lib/kiosk/protocol.rb	e7b3e1f5f4eb5ce5	6af94b92	API_VERSION = '0.6.
 kiosk-core/spec/kiosk/kyc_providers/base_spec.rb	d4efc7346062c77b	49c865ab	refuses a key that is not Ed25519
 kiosk-core/spec/spec_helper.rb	c89ca3f73742cd52	49c865ab	require 'kiosk'
 kiosk-demo-atablefor/README.md	9c41ef23a955233a	49c865ab	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
@@ -1078,12 +1078,12 @@ kiosk-server/lib/kiosk/server/client_assertion.rb	7b38dcb6424b5f76	49c865ab	issu
 kiosk-server/lib/kiosk/server/client_registration.rb	93acfb9b02cf3a3a	49c865ab	# RFC 7591 open registration of an AI assistant's public key, with no human:
 kiosk-server/lib/kiosk/server/client_registration.rb	08037059c8fd4ec7	49c865ab	AuthToll.gate(verb: 'oauth/register', body: { key: AssistantKey.thumbprint(key) }, pow: pow, config: config)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	c1e0f9e32b401aa9	49c865ab	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	b3cd641c342c3404	d998bf1a	        @skill_url ||= 'https://kiosk.tech/skill-v
-kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	d998bf1a	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
-kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	d998bf1a	      attr_accessor :spending_cap_window_days
-kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	d998bf1a	      def computed_capabilities
-kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	d998bf1a	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
-kiosk-server/lib/kiosk/server/configuration_extension.rb	59e6dd41e77efef5	d998bf1a	def reputation_policy=
+kiosk-server/lib/kiosk/server/configuration_extension.rb	0310bb9c024e9bad	6af94b92	        @skill_url ||= 'https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	6af94b92	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
+kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	6af94b92	      attr_accessor :spending_cap_window_days
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	6af94b92	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	6af94b92	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	59e6dd41e77efef5	6af94b92	def reputation_policy=
 kiosk-server/lib/kiosk/server/device_code_grant.rb	0127c4b9e1aef66b	49c865ab	# The claim ceremony on the RFC 8628 device-grant endpoints: binds a registered
 kiosk-server/lib/kiosk/server/device_code_grant.rb	8077327e193a9d87	49c865ab	da = authorization_of(client, store.lookup_by_device_code_hash(hash))
 kiosk-server/lib/kiosk/server/engine.rb	9a04fe52f1e0a44f	49c865ab	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
@@ -1702,29 +1702,29 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	04191b85a196448d	49c865ab	lets 
 kiosk-server/spec/kiosk/server/link_code_spec.rb	7922f76d06ad8e35	49c865ab	persists only the hash of the link code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	2fcb6f67fbcf6ff2	49c865ab	refuses a blank, an unknown and an expired code, and a claim-flow device_code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	0a568a8f72025fc1	49c865ab	refuses a client assertion and leaves the code live
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	8b037e116e7cda24	49c865ab	answers 400 for an exp beyond the maximum lifetime, and accepts one within it
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	86e143c535493640	49c865ab	answers 400 for an exp or iat that is not an integer, before Time.at
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	82447cd26d5fc499	49c865ab	answers the checkout mandate, its values taken from the checkout this origin signed
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	da8e85d54b1a4c3d	49c865ab	answers the payment mandate for that checkout
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	326ac4b081a715a9	49c865ab	compares the currency as a code
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	67c169f55d5cc1a0	49c865ab	refuses a checkout another origin of this deployment signed
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	f12331ca4c119d00	49c865ab	refuses a checkout mandate in the payment place
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e2c1be763396bced	49c865ab	refuses a checkout signed for another account
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	708c2d01cf931d69	49c865ab	refuses a checkout that another key signs under this key's kid, EdDSA or RS256
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	bf94f649c0593de7	49c865ab	refuses a mandate of an agent revoked since it authenticated
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	5626464d69db870f	49c865ab	refuses a mandate signed by any key but the agent key
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	fd34895dad6e995c	49c865ab	refuses a mandate whose exp has passed
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	28483b56fc9382cf	49c865ab	refuses a mandate with no checkout_jwt, or a checkout_hash of other bytes
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	2941b7e6f190deac	49c865ab	refuses a payee that is not this origin, or none
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	79673307ccbd13c3	49c865ab	refuses a payment for another checkout
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	c3522f66d9b292ed	49c865ab	refuses a payment with no instrument id or type
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	30d0f41037cfa9f3	49c865ab	refuses a signed payload that carries no mandate
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	339feebfd88451ac	49c865ab	refuses a token that is not an SD-JWT, with the reason in the hint
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	0ba1c64cc67bc8a8	49c865ab	refuses an SD-JWT whose header typ is not dc+sd-jwt
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	6dd5ddfc1c029a2a	49c865ab	refuses an amount or a currency other than the checkout, and an amount in a string
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	31bf25fa40d75caf	49c865ab	refuses an open mandate, and a payment mandate in the checkout place
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a7262502d73ff2c2	49c865ab	takes the currency in lower case, the spelling the spending cap counts
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	af4a04a7dc1664db	49c865ab	verifies the mandates the key signs ES256
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	8b037e116e7cda24	6af94b92	answers 400 for an exp beyond the maximum lifetime, and accepts one within it
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e1714ddc5b95480f	6af94b92	answers 400 for an exp or iat that is not an integer, before Time.at
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	82447cd26d5fc499	6af94b92	answers the checkout mandate, its values taken from the checkout this origin signed
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	da8e85d54b1a4c3d	6af94b92	answers the payment mandate for that checkout
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	326ac4b081a715a9	6af94b92	compares the currency as a code
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	67c169f55d5cc1a0	6af94b92	refuses a checkout another origin of this deployment signed
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	f12331ca4c119d00	6af94b92	refuses a checkout mandate in the payment place
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e2c1be763396bced	6af94b92	refuses a checkout signed for another account
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	708c2d01cf931d69	6af94b92	refuses a checkout that another key signs under this key's kid, EdDSA or RS256
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	bf94f649c0593de7	6af94b92	refuses a mandate of an agent revoked since it authenticated
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	5626464d69db870f	6af94b92	refuses a mandate signed by any key but the agent key
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	fd34895dad6e995c	6af94b92	refuses a mandate whose exp has passed
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	28483b56fc9382cf	6af94b92	refuses a mandate with no checkout_jwt, or a checkout_hash of other bytes
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	2941b7e6f190deac	6af94b92	refuses a payee that is not this origin, or none
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	79673307ccbd13c3	6af94b92	refuses a payment for another checkout
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	c3522f66d9b292ed	6af94b92	refuses a payment with no instrument id or type
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	30d0f41037cfa9f3	6af94b92	refuses a signed payload that carries no mandate
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	339feebfd88451ac	6af94b92	refuses a token that is not an SD-JWT, with the reason in the hint
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	0ba1c64cc67bc8a8	6af94b92	refuses an SD-JWT whose header typ is not dc+sd-jwt
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	6dd5ddfc1c029a2a	6af94b92	refuses an amount or a currency other than the checkout, and an amount in a string
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	31bf25fa40d75caf	6af94b92	refuses an open mandate, and a payment mandate in the checkout place
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a7262502d73ff2c2	6af94b92	takes the currency in lower case, the spelling the spending cap counts
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	af4a04a7dc1664db	6af94b92	verifies the mandates the key signs ES256
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	06727d7d1f1e8a56	49c865ab	answers 401 invalid_client and the Kiosk-Client-Assertion challenge for a missing or refused client assertion
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	5698432646fdfe8d	49c865ab	ignores a scope: the row carries no requested role
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	95cc5fa0939e0658	49c865ab	opens a claim ceremony for the client, with the client's key on the row

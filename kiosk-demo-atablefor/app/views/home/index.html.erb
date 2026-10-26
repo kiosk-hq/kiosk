@@ -14,7 +14,7 @@
       <h1>Point your AI assistant here — it books the table.</h1>
       <p>This is <strong>atablefor</strong> — a restaurant booking aggregator across a handful of Lisbon neighbourhoods (Alfama, Graça, Bairro Alto, Belém, Príncipe Real). AI assistants book here through <strong>Kiosk</strong>. There is <strong>no web booking form and no sign-in to reserve</strong>. An assistant finds this site, makes its own account, and books a table.</p>
       <p class="say">“Book a table for two in Alfama tonight at 8.”</p>
-      <p class="no-signin">Say that to your assistant. It reads <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a>, makes its own account, and books — no login, no app, no card. (Staff sign-in, top right, is only for restaurant staff to manage linked diners.)</p>
+      <p class="no-signin">Say that to your assistant. It reads <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a>, makes its own account, and books — no login, no app, no card. (Diner sign-in, top right, is only for a diner who links an assistant to their account.)</p>
     </div>
   </section>
 
@@ -33,7 +33,7 @@
         </ol>
         <p class="note">⚠ Every new assistant account solves a <strong>full-strength proof-of-work toll</strong> to register: one memory-hard puzzle, 9 to 20&nbsp;s on one Apple M3 laptop core. Then the toll comes on every 10th call. You feel first-hand the cost that keeps scalpers out. Every Kiosk demo asks the same toll.</p>
         <div class="linkbox">
-          <strong>Link a booking to a real diner account.</strong> A diner signs in at <a href="/users/sign_in">Staff login</a> (demo login below), opens <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and makes a one-time link code. Hand that code to the assistant. It uses the code, and its bookings then appear on the <a href="/reservations">reservations board</a> under that diner's name.
+          <strong>Link a booking to a real diner account.</strong> A diner signs in at <a href="/users/sign_in">Diner sign-in</a> (demo login below), opens <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and makes a one-time link code. Hand that code to the assistant. It uses the code, and its bookings then appear on the <a href="/reservations">reservations board</a> under that diner's name.
           <div class="cred">Demo login: <code>diego@example.com</code> &nbsp;/&nbsp; <code>atablefor-demo-password</code></div>
         </div>
       </div>

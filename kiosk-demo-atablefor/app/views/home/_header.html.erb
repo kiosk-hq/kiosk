@@ -3,10 +3,10 @@
   <nav>
     <%= link_to label, path %>
     <% if user_signed_in? %>
-      <span class="whoami">Staff: <%= current_user.display_name.presence || current_user.email %></span>
+      <span class="whoami">Diner: <%= current_user.display_name.presence || current_user.email %></span>
       <%= button_to "Sign out", destroy_user_session_path, method: :delete, class: "signout-btn" %>
     <% else %>
-      <a class="staff-login" href="/users/sign_in">Staff login</a>
+      <a class="sign-in" href="/users/sign_in">Diner sign-in</a>
     <% end %>
   </nav>
 </header>

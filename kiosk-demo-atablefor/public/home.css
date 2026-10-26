@@ -8,7 +8,7 @@ header{background:var(--accent);color:#fff;padding:0 32px;height:60px;display:fl
 header nav{display:flex;align-items:center;gap:18px;font-size:13px}
 header nav a{color:#fff;text-decoration:none;font-weight:600;opacity:.92}
 header nav a:hover{opacity:1;text-decoration:underline}
-.staff-login{background:rgba(255,255,255,.16);border-radius:8px;padding:6px 13px}
+.sign-in{background:rgba(255,255,255,.16);border-radius:8px;padding:6px 13px}
 .signout-btn{background:rgba(255,255,255,.16);border:0;color:#fff;font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:6px 13px;cursor:pointer}
 .signout-btn:hover{background:rgba(255,255,255,.28)}
 .whoami{font-size:12px;opacity:.85}

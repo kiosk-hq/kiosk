@@ -18,8 +18,8 @@ seating is honestly **sold out** (availability legitimately empty for it).
 The home page is **protocol-primary**: it tells a visitor (and an assistant
 scanning it) that this is a Kiosk endpoint to point an assistant at — not a
 human web-booking form. A human diner *does* have a **real account** at the
-restaurant (Devise sign-in, promoted as **Staff login**) and can **link their AI
-assistant** to it: the diner signs in, mints a link code, the assistant redeems
+restaurant (Devise sign-in, promoted as **Diner sign-in**) and can **link their AI
+assistant** to it: the diner signs in, gets a link code, the assistant uses
 it, and the assistant's bookings then tie to the diner's account.
 
 Every confirmed reservation shows on a **public, read-only reservations board**

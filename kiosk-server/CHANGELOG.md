@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: The README names the two gems and `registration_pow_count` of the toll, the real KYC variables, every root discovery document and a matching route example.
 - 2026-10-26: The manage-assistants and link-approval pages are whole documents with a title, in the engine layout `layouts/kiosk/server/application`.
 - 2026-10-26: The manage-assistants page shows money amounts and a cap of 0 as «no payments allowed»; its `spending_cap` field takes an amount in the cap currency.
 

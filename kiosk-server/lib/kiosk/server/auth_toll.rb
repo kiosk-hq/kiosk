@@ -5,9 +5,9 @@ module Kiosk
     # Optional proof-of-work toll on the auth requests that come before a
     # token: `POST /oauth/register`, the link-code claim `POST /auth/claim`, and
     # the first token poll of each device code. It runs before any lookup, so
-    # the answer never tells a caller whether a key or a code exists. It bounds
-    # the cost per request, not the rate: an edge rate limit is required
-    # (deploy/README.md "Edge rate-limit").
+    # the answer never tells a caller whether a key or a code exists. It sets
+    # the cost of each request, not a rate. The shipped deploy has no edge rate
+    # limit (deploy/README.md "Edge rate-limit").
     module AuthToll
       module_function
 

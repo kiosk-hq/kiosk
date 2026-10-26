@@ -10,6 +10,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.27] — 2026-10-26
+
+- 2026-10-26: Version 0.6.27, the tree cut that matches skill 0.6.27.
 - 2026-10-26: The gem is `kiosk-kyc-proveli` and the class `Kiosk::KycProviders::Proveli`. The broker serves its public key at `/proveli_key.pem`.
 
 ## [0.6.26] — 2026-10-26

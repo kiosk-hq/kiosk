@@ -69,19 +69,24 @@ module Kiosk
           end
         end
 
-        # Each settlement less what was refunded of it, never below zero, one
-        # tally per currency.
+        # One tally per currency.
         def spend_sql
           schema = Kiosk.configuration.schema
           <<~SQL.squish
-            SELECT settlements.agent_id, lower(btrim(settlements.currency)) AS currency,
-                   SUM(GREATEST(settlements.settled_amount_cents - (
-                     SELECT COALESCE(SUM(r.refunded_amount_cents), 0) FROM #{schema}.kiosk_refunds r WHERE r.settlement_id = settlements.id
-                   ), 0)) AS cents
+            SELECT settlements.agent_id, lower(btrim(settlements.currency)) AS currency, SUM(#{net_cents_sql(schema)}) AS cents
             FROM #{schema}.kiosk_settlements settlements
             JOIN #{schema}.kiosk_agents agents ON agents.id = settlements.agent_id
             WHERE agents.user_id = $1 AND agents.issuer = $2 AND agents.revoked_at IS NULL
             GROUP BY 1, 2 ORDER BY 2
+          SQL
+        end
+
+        # Each settlement less what was refunded of it, never below zero.
+        def net_cents_sql(schema)
+          <<~SQL.squish
+            GREATEST(settlements.settled_amount_cents - (
+              SELECT COALESCE(SUM(r.refunded_amount_cents), 0) FROM #{schema}.kiosk_refunds r WHERE r.settlement_id = settlements.id
+            ), 0)
           SQL
         end
 

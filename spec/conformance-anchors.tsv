@@ -359,8 +359,8 @@ kiosk-demo-atablefor/app/models/table_search.rb	.where(restaurant_tables: { capa
 kiosk-demo-atablefor/app/views/home/index.html.erb	        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
 kiosk-demo-atablefor/app/views/home/index.html.erb	      <h1>Point your AI assistant here — it books the table.</h1>
 kiosk-demo-atablefor/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor
-kiosk-demo-atablefor/app/views/layouts/home.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
-kiosk-demo-atablefor/app/views/layouts/home.html.erb	The href is the VERSIONED cut this operator pins, read from
+kiosk-demo-atablefor/app/views/layouts/application.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
+kiosk-demo-atablefor/app/views/layouts/application.html.erb	The href is the VERSIONED cut this operator pins, read from
 kiosk-demo-atablefor/before-after.md	`test/stories/booking_test.rb` runs the errand with no human, no web sign-in and no payment:
 kiosk-demo-atablefor/before-after.md	every new assistant solves an Equihash proof-of-work to register. One diner's
 kiosk-demo-atablefor/before-after.md	rails g kiosk:install
@@ -407,7 +407,7 @@ kiosk-demo-getgrocery/app/services/price_checker.rb	unless presented.sort == ord
 kiosk-demo-getgrocery/app/validators/served_address_validator.rb	record.errors.add(attribute, DublinZones.reject_message(result)) unless result.ok?
 kiosk-demo-getgrocery/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-getgrocery/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-getgrocery
-kiosk-demo-getgrocery/app/views/layouts/home.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
+kiosk-demo-getgrocery/app/views/layouts/application.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
 kiosk-demo-getgrocery/before-after.md	# Before and after — grocery delivery
 kiosk-demo-getgrocery/before-after.md	## With getgrocery
 kiosk-demo-getgrocery/before-after.md	**Honesty note up front.**
@@ -507,7 +507,7 @@ kiosk-demo-hoteling/spec/stories/search_spec.rb	a guest reads one hotel's rooms,
 kiosk-demo-hoteling/spec/stories/search_spec.rb	a made-up cursor moves through the hotels the search matches, and reaches no other hotel
 kiosk-demo-hoteling/spec/stories/search_spec.rb	a search that matches nothing comes back empty, and a neighbourhood the city does not have is answered with the ones it does
 kiosk-demo-hoteling/spec/stories/search_spec.rb	def total(found) = found.header('x-total-count').to_i
-kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	'spending_cap_cents' => (stay['total_cents'] - 1).to_s,
+kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	'spending_cap' => cap, 'spending_cap_currency' => 'EUR')
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest sets the cap of her assistant on the assistants page, and the assistant cannot pay past it
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay for the stay that would cross its cap, however the currency is spelled, until the cap is raised
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay in a currency other than its cap's

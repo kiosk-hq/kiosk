@@ -8,8 +8,6 @@ class UnlockController < ApplicationController
     render :incomplete, status: :bad_request
   end
 
-  layout 'home'
-
   def show
     @scooter_code = params.expect(:scooter)
     @rental_token = params.expect(:rt)

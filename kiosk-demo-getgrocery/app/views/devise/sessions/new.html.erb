@@ -1,0 +1,17 @@
+<%# Devise's sign-in form under the demo's header. %>
+<% content_for :title, 'Sign in — GetGrocery' %>
+<header>
+  <div class="logo">Get<span>Grocery</span></div>
+</header>
+<div class="wrap">
+  <h1>Sign in</h1>
+  <% if alert %><p role="alert"><%= alert %></p><% end %>
+
+  <%= form_for(resource, as: resource_name, url: session_path(resource_name)) do |f| %>
+    <p><%= f.label :email %><br><%= f.email_field :email, autofocus: true, autocomplete: "email" %></p>
+    <p><%= f.label :password %><br><%= f.password_field :password, autocomplete: "current-password" %></p>
+    <p><%= f.submit "Sign in" %></p>
+  <% end %>
+
+  <p><a href="/">Back to the home page</a></p>
+</div>

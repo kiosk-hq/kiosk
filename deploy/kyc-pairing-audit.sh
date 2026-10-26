@@ -1,26 +1,23 @@
 #!/usr/bin/env bash
 # KYC operator pairing audit — read-only by default.
 #
-#   deploy/kyc-pairing-audit.sh [user@host] [--fix-retired-names]
+#   deploy/kyc-pairing-audit.sh [user@host] [--fix-names]
 #
 # The host defaults to $KIOSK_DEPLOY_HOST. From a checkout it sends itself to
 # the box over ssh and runs there as root with `--on-box`.
 #
 # WHY IT EXISTS. Nothing in this repository reads the VALUES on the boxes in
 # /etc/kiosk-demo/*.env, so a deployment can match every shipped template
-# and still answer `501 module_not_served` on `request_kyc` — which is exactly
-# what both KYC operators did for thirty-five days, and what a live third-party
-# assistant hit on 2026-09-17.
+# and still answer `501 module_not_served` on `request_kyc`.
 #
-# The half nothing held was the 2026-08-13 rename: the operator side
-# read the per-operator name, today `KIOSK_PROVELI_<OP>_SECRET`, until then and reads the role-named
-# `KIOSK_PROVELI_INTAKE_SECRET` now. The rename shipped with a CHANGELOG sentence
-# asking deploys to rename the variable, and with no mechanism at all — so both
-# operator envs went on carrying a correct secret under a name the app had
-# stopped reading. The app then fails CLOSED and SILENTLY: the descriptor keeps
-# advertising `request_kyc` because it is static, the verb answers a cacheable
-# 501, and the broker answers an unregistered operator and a wrong secret with
-# the identical 401. No outside probe separates any of those.
+# The two sides name the one secret differently: the operator app reads the
+# role-named `KIOSK_PROVELI_INTAKE_SECRET`, and the broker keeps
+# `KIOSK_PROVELI_<OP>_SECRET` for each operator. An operator env that stores
+# the secret under the broker's name leaves the app with no secret. The app
+# then fails CLOSED and SILENTLY: the descriptor keeps advertising
+# `request_kyc` because it is static, the verb answers a cacheable 501, and
+# the broker answers an unregistered operator and a wrong secret with the
+# identical 401. No outside probe separates any of those.
 #
 # NO VALUE IS EVER PRINTED. Pairing is reported as PAIRED / MISMATCH, presence
 # as set / unset. The one thing it prints about a key is a SPKI fingerprint,
@@ -40,7 +37,7 @@ REPO=${KIOSK_REPO:-/srv/kiosk}
 ENVDIR=${KIOSK_ENV_DIR:-/etc/kiosk-demo}
 BROKER_ENV=$ENVDIR/proveli.env
 FIX=0
-[ "${1:-}" = "--fix-retired-names" ] && FIX=1
+[ "${1:-}" = "--fix-names" ] && FIX=1
 
 fail=0
 bad() { echo "FAIL  $*"; fail=1; }
@@ -80,7 +77,7 @@ for op in $roster; do
   echo "--- $op ---"
   [ -r "$f" ] || { bad "$op: cannot read $f"; continue; }
 
-  # 1. the retired spelling — the whole of the box half. Renaming it is
+  # 1. the broker's name in an operator env. Renaming it is
   #    right only when nothing already assigns the role-named variable; two
   #    assignments of one name in an EnvironmentFile silently take the last.
   if grep -qE "^[[:space:]]*(export[[:space:]]+)?KIOSK_PROVELI_${OP}_SECRET=" "$f"; then
@@ -99,13 +96,13 @@ for op in $roster; do
       if [ -s "$tmp" ]; then cat "$tmp" > "$f"; rm -f "$tmp"; echo "      $act in $f (backup $bk)"
       else rm -f "$tmp"; bad "$op: rewrite produced an empty file — $f left untouched"; fi
     else
-      bad "$op: $f still assigns the retired KIOSK_PROVELI_${OP}_SECRET — nothing reads it since 2026-08-13; re-run with --fix-retired-names"
+      bad "$op: $f assigns the broker's KIOSK_PROVELI_${OP}_SECRET, which the operator app does not read; re-run with --fix-names"
     fi
   fi
   if grep -qE "^[[:space:]]*(export[[:space:]]+)?KIOSK_PROVELI_${OP}_SECRET=" "$f"; then
-    bad "$op: retired KIOSK_PROVELI_${OP}_SECRET still present"
+    bad "$op: KIOSK_PROVELI_${OP}_SECRET still present"
   else
-    ok "$op: no retired operator-side secret name"
+    ok "$op: no broker-side secret name"
   fi
 
   # 2. the role-named secret the app actually reads

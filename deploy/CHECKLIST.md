@@ -88,19 +88,16 @@ What each unit must carry. For EACH of the 7 apps:
 - [ ] **RUN `deploy/kyc-pairing-audit.sh` ON THE BOX — it reads what is deployed, and a tick taken by eye is a guess.**
       ```
       deploy/kyc-pairing-audit.sh <deploy-user>@<box>
-      deploy/kyc-pairing-audit.sh <deploy-user>@<box> --fix-retired-names
+      deploy/kyc-pairing-audit.sh <deploy-user>@<box> --fix-names
       ```
       It pairs each operator's `KIOSK_PROVELI_INTAKE_SECRET` against the broker's `KIOSK_PROVELI_<OP>_SECRET` BY VALUE,
-      checks the pinned broker key against the key the broker actually signs with, and names any operator env still
-      carrying the RETIRED operator-side spelling. It prints no value: pairing comes out PAIRED or MISMATCH, a key as a
+      checks the pinned broker key against the key the broker actually signs with, and names any operator env that
+      stores the secret under the broker's name. It prints no value: pairing comes out PAIRED or MISMATCH, a key as a
       public SPKI fingerprint. Run it before the restart, and again after.
-- [ ] **The RETIRED operator-side name, on any box that predates 2026-08-13.** The operator side read the
-      per-operator name, today `KIOSK_PROVELI_<OP>_SECRET`, until then and is `KIOSK_PROVELI_INTAKE_SECRET` now. Nothing reads the old spelling any
-      more, so an env file still carrying it leaves the app with NO secret — and `request_kyc` then answers a cacheable
-      `501 module_not_served`, which reads as «this operator does not do KYC» rather than as a missing value. That is not
-      hypothetical: it is what BOTH deployed KYC operators did from 2026-08-13 to 2026-09-17, with a correct secret
-      stored under the dead name on each box, until a live third-party assistant reported the alcohol in its getgrocery
-      basket as unbuyable by any route. The audit above is the box-side control.
+- [ ] **An operator env stores the secret as `KIOSK_PROVELI_INTAKE_SECRET`.** The operator app does not read the
+      broker's name `KIOSK_PROVELI_<OP>_SECRET`, so a secret stored under it leaves the app with NO secret — and
+      `request_kyc` then answers a cacheable `501 module_not_served`, which reads as «this operator does not do KYC»
+      rather than as a missing value. The audit above is the box-side control.
       **What a missed pair looks like from outside, so it is not mistaken for a design choice:** the origin still
       ADVERTISES `request_kyc` in `/kiosk/schema` — the descriptor is static — and answers the verb
       `501 module_not_served`. No unauthenticated probe can tell that apart from an operator that genuinely serves no
@@ -233,10 +230,6 @@ database is dropped and rebuilt from `db/schema.rb` instead. **All fleet data is
 bookings, KYC grants and verifications, bound assistants and every account the seeds do not create —
 getgrocery's real third-party orders included.
 
-**Due once, on the next deploy:** the migrations of each of the seven operator demos were collapsed into
-one fresh install: the demo's own tables and kiosk:install's `kiosk_*` tables, all in `public`. Run this
-section for them. §7c rebuilds the database of `kiosk-demo-proveli`, so drop `proveli` from the
-loop below.
 - [ ] Install the current hook (the push below runs it):
       ```
       scp reference/deploy/post-receive <deploy-user>@<box>:/srv/kiosk.git/hooks/post-receive
@@ -272,47 +265,6 @@ loop below.
       sudo systemctl start kiosk-demo@<app>
       ```
 - [ ] Verify as §8; `\d` on any table in `psql` shows the shape `db/schema.rb` states.
-
-## 7c. Move the KYC broker from `prove` to `proveli` (one-time)
-A box that runs the unit `kiosk-demo@prove` needs these steps once. They replace `deploy/deploy.sh` for
-that one deploy: its rollout reads the templates of the checkout on the box, and that checkout does
-not know the new names yet. The broker's migrations were collapsed into one fresh install, so its
-database is rebuilt empty. It holds only verifications that expire after 15 minutes. Every step is
-safe to run again.
-- [ ] Stop the old unit, and give the env files, the role and the database their new names:
-      ```
-      ssh <deploy-user>@<box> 'sudo bash -s' <<'SH'
-      set -eu
-      cd /etc/kiosk-demo
-      if [ -e prove.env ]; then
-        systemctl disable --now kiosk-demo@prove
-        sed -i -E 's/^KIOSK_PROVE_/KIOSK_PROVELI_/; s/^PROVE_/PROVELI_/' prove.env getgrocery.env skooti.env
-        sed -i -E 's/^KIOSK_PROVELI_DB=.*/KIOSK_PROVELI_DB=kiosk_proveli_production/
-                   s/^KIOSK_PROVELI_DB_USER=.*/KIOSK_PROVELI_DB_USER=kiosk_proveli/' prove.env
-        mv prove.env proveli.env
-      fi
-      pw=$(sed -n 's/^KIOSK_PROVELI_DB_PASSWORD=//p' proveli.env)
-      sudo -u postgres psql -v ON_ERROR_STOP=1 -q -v pw="$pw" <<'SQL'
-      SELECT 'ALTER ROLE kiosk_prove RENAME TO kiosk_proveli'
-        WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_prove')\gexec
-      ALTER ROLE kiosk_proveli PASSWORD :'pw';
-      DROP DATABASE IF EXISTS kiosk_prove_production WITH (FORCE);
-      SELECT 'CREATE DATABASE kiosk_proveli_production OWNER kiosk_proveli'
-        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_proveli_production')\gexec
-      REVOKE CONNECT ON DATABASE kiosk_proveli_production FROM PUBLIC;
-      GRANT CONNECT ON DATABASE kiosk_proveli_production TO kiosk_proveli;
-      SQL
-      SH
-      ```
-      The `ALTER ROLE … PASSWORD` sets the password again, because a rename clears an MD5 password.
-- [ ] Install the hook of this tree (§7), then push: `git -C reference push prod-demo HEAD:main`. The
-      push must end `deploy complete.`
-- [ ] Run `deploy/rollout.sh <deploy-user>@<box>` and restart each unit it names. It now reads the new
-      templates.
-- [ ] Enable the new unit and remove what the old checkout left:
-      `ssh <deploy-user>@<box> 'sudo systemctl enable kiosk-demo@proveli && sudo rm -rf /srv/kiosk/kiosk-demo-prove'`.
-- [ ] `deploy/kyc-pairing-audit.sh <deploy-user>@<box>` exits 0, and
-      `curl -s https://kyc.demo.kiosk.tech/proveli_key.pem` returns a public key.
 
 ## 8. Verify (per subdomain)
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery.

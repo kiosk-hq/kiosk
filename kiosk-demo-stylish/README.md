@@ -91,7 +91,7 @@ The role rides the token, sourced from the operator's identity system — never 
 
 It discovers the protocol, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
-`alice@example.com` / `combette-demo-password` and approve it there.
+`alice@example.com` / `stylish-demo-password` and approve it there.
 
 ## Repo tour
 

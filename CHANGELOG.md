@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: kiosk-demo-stylish: the owner signs in as owner@stylish.example with stylish-demo-password.
+
 ## [0.6.27] — 2026-10-26
 
 - 2026-10-26: **Every gem and `API_VERSION` are 0.6.27, matching skill 0.6.27; the engine default is `skill-v0.6.27.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.

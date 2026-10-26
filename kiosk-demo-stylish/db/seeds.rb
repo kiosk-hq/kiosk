@@ -5,11 +5,11 @@
 # with no bookings and never runs out of room. The owner's `staff_role` is the
 # role their assistant inherits when they link it.
 
-password = 'combette-demo-password'
+password = 'stylish-demo-password'
 people = {
   '00000000-0000-0000-0000-000000000001' => ['alice@example.com', nil],
   '00000000-0000-0000-0000-000000000002' => ['bob@example.com', nil],
-  '00000000-0000-0000-0000-0000000000a0' => ['owner@combette.example', 'owner']
+  '00000000-0000-0000-0000-0000000000a0' => ['owner@stylish.example', 'owner']
 }.map do |id, (email, staff_role)|
   User.find_or_initialize_by(id:).tap do |person|
     person.email      = email

@@ -49,9 +49,9 @@ end
 # Alice and Bob book at Combette on Park, and the owner runs it. Each links an
 # assistant to their own salon account.
 class StoryTest < Kiosk::StoryTest
-  PEOPLE = { alice: 'alice@example.com', bob: 'bob@example.com', owner: 'owner@combette.example' }.freeze
+  PEOPLE = { alice: 'alice@example.com', bob: 'bob@example.com', owner: 'owner@stylish.example' }.freeze
 
-  def signs_in(person) = a_person(email: PEOPLE.fetch(person), password: 'combette-demo-password')
+  def signs_in(person) = a_person(email: PEOPLE.fetch(person), password: 'stylish-demo-password')
   def account_of(person) = User.find_by!(email: PEOPLE.fetch(person)).id
 
   # A fresh assistant solves the registration toll, then claims a link code the person mints.

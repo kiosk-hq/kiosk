@@ -24,10 +24,10 @@ SERVER = ENV.fetch('SERVER_URL')
 
 # Seeded accounts (db/seeds.rb); only the owner carries a staff_role.
 OWNER_ID      = '00000000-0000-0000-0000-0000000000a0'
-OWNER_EMAIL   = 'owner@combette.example'
+OWNER_EMAIL   = 'owner@stylish.example'
 ALICE_EMAIL   = 'alice@example.com'
 BOB_EMAIL     = 'bob@example.com'
-DEMO_PASSWORD = 'combette-demo-password'
+DEMO_PASSWORD = 'stylish-demo-password'
 
 # The owner's browser session, signed in once and reused by the beats below.
 def owner_session
@@ -396,7 +396,7 @@ BATTERY.scenario(
   client: Kiosk::TestHelpers::Assistant.new(base_url: SERVER),
   profile: Kiosk::Redteam::Profile.new(
     tolled_calls_per_proof: 10, tolled_query: 'my_appointments',
-    person: -> { Kiosk::TestHelpers::Person.new(SERVER, email: 'bob@example.com', password: 'combette-demo-password') }
+    person: -> { Kiosk::TestHelpers::Person.new(SERVER, email: 'bob@example.com', password: 'stylish-demo-password') }
   ),
   on_skip: :breach
 )

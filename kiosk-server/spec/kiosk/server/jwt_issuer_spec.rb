@@ -18,7 +18,7 @@ RSpec.shared_context 'with a configured JWT issuer' do
   let(:key)        { Kiosk::Server::SigningKey.new(JwtIssuerSpec.key1) }
   let(:other_key)  { Kiosk::Server::SigningKey.new(JwtIssuerSpec.key2) }
   let(:jwks)       { Kiosk::Server::Jwks.build(keys: [key]) }
-  let(:issuer)     { 'https://combette.example/kiosk' }
+  let(:issuer)     { 'https://stylish.example/kiosk' }
   let(:audience)   { 'https://claude.ai/agent/alice' }
 
   before do

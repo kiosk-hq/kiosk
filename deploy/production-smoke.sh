@@ -361,8 +361,8 @@ smoke_stylish() {
       -D "$RESPONSE_HEADERS" -H "Cookie: ${cookie}" \
       "${SIGNIN_HEADERS[@]}" -H "Origin: ${ORIGIN}" \
       --data-urlencode "authenticity_token=${token}" \
-      --data-urlencode "user[email]=owner@combette.example" \
-      --data-urlencode "user[password]=combette-demo-password" \
+      --data-urlencode "user[email]=owner@stylish.example" \
+      --data-urlencode "user[password]=stylish-demo-password" \
       "${BASE}/users/sign_in")"
     cookie="$(secure_session_cookie "$RESPONSE_HEADERS")"
     if [ "$signin_code" = "302" ] || [ "$signin_code" = "303" ]; then

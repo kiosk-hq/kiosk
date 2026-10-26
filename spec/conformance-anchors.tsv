@@ -693,7 +693,7 @@ kiosk-demo-stylish/test/stories/salon_book_test.rb	assert_equal [alices, bobs].s
 kiosk-demo-stylish/test/stories/salon_book_test.rb	class SalonBookStory < StoryTest
 kiosk-demo-stylish/test/stories/salon_book_test.rb	test "the owner's assistant sees every booking and what they will bring in" do
 kiosk-demo-stylish/test/stories/salon_book_test.rb	the owner's assistant sees every booking and what they will bring in
-kiosk-demo-stylish/test/test_helper.rb	def signs_in(person) = a_person(email: PEOPLE.fetch(person), password: 'combette-demo-password')
+kiosk-demo-stylish/test/test_helper.rb	def signs_in(person) = a_person(email: PEOPLE.fetch(person), password: 'stylish-demo-password')
 kiosk-demo-tudu/README.md	# tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
 kiosk-demo-tudu/README.md	### Adversarial battery (`../kiosk-redteam/suites/tudu.rb`)
 kiosk-demo-tudu/README.md	Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`

@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-26 at 779b1039 -- Proveli rename, release 0.6.27
+# recorded: 2026-10-26 at 7dd38689 (working tree: 1 cited file(s) modified)
 # 2056 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	779b1039	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	f917a3b8a01e4bef	779b1039	        if: matrix.demo != 'kiosk-demo-proveli'
@@ -674,7 +674,7 @@ kiosk-demo-stylish/test/stories/salon_book_test.rb	18a561ad30b61a4f	779b1039	ass
 kiosk-demo-stylish/test/stories/salon_book_test.rb	056e5d66bbdd4045	779b1039	class SalonBookStory < StoryTest
 kiosk-demo-stylish/test/stories/salon_book_test.rb	3b099a3f2098093d	779b1039	test "the owner's assistant sees every booking and what they will bring in" do
 kiosk-demo-stylish/test/stories/salon_book_test.rb	3b099a3f2098093d	779b1039	the owner's assistant sees every booking and what they will bring in
-kiosk-demo-stylish/test/test_helper.rb	eef4f4f943a4aeaa	779b1039	def signs_in(person) = a_person(email: PEOPLE.fetch(person), password: 'combette-demo-password')
+kiosk-demo-stylish/test/test_helper.rb	faa896e2ae1f81d2	dirty	def signs_in(person) = a_person(email: PEOPLE.fetch(person), password: 'stylish-demo-password')
 kiosk-demo-tudu/README.md	72ac0199f330aa3b	779b1039	# tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
 kiosk-demo-tudu/README.md	baaee04f1319a17c	779b1039	### Adversarial battery (`../kiosk-redteam/suites/tudu.rb`)
 kiosk-demo-tudu/README.md	d22ee40cd2c68328	779b1039	Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`

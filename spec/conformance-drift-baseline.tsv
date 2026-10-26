@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-26 at bfc660e0
+# recorded: 2026-10-26 at 657427c9 -- RecentSpend .params check
 # 2067 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	bfc660e0	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	bfc660e0	        if: matrix.demo != 'kiosk-demo-prove'
@@ -947,11 +947,11 @@ kiosk-reputation/lib/kiosk/reputation/challenge.rb	508b9a76c2353b40	bfc660e0	ret
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	2cd1426fe946f764	bfc660e0	sig: compute_sig(secret, fields) }
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	2cd1426fe946f764	bfc660e0	{ id:, alg:, params:, salt: fields.salt, exp: fields.exp,
 kiosk-reputation/lib/kiosk/reputation/factors.rb	e77ec6cedc9b2dbd	bfc660e0	Factors = Data.define(:settled_purchases_count, :settled_purchases_cents, :calls_since_proof) do
-kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	54061ba24b96f308	bfc660e0	BASE_INTERVAL = 10
-kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	703097d6b541d039	bfc660e0	Rational(BASE_INTERVAL * @cap_cents, @cap_cents - cents).ceil if cents < @cap_cents
-kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	9c1cc60508603c03	bfc660e0	def equihash_params = defined?(::Kiosk::Pow::Equihash) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
-kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	f6dee8104d42bb05	bfc660e0	def initialize(within:, cap:)
-kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	ffcfef9fc36b3aaa	bfc660e0	{ alg: 'equihash', params: equihash_params, count: 1 }
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	54061ba24b96f308	657427c9	BASE_INTERVAL = 10
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	703097d6b541d039	657427c9	Rational(BASE_INTERVAL * @cap_cents, @cap_cents - cents).ceil if cents < @cap_cents
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	b3b25d99b14b70bc	657427c9	def equihash_params = defined?(::Kiosk::Pow::Equihash.params) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	f6dee8104d42bb05	657427c9	def initialize(within:, cap:)
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	ffcfef9fc36b3aaa	657427c9	{ alg: 'equihash', params: equihash_params, count: 1 }
 kiosk-reputation/lib/kiosk/reputation/policy.rb	efadbd818ae873ca	bfc660e0	@return [Hash{alg: String, params: Hash, count: Integer}, nil]
 kiosk-reputation/lib/kiosk/reputation/policy.rb	31483c85b8ee79f2	bfc660e0	coarse CALL KIND: :query, :run or :pay
 kiosk-reputation/lib/kiosk/reputation/policy.rb	cce87723250c72d6	bfc660e0	def challenge_for(**)

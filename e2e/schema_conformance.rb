@@ -444,7 +444,7 @@ end
 # ── 7. kyc.schema.json — vendored, compiled, and honestly not exercised ──────
 #
 # This origin serves no KYC: the attestation flow is a TWO-SERVER integration
-# and lives in the skooti/getgrocery demos against kiosk-demo-prove. The schema
+# and lives in the skooti/getgrocery demos against kiosk-demo-proveli. The schema
 # is vendored anyway so the mirror of the published set is COMPLETE — a partial mirror is the trap where the one file nobody copied is
 # the one that drifts. What can be checked here is that it still COMPILES, which
 # is what validate.sh checks for every schema before it validates anything.

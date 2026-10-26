@@ -30,7 +30,7 @@ after the leading `- `, date included, with wrapped lines joined by one space.
   each gemspec publishes that file inside the package, so it is what a reader
   who installed the gem and never saw this repository has. A change to a gem's
   published surface gets its release note there as well.
-- **A demo record** (`kiosk-demo-atablefor`, `kiosk-demo-prove`) is a
+- **A demo record** (`kiosk-demo-atablefor`, `kiosk-demo-proveli`) is a
   courtesy kept as history. It is never the target of
   the one-line rule.
 

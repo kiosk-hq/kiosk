@@ -12,7 +12,7 @@ while read -r _o _n ref; do [ "$ref" = "refs/heads/main" ] && MAIN=1; done
 [ "$MAIN" -eq 1 ] || { echo "remote: no main in push; nothing to deploy."; exit 0; }
 echo "remote: ==> checkout main ($(git --git-dir=$GIT_DIR rev-parse --short HEAD))"
 git --work-tree=$WORK_TREE --git-dir=$GIT_DIR checkout -f main
-for a in getgrocery atablefor hoteling skooti stylish philslist tudu prove; do
+for a in getgrocery atablefor hoteling skooti stylish philslist tudu proveli; do
   d=$WORK_TREE/kiosk-demo-$a
   [ -d "$d" ] || continue
   echo "remote: ==> $a: bundle + migrate + restart"

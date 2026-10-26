@@ -60,7 +60,7 @@ section says which lines are supported.
 Anything in a shipped gem (each directory with a `*.gemspec` that is not a
 `kiosk-demo-*` application: `kiosk-all`, `kiosk-core`, `kiosk-server`,
 `kiosk-pow` and its three backends, `kiosk-reputation`, `kiosk-rls` and its two
-test gems, `kiosk-user-idp-devise`, `kiosk-pay-stripe`, `kiosk-kyc-prove`,
+test gems, `kiosk-user-idp-devise`, `kiosk-pay-stripe`, `kiosk-kyc-proveli`,
 `kiosk-test-support`, `kiosk-redteam`), anything in the `e2e/` harness, and
 anything in the `deploy/` runbook. A flaw in one of the
 `kiosk-demo-*` applications is in scope too when it is a flaw a reader would
@@ -74,7 +74,7 @@ enough to be worth naming:
 
 - **The two development keypairs this repository tracks on purpose**
   (`kiosk-demo-skooti/config/dev_unlock_key.pem`,
-  `kiosk-demo-prove/config/dev_prove_key.pem`). They are burned by design: each
+  `kiosk-demo-proveli/config/dev_proveli_key.pem`). They are burned by design: each
   file carries a do-not-use banner in its own header, each application refuses to
   boot in production without an explicit key, and `bin/check-publication-paths`
   fails on any *third* tracked private key and on either of these two if it loses

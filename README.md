@@ -80,7 +80,7 @@ settled the `alpha` engine underneath it is.
 | `kiosk-rls-minitest` | Minitest journey-test helpers for RLS policies | alpha |
 | `kiosk-user-idp-devise` | Customer sign-in adapter (Devise) | alpha |
 | `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
-| `kiosk-kyc-prove` | KYC provider adapter — the Prove anonymizing broker | alpha |
+| `kiosk-kyc-proveli` | KYC provider adapter — the Proveli anonymizing broker | alpha |
 
 ### Proof-of-work
 
@@ -113,7 +113,7 @@ Each backend is built on `kiosk-pow`, which holds the shared BLAKE2b-256.
 | `kiosk-demo-philslist` | Classifieds board — non-commerce (no payments) | active |
 | `kiosk-demo-tudu` | Collaborative todo — non-commerce (no payments) | active |
 
-`kiosk-demo-prove` is not an operator. It is the KYC broker: a service outside
+`kiosk-demo-proveli` is not an operator. It is the KYC broker: a service outside
 the operators. A demo connects to it to confirm facts about a customer, for
 example an age over 18 or a driving licence. It serves no Kiosk operation, and it
 deploys at `kyc.demo.kiosk.tech`.
@@ -201,9 +201,9 @@ operator supplies them. To make a value by hand:
 | `SECRET_KEY_BASE` | The Rails key that signs and encrypts cookies | `bin/rails secret` |
 | `KIOSK_SIGNING_KEY_B64` | The Ed25519 key that signs access tokens, checkouts and receipts | `openssl genpkey -algorithm ed25519 \| openssl base64 -A` |
 | `KIOSK_POW_SECRET` | The key that signs each proof-of-work challenge, 32 bytes or more | `openssl rand -hex 32` |
-| `KIOSK_PROVE_INTAKE_SECRET` | The secret an operator and the KYC broker share. The broker keeps the same value as `KIOSK_PROVE_<OPERATOR>_SECRET`, for example `KIOSK_PROVE_SKOOTI_SECRET` | `openssl rand -hex 32`, then set the value on both sides |
-| `PROVE_KEY_PEM` | The broker's Ed25519 key that signs each attestation | `openssl genpkey -algorithm ed25519` |
-| `KIOSK_PROVE_PUBLIC_KEY_PEM` | The public half of the broker's key, which an operator uses to verify an attestation | `openssl pkey -in prove_key.pem -pubout` |
+| `KIOSK_PROVELI_INTAKE_SECRET` | The secret an operator and the KYC broker share. The broker keeps the same value as `KIOSK_PROVELI_<OPERATOR>_SECRET`, for example `KIOSK_PROVELI_SKOOTI_SECRET` | `openssl rand -hex 32`, then set the value on both sides |
+| `PROVELI_KEY_PEM` | The broker's Ed25519 key that signs each attestation | `openssl genpkey -algorithm ed25519` |
+| `KIOSK_PROVELI_PUBLIC_KEY_PEM` | The public half of the broker's key, which an operator uses to verify an attestation | `openssl pkey -in proveli_key.pem -pubout` |
 | `STRIPE_SECRET_KEY` | The Stripe key of an operator that takes payment, in test mode | Stripe Dashboard, Developers, API keys, with "Test mode" on: the secret key that starts with `sk_test_` |
 | `KIOSK_UNLOCK_SIGNING_KEY_PEM` | skooti only: the Ed25519 key that signs each unlock token for a scooter lock | `openssl genpkey -algorithm ed25519` |
 
@@ -231,7 +231,7 @@ No git tag marks a release.
 ## The two development keypairs this repo tracks on purpose
 
 `kiosk-demo-skooti/config/dev_unlock_key.pem` (Ed25519) and
-`kiosk-demo-prove/config/dev_prove_key.pem` (Ed25519) are private keys, they are
+`kiosk-demo-proveli/config/dev_proveli_key.pem` (Ed25519) are private keys, they are
 committed, and that is deliberate. Read the header of either file: it says what
 the key is for, that it is world-readable, and that it must never sign
 anything real. Both applications enforce that rather than asking — production

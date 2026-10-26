@@ -64,7 +64,7 @@ at the repository root runs the whole fleet with the KYC broker and stripe-mock,
 and both work.
 
 On your own machine, `request_kyc` needs the KYC broker on port 3020. In a third
-terminal, in `../kiosk-demo-prove`, run `bin/rails db:reset`, then
+terminal, in `../kiosk-demo-proveli`, run `bin/rails db:reset`, then
 `bin/rails server -p 3020`.
 
 `bin/setup` seeds this demo and leaves the origin running on

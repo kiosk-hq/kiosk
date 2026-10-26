@@ -30,7 +30,7 @@ OWNER=${KIOSK_OWNER:-ubuntu:ubuntu}   # the push-to-deploy hook sources every on
 MODE=0640
 DIR=${KIOSK_ENV_DIR:-/etc/kiosk-demo}
 SRC=${KIOSK_SRC:-/srv/kiosk}/deploy/env
-UNITS=(atablefor getgrocery hoteling philslist skooti stylish tudu prove)  # broker last: it reads the operators'
+UNITS=(atablefor getgrocery hoteling philslist skooti stylish tudu proveli)  # broker last: it reads the operators'
 
 # shellcheck disable=SC2016  # this is an awk program; nothing in it is shell
 ed25519() { # stdin is a private PEM; true when it is an Ed25519 key, the one type Kiosk signs with
@@ -47,30 +47,30 @@ render() {  # render <unit> — stdout is the file that unit should have
   while IFS= read -r line || [ -n "$line" ]; do
     case $line in [A-Za-z_]*=*REPLACE_*) key=${line%%=*} ;; *) printf '%s\n' "$line"; continue ;; esac
     case $1/$key in
-      prove/KIOSK_PROVE_*_SECRET)   # one secret, two names: the operator's own copy is the source
-        o=${key#KIOSK_PROVE_}; o=${o%_SECRET}; val=$(value "$DIR/${o,,}.env" KIOSK_PROVE_INTAKE_SECRET) ;;
-      prove/PROVE_KEY_PEM)          val=\"$broker\" ;;
-      */KIOSK_PROVE_PUBLIC_KEY_PEM) val=\"$(printf '%s\n' "$broker" | openssl pkey -pubout)\" ;;
+      proveli/KIOSK_PROVELI_*_SECRET)  # one secret, two names: the operator's own copy is the source
+        o=${key#KIOSK_PROVELI_}; o=${o%_SECRET}; val=$(value "$DIR/${o,,}.env" KIOSK_PROVELI_INTAKE_SECRET) ;;
+      proveli/PROVELI_KEY_PEM)         val=\"$broker\" ;;
+      */KIOSK_PROVELI_PUBLIC_KEY_PEM)  val=\"$(printf '%s\n' "$broker" | openssl pkey -pubout)\" ;;
       *) val=$(value "$live" "$key")
          case $key in   # a key that is not an Ed25519 key is a slot to fill again
            KIOSK_SIGNING_KEY_B64) printf '%s' "$val" | openssl base64 -d -A 2>/dev/null | ed25519 || val= ;;
          esac
          [ -n "$val" ] || case $key in   # nothing off this box holds the other half of these
-           SECRET_KEY_BASE)                            val=$(openssl rand -hex 64) ;;
-           KIOSK_POW_SECRET|KIOSK_PROVE_INTAKE_SECRET) val=$(openssl rand -hex 32) ;;
-           KIOSK_SIGNING_KEY_B64)                      val=$(openssl genpkey -algorithm ed25519 | openssl base64 -A) ;;
+           SECRET_KEY_BASE)                              val=$(openssl rand -hex 64) ;;
+           KIOSK_POW_SECRET|KIOSK_PROVELI_INTAKE_SECRET) val=$(openssl rand -hex 32) ;;
+           KIOSK_SIGNING_KEY_B64)                        val=$(openssl genpkey -algorithm ed25519 | openssl base64 -A) ;;
          esac ;;
     esac
     [ -n "$val" ] || { echo "MISSING $1 $key" >&2; return 1; }
     printf '%s=%s\n' "$key" "$val"
-  done <"$SRC/${1/prove/kyc-demo}.env.example"   # the broker unit is `prove`, its template `kyc-demo`
+  done <"$SRC/$1.env.example"
 }
 
 [ $# -eq 0 ] || { echo "rollout.sh --on-box takes no other argument" >&2; exit 2; }
 
-# The broker's key: the one prove.env holds, or a new one when it holds none or
+# The broker's key: the one proveli.env holds, or a new one when it holds none or
 # one that is not an Ed25519 key. The operators pin its public half from it.
-broker=$(value "$DIR/prove.env" PROVE_KEY_PEM | tr -d '"')
+broker=$(value "$DIR/proveli.env" PROVELI_KEY_PEM | tr -d '"')
 printf '%s\n' "$broker" | ed25519 || broker=$(openssl genpkey -algorithm ed25519)
 
 new=$(mktemp); trap 'rm -f "$new"' EXIT; fail=0

@@ -43,10 +43,10 @@ module Kiosk
 
     # The KYC service that confirms facts about a customer, for example an age
     # over 18, a {Kiosk::KycProviders::Base}. Default nil: the action
-    # `request_kyc` answers `module_not_served`. The kiosk-kyc-prove gem gives
-    # the Prove broker.
-    #   c.kyc_provider = Kiosk::KycProviders::Prove.new(operator_id: 'shop',
-    #     intake_secret: ENV.fetch('KIOSK_PROVE_INTAKE_SECRET'), public_key: ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM'))
+    # `request_kyc` answers `module_not_served`. The kiosk-kyc-proveli gem gives
+    # the Proveli broker.
+    #   c.kyc_provider = Kiosk::KycProviders::Proveli.new(operator_id: 'shop',
+    #     intake_secret: ENV.fetch('KIOSK_PROVELI_INTAKE_SECRET'), public_key: ENV.fetch('KIOSK_PROVELI_PUBLIC_KEY_PEM'))
     attr_accessor :kyc_provider
 
     # The Postgres role that the opt-in kiosk-rls gem gives table access to,

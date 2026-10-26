@@ -11,6 +11,9 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: **The KYC broker is Proveli**: gem `kiosk-kyc-proveli`, class `Kiosk::KycProviders::Proveli`, demo `kiosk-demo-proveli`, env names `KIOSK_PROVELI_*` and `PROVELI_KEY_PEM`.
+- 2026-10-26: deploy: the broker unit, env file, role and database are named `proveli`; `deploy/CHECKLIST.md` §7c moves a box once. The broker's migrations are one fresh install.
+
 ## [0.6.26] — 2026-10-26
 
 - 2026-10-26: **Every gem and `API_VERSION` are 0.6.26, matching skill 0.6.26; the engine default is `skill-v0.6.26.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.

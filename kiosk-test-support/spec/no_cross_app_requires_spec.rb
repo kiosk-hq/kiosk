@@ -109,18 +109,18 @@ RSpec.describe "no demo requires another demo's source into its process (K-683)"
 
     it 'FORBIDS an in-process require_relative into another demo' do
       rel = source('kiosk-demo-skooti/script/rental_flow.rb',
-                   %(require_relative "../../kiosk-demo-prove/app/services/prove_key"\n))
-      expect(CrossAppRequires.violations([rel]).first).to include('kiosk-demo-skooti', 'kiosk-demo-prove')
+                   %(require_relative "../../kiosk-demo-proveli/app/services/proveli_key"\n))
+      expect(CrossAppRequires.violations([rel]).first).to include('kiosk-demo-skooti', 'kiosk-demo-proveli')
     end
 
     it 'ALLOWS a data-file path read — a PEM is bytes, not code' do
-      rel = source('kiosk-demo-skooti/script/rental_flow.rb', %(DEV_KEY_PATH = "../kiosk-demo-prove/config/dev_key.pem"\n))
+      rel = source('kiosk-demo-skooti/script/rental_flow.rb', %(DEV_KEY_PATH = "../kiosk-demo-proveli/config/dev_key.pem"\n))
       expect(CrossAppRequires.violations([rel])).to be_empty
     end
 
     it "ALLOWS naming another app's directory in order to BOOT it (K-663)" do
       rel = source('kiosk-demo-skooti/script/rental_flow.rb',
-                   %(BROKER_APP = File.expand_path("../../kiosk-demo-prove", __dir__)\n) +
+                   %(BROKER_APP = File.expand_path("../../kiosk-demo-proveli", __dir__)\n) +
                    %(spawn({}, "bin/rails s", chdir: BROKER_APP)\n))
       expect(CrossAppRequires.violations([rel])).to be_empty
     end

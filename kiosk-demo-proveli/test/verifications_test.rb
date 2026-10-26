@@ -1,0 +1,259 @@
+# frozen_string_literal: true
+
+require 'test_helper'
+
+# The broker's security model over HTTP: intake auth and allow-list, the
+# unguessable capability, single use, TTL, the signed anonymized claim bound to
+# one request, operator and subject, and the callback allow-list.
+class IntakeTest < ActionDispatch::IntegrationTest
+  test 'creates a pending request and returns a verification_url carrying the token' do
+    intake(valid_intake_body)
+    json = response.parsed_body
+    row = ProveliRequest.find(json['request_id'])
+
+    assert_response :created
+    # The operator gets the nonce at intake. The human page does not show it.
+    assert_equal({ 'status' => 'pending', 'nonce' => row.nonce, 'expires_at' => row.expires_at.utc.iso8601,
+                   'verification_url' => "http://www.example.com/verify?request=#{row.request_id}" },
+                 json.slice('status', 'nonce', 'expires_at', 'verification_url'))
+    assert_equal ['skooti', 'user-uuid-123', 'pending', true, true],
+                 [row.operator_id, row.subject_handle, row.status, row.nonce.present?, row.expires_at.future?]
+  end
+
+  test 'rejects an unknown operator / bad secret (401) — a stranger cannot open requests' do
+    intake(valid_intake_body, headers: intake_headers('wrong'))
+
+    assert_response :unauthorized
+    assert_equal 0, ProveliRequest.count
+  end
+
+  test 'rejects a callback_url whose host is NOT allow-listed (SSRF/open-relay guard, 403)' do
+    intake(valid_intake_body(callback_url: 'http://evil.example.com/steal'))
+
+    assert_response :forbidden
+    assert_equal 0, ProveliRequest.count
+  end
+
+  test 'rejects unknown/empty requested_claims (400)' do
+    intake(valid_intake_body(requested_claims: ['not_a_claim']))
+
+    assert_response :bad_request
+  end
+
+  test 'rejects a missing subject_handle (400)' do
+    intake(valid_intake_body(subject_handle: ''))
+
+    assert_response :bad_request
+  end
+
+  test 'rejects a body that is not JSON (400)' do
+    post '/verifications', params: '{"operator_id":', headers: intake_headers
+
+    assert_response :bad_request
+    assert_equal 0, ProveliRequest.count
+  end
+
+  # getgrocery authenticates with its own secret but asks for skooti's audience.
+  # The broker takes `aud` from getgrocery's registration and refuses the body's value.
+  test "rejects an operator requesting ANOTHER operator's audience (cross-operator forgery)" do
+    intake({ operator_id: 'getgrocery', callback_url: 'http://127.0.0.1/kyc/callback',
+             requested_claims: ['age_over_18'], subject_handle: 'victim-subject', audience: 'skooti' },
+           headers: intake_headers(OperatorRegistry.registry['getgrocery'][:secret]))
+
+    assert_response :forbidden
+    assert_match(/audience/, response.parsed_body['error'])
+    assert_equal 0, ProveliRequest.count
+  end
+end
+
+class VerificationPageTest < ActionDispatch::IntegrationTest
+  test 'asks the yes/no questions and the licence category for a live request' do
+    get '/verify', params: { request: open_request }
+
+    assert_response :ok
+    assert_includes response.body, 'over 18'
+    %w[A1 A B C none].each { assert_includes response.body, %(name="licence_category" value="#{it}") }
+  end
+
+  test 'asks no licence category when the operator asks for no licence' do
+    get '/verify', params: { request: open_request(requested_claims: ['age_over_18']) }
+
+    assert_not_includes response.body, 'licence_category'
+  end
+
+  test 'does not reveal anything for an unknown token' do
+    get '/verify', params: { request: 'not-a-real-token' }
+
+    assert_response :ok
+    assert_includes response.body, 'not recognised'
+  end
+
+  test 'loads its script and style from this origin only, as its Content-Security-Policy says' do
+    get '/verify', params: { request: open_request }
+
+    assert_includes response.headers['Content-Security-Policy'], "default-src 'self'; script-src 'self'; style-src 'self'"
+    assert_no_match(/<script(?![^>]*src=)|<style|\sstyle=/, response.body)
+  end
+end
+
+class ApprovalTest < ActionDispatch::IntegrationTest
+  test 'mints a signed claim bound to (subject + operator + request) and echoes the nonce' do
+    rid = open_request
+    row = ProveliRequest.find(rid)
+    delivered = approve_capturing(rid)
+    payload = decode(delivered[:kyc_jws])
+
+    assert_response :ok
+    assert_includes response.body, 'Confirmed'
+    assert_equal [{ 'sub' => row.subject_handle, 'iss' => ProveliKey.issuer, 'level' => 'verified',
+                    'operator' => 'skooti', 'aud' => 'skooti', 'request_id' => rid, 'nonce' => row.nonce,
+                    'attributes' => { 'age_over_18' => true, 'licence_a1' => true, 'licence_a' => true } },
+                  row.nonce, callback_url, 'confirmed'],
+                 [payload.slice('sub', 'iss', 'level', 'operator', 'aud', 'request_id', 'nonce', 'attributes'),
+                  *delivered.values_at(:nonce, :callback_url), row.reload.status]
+  end
+
+  test 'queues the attestation again when the callback refuses the first attempt' do
+    rid = open_request
+
+    CallbackPoster.stub(:deliver, nil) { approve(rid) }
+
+    assert_response :ok
+    assert_includes response.body, 'We will try again'
+    retry_args = enqueued_jobs.sole.fetch('arguments').first
+
+    assert_equal ['CallbackDeliveryJob', callback_url, rid, ProveliRequest.find(rid).nonce],
+                 [enqueued_jobs.sole['job_class'], *retry_args.values_at('callback_url', 'request_id', 'nonce')]
+    decode(retry_args['kyc_jws'])
+  end
+
+  # The broker checks a declared audience against the registration and stamps
+  # the registered one, which the operator's KycVerifier compares against.
+  test "binds aud to the operator's REGISTERED audience, accepting a matching body declaration" do
+    rid = open_request(audience: 'skooti')
+
+    assert_equal 'skooti', ProveliRequest.find(rid).audience
+    payload = decode(approve_capturing(rid)[:kyc_jws])
+    # The operator handle stays a separate claim, for the callback.
+    assert_equal %w[skooti skooti], payload.values_at('aud', 'operator')
+  end
+
+  test 'mints aud from the registration even when the body declares no audience (aud == operator_id)' do
+    rid = open_request
+    # The row records the registered audience, never a raw body value.
+    assert_equal 'skooti', ProveliRequest.find(rid).audience
+    assert_equal 'skooti', decode(approve_capturing(rid)[:kyc_jws])['aud']
+  end
+
+  test 'mints an attestation valid for one year' do
+    payload = decode(approve_capturing(open_request)[:kyc_jws])
+
+    assert_equal 365 * 24 * 3600, payload['exp'] - payload['iat']
+  end
+
+  test 'grants ONLY the attributes the operator asked for (age_over_18 alone)' do
+    payload = decode(approve_capturing(open_request(requested_claims: ['age_over_18']), licence_category: nil)[:kyc_jws])
+
+    assert_equal({ 'age_over_18' => true }, payload['attributes'])
+  end
+
+  test 'grants the licence attributes the chosen category covers, of those the operator asked for' do
+    granted = %w[A1 B C none].index_with do |category|
+      decode(approve_capturing(open_request, licence_category: category)[:kyc_jws])['attributes']
+    end
+
+    assert_equal({ 'A1' => { 'age_over_18' => true, 'licence_a1' => true },
+                   'B' => { 'age_over_18' => true }, 'C' => { 'age_over_18' => true },
+                   'none' => { 'age_over_18' => true } }, granted)
+  end
+
+  test 'refuses an approval with no licence category, and the request stays open' do
+    rid = open_request
+    posting_no_callback { approve(rid, licence_category: nil) }
+
+    assert_response :unprocessable_content
+    assert_includes response.body, 'Choose your driving licence category'
+    assert_equal 'pending', ProveliRequest.find(rid).status
+  end
+
+  test 'is single-use: a second approve on a confirmed request is rejected (no re-mint)' do
+    rid = open_request
+    approve_capturing(rid)
+
+    assert_equal 'confirmed', ProveliRequest.find(rid).status
+
+    posting_no_callback { approve(rid) }
+
+    assert_response :unprocessable_content
+  end
+
+  test 'is un-confirmable once past its TTL' do
+    rid = open_request
+    ProveliRequest.find(rid).update!(expires_at: 1.hour.ago)
+    posting_no_callback { approve(rid) }
+
+    assert_response :unprocessable_content
+  end
+
+  test 'records a decline without minting' do
+    rid = open_request
+    posting_no_callback { post '/verify', params: { request: rid, decision: 'decline' } }
+
+    assert_response :ok
+    assert_includes response.body, 'Declined'
+    assert_equal 'declined', ProveliRequest.find(rid).status
+  end
+end
+
+# Real threads on separate connections race one committed row, so Postgres,
+# not an in-process mock, decides which claim wins. Every reader is held
+# between its read and its claim, so all of them see the row as pending and
+# the refusals come from the claim under the row lock (`claim!`), not from the pre-check.
+class ConcurrentApprovalTest < ActionDispatch::IntegrationTest
+  include ApprovalRace
+
+  # The other threads read the row on their own connections, so it is committed; the test deletes it.
+  self.use_transactional_tests = false
+
+  test 'is single-use under concurrency: N racing approvals mint exactly once' do
+    racers = 6
+    rid = open_request
+    statuses, reads, deliveries = race_approvals(rid, racers)
+
+    # Every reader saw the row pending; one approval won, minted once, and confirmed it.
+    assert_equal racers, reads.count('pending')
+    assert_equal [1, racers - 1, 1, 'confirmed'],
+                 [statuses.count(200), statuses.count(422), deliveries.size, ProveliRequest.find(rid).status]
+  ensure
+    ProveliRequest.delete(rid)
+  end
+end
+
+class ProveliKeyTest < ActionDispatch::IntegrationTest
+  test 'serves the ProveliKey public PEM operators pin' do
+    get '/proveli_key.pem'
+
+    assert_response :ok
+    assert_includes response.body, 'PUBLIC KEY'
+  end
+end
+
+class CallbackAllowListTest < ActiveSupport::TestCase
+  OPERATOR = { callback_host: 'shop.example' }.freeze
+
+  test 'posts to the registered host over https' do
+    assert OperatorRegistry.callback_allowed?(OPERATOR, 'https://shop.example/kiosk/kyc/callback')
+  end
+
+  test 'refuses plain http to a host other than the machine itself' do
+    assert_not OperatorRegistry.callback_allowed?(OPERATOR, 'http://shop.example/kiosk/kyc/callback')
+  end
+
+  test 'accepts plain http to a loopback host, for development and test' do
+    assert OperatorRegistry.callback_allowed?({ callback_host: '127.0.0.1' }, 'http://127.0.0.1:3004/kyc/callback')
+  end
+
+  test 'accepts plain http to the IPv6 loopback' do
+    assert OperatorRegistry.callback_allowed?({ callback_host: '::1' }, 'http://[::1]:3004/kyc/callback')
+  end
+end

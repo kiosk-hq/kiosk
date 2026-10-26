@@ -4,7 +4,7 @@ require 'base64'
 require 'openssl'
 require 'stripe'
 require 'kiosk/payment_providers/stripe'
-require 'kiosk/kyc_providers/prove'
+require 'kiosk/kyc_providers/proveli'
 require 'kiosk/user_identity_providers/devise'
 
 Kiosk.configure do |c|
@@ -41,10 +41,10 @@ end
 Kiosk.configure do |c|
   # A vehicle needs age_over_18 and the licence attribute of its category (Scooter::LICENCE_CATEGORIES).
   c.kyc_claims     = %w[age_over_18 licence_a1 licence_a]
-  c.kyc_provider   = Kiosk::KycProviders::Prove.new(
-    operator_id: 'skooti', intake_secret: ENV.fetch('KIOSK_PROVE_INTAKE_SECRET'),
-    url: ENV.fetch('KIOSK_PROVE_BROKER_URL'), issuer: ENV.fetch('KIOSK_PROVE_ISSUER'),
-    public_key: ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')
+  c.kyc_provider   = Kiosk::KycProviders::Proveli.new(
+    operator_id: 'skooti', intake_secret: ENV.fetch('KIOSK_PROVELI_INTAKE_SECRET'),
+    url: ENV.fetch('KIOSK_PROVELI_BROKER_URL'), issuer: ENV.fetch('KIOSK_PROVELI_ISSUER'),
+    public_key: ENV.fetch('KIOSK_PROVELI_PUBLIC_KEY_PEM')
   )
 
   c.pow_secret             = ENV.fetch('KIOSK_POW_SECRET')

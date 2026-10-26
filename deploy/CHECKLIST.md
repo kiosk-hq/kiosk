@@ -2,7 +2,7 @@
 
 Concise, ordered. Detail + file contents: `deploy/README.md`. Operator actions.
 Seven demos: getgrocery · atablefor · hoteling · skooti · stylish · philslist · tudu.
-Plus the KYC broker (`kiosk-demo-prove` → `kyc.demo.kiosk.tech`, port 3008) —
+Plus the KYC broker (`kiosk-demo-proveli` → `kyc.demo.kiosk.tech`, port 3008) —
 an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent surface).
 
 ## 1. DNS (you)
@@ -23,7 +23,7 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 - [ ] `git clone` the reference repo (or push-to-deploy — see §7).
 
 ## 3. Databases (one Postgres cluster)
-- [ ] `psql -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… -v st_pw=… -v pl_pw=… -v td_pw=… -v pv_pw=… -f deploy/postgres-init.sql`  → 8 app DBs + least-priv roles (7 demos + `kiosk_prove`). (Pass each RAW password unquoted — the script escapes it via `:'var'`.)
+- [ ] `psql -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… -v st_pw=… -v pl_pw=… -v td_pw=… -v pv_pw=… -f deploy/postgres-init.sql`  → 8 app DBs + least-priv roles (7 demos + `kiosk_proveli`). (Pass each RAW password unquoted — the script escapes it via `:'var'`.)
 - [ ] **Only if you renamed something:** the DB/role names default to the shipped ones. If you changed `KIOSK_<APP>_DB` / `KIOSK_<APP>_DB_USER` in an app's env (§4), pass the SAME value here as `-v <xx>_db=` / `-v <xx>_user=` (`gg af ho sk st pl td pv`) — otherwise provisioning creates one name and the app connects to another. See `deploy/README.md` §"Database names".
 
 ## 4. Per-app env (`deploy/env/<app>.env.example` DECLARES it; `deploy/rollout.sh` places it)
@@ -66,36 +66,36 @@ What each unit must carry. For EACH of the 7 apps:
 - [ ] **Stripe (getgrocery, hoteling, skooti):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges) in each of their env files; the other demos take no money (no `pay` capability).
 - [ ] **Card-setup Checkout render (getgrocery):** `payment_setup`'s `setup_url` is a valid Stripe link, but a relaying agent can truncate its required `#fid…` fragment → **"Something went wrong"** (not the account/deploy — the session is valid; proven agent-side). Mitigated by skill guidance (relay the url verbatim/in full); escalate to an operator-hosted short redirect if it recurs. See `deploy/README.md` §Payments.
 
-### 4b. KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
-- [ ] `SECRET_KEY_BASE`, `KIOSK_PROVE_DB` / `KIOSK_PROVE_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.
-- [ ] **Issuer + public URL:** `KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech`, `PROVE_PUBLIC_URL=https://kyc.demo.kiosk.tech`.
-- [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh Ed25519 private PEM>`; `deploy/rollout.sh` mints it when the box has none — REQUIRED, enforced at boot: the
+### 4b. KYC broker env (copy `deploy/env/proveli.env.example` → `/etc/kiosk-demo/proveli.env`)
+- [ ] `SECRET_KEY_BASE`, `KIOSK_PROVELI_DB` / `KIOSK_PROVELI_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.
+- [ ] **Issuer + public URL:** `KIOSK_PROVELI_ISSUER=https://kyc.demo.kiosk.tech`, `PROVELI_PUBLIC_URL=https://kyc.demo.kiosk.tech`.
+- [ ] **Broker signing key:** `PROVELI_KEY_PEM=<fresh Ed25519 private PEM>`; `deploy/rollout.sh` mints it when the box has none — REQUIRED, enforced at boot: the
       broker refuses to start in production without it (and rejects a PEM that is not an Ed25519 private key), because
       the baked-in dev key's private half is world-readable in the public repo — silently signing with it would let anyone
       forge attestations, and the pin flows below would faithfully pin its forgeable public half.
 - [ ] **Operator allow-list — ONE PAIR PER KYC OPERATOR, and an operator with no pair is silently not registered:**
-      `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`;
-      `KIOSK_PROVE_GETGROCERY_SECRET=<a DIFFERENT shared intake secret>`, `KIOSK_PROVE_GETGROCERY_CALLBACK_HOST=getgrocery.demo.kiosk.tech`.
-      The KYC operators are the demos whose Gemfile bundles `kiosk-kyc-prove`.
-- [ ] **Point each operator at it:** in THAT operator's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, `KIOSK_PROVE_INTAKE_SECRET=<the SAME value as the broker's KIOSK_PROVE_<OP>_SECRET>`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
-      The names differ by design: every OPERATOR app reads one role-named `KIOSK_PROVE_INTAKE_SECRET`, while
+      `KIOSK_PROVELI_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVELI_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`;
+      `KIOSK_PROVELI_GETGROCERY_SECRET=<a DIFFERENT shared intake secret>`, `KIOSK_PROVELI_GETGROCERY_CALLBACK_HOST=getgrocery.demo.kiosk.tech`.
+      The KYC operators are the demos whose Gemfile bundles `kiosk-kyc-proveli`.
+- [ ] **Point each operator at it:** in THAT operator's env set `KIOSK_PROVELI_ISSUER` + `KIOSK_PROVELI_BROKER_URL` = `https://kyc.demo.kiosk.tech`, `KIOSK_PROVELI_INTAKE_SECRET=<the SAME value as the broker's KIOSK_PROVELI_<OP>_SECRET>`, and `KIOSK_PROVELI_PUBLIC_KEY_PEM=<public half of PROVELI_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/proveli_key.pem`).
+      The names differ by design: every OPERATOR app reads one role-named `KIOSK_PROVELI_INTAKE_SECRET`, while
       the BROKER keeps a per-operator name for each registry entry. The two sides pair by VALUE; the broker resolves the
       operator from the `operator_id` in the intake body.
 - [ ] **The pair is ONE secret and `deploy/rollout.sh` writes both sides of it.** The operator's
-      `KIOSK_PROVE_INTAKE_SECRET` is the source: the broker's `KIOSK_PROVE_<OP>_SECRET` is read from that operator's
-      own file, and each operator's `KIOSK_PROVE_PUBLIC_KEY_PEM` is derived from the broker's own `PROVE_KEY_PEM`.
+      `KIOSK_PROVELI_INTAKE_SECRET` is the source: the broker's `KIOSK_PROVELI_<OP>_SECRET` is read from that operator's
+      own file, and each operator's `KIOSK_PROVELI_PUBLIC_KEY_PEM` is derived from the broker's own `PROVELI_KEY_PEM`.
       Setting half of either pair is no longer a thing the rollout can do.
 - [ ] **RUN `deploy/kyc-pairing-audit.sh` ON THE BOX — it reads what is deployed, and a tick taken by eye is a guess.**
       ```
       deploy/kyc-pairing-audit.sh <deploy-user>@<box>
       deploy/kyc-pairing-audit.sh <deploy-user>@<box> --fix-retired-names
       ```
-      It pairs each operator's `KIOSK_PROVE_INTAKE_SECRET` against the broker's `KIOSK_PROVE_<OP>_SECRET` BY VALUE,
+      It pairs each operator's `KIOSK_PROVELI_INTAKE_SECRET` against the broker's `KIOSK_PROVELI_<OP>_SECRET` BY VALUE,
       checks the pinned broker key against the key the broker actually signs with, and names any operator env still
       carrying the RETIRED operator-side spelling. It prints no value: pairing comes out PAIRED or MISMATCH, a key as a
       public SPKI fingerprint. Run it before the restart, and again after.
-- [ ] **The RETIRED operator-side name, on any box that predates 2026-08-13.** The operator side was
-      `KIOSK_PROVE_<OP>_SECRET` until then and is `KIOSK_PROVE_INTAKE_SECRET` now. Nothing reads the old spelling any
+- [ ] **The RETIRED operator-side name, on any box that predates 2026-08-13.** The operator side read the
+      per-operator name, today `KIOSK_PROVELI_<OP>_SECRET`, until then and is `KIOSK_PROVELI_INTAKE_SECRET` now. Nothing reads the old spelling any
       more, so an env file still carrying it leaves the app with NO secret — and `request_kyc` then answers a cacheable
       `501 module_not_served`, which reads as «this operator does not do KYC» rather than as a missing value. That is not
       hypothetical: it is what BOTH deployed KYC operators did from 2026-08-13 to 2026-09-17, with a correct secret
@@ -113,7 +113,7 @@ What each unit must carry. For EACH of the 7 apps:
         KIOSK_POW_SECRET=throwaway-at-least-32-bytes-long-xxxx \
         KIOSK_ISSUER=https://throwaway.example.test \
         bin/rails zeitwerk:check                     # getgrocery, hoteling, skooti: add STRIPE_SECRET_KEY=sk_test_throwaway
-                                                     # prove: add PROVE_KEY_PEM="$(openssl genpkey -algorithm ed25519)" — it
+                                                     # proveli: add PROVELI_KEY_PEM="$(openssl genpkey -algorithm ed25519)" — it
                                                      #   must PARSE as an Ed25519 private key — a throwaway literal will not do;
                                                      #   the kiosk vars above are ignored by the broker (harmless)
                                                      # skooti: add KIOSK_UNLOCK_SIGNING_KEY_PEM="$(openssl genpkey \
@@ -126,7 +126,7 @@ What each unit must carry. For EACH of the 7 apps:
       The three env vars are not optional decoration — each is crash-if-absent in `production`, and a missing one aborts
       in the initializer BEFORE Zeitwerk runs, so the command exits 1 for a reason that has nothing to do with eager
       loading (`KIOSK_POW_SECRET`, `KIOSK_ISSUER`, the paying demos' Stripe key/mock URL, the broker's
-      `PROVE_KEY_PEM`, skooti's `KIOSK_UNLOCK_SIGNING_KEY_PEM`). Verified on all 8 apps.
+      `PROVELI_KEY_PEM`, skooti's `KIOSK_UNLOCK_SIGNING_KEY_PEM`). Verified on all 8 apps.
       CI runs the same gate for all 8 apps on every push, so a green CI on the exact commit you are deploying is the same
       gate; run it by hand whenever you deploy a tree CI has not seen. **If an initializer ever learns to raise outside
       dev/test, add the variable HERE and in `.github/workflows/ci.yml` in the same commit** — these two are one gate
@@ -235,8 +235,8 @@ getgrocery's real third-party orders included.
 
 **Due once, on the next deploy:** the migrations of each of the seven operator demos were collapsed into
 one fresh install: the demo's own tables and kiosk:install's `kiosk_*` tables, all in `public`. Run this
-section for them; `kiosk-demo-prove`'s migrations did not change, so drop
-`prove` from the loop below and keep its database.
+section for them. §7c rebuilds the database of `kiosk-demo-proveli`, so drop `proveli` from the
+loop below.
 - [ ] Install the current hook (the push below runs it):
       ```
       scp reference/deploy/post-receive <deploy-user>@<box>:/srv/kiosk.git/hooks/post-receive
@@ -246,7 +246,7 @@ section for them; `kiosk-demo-prove`'s migrations did not change, so drop
       env file, as `deploy/demo-reset.sh` reads them):
       ```
       ssh <deploy-user>@<box> 'bash -s' <<'SH'
-      for a in getgrocery atablefor hoteling skooti stylish philslist tudu prove; do
+      for a in getgrocery atablefor hoteling skooti stylish philslist tudu proveli; do
         A=$(printf %s "$a" | tr '[:lower:]' '[:upper:]')
         names=$(set -a; . /etc/kiosk-demo/$a.env; set +a; dv=KIOSK_${A}_DB; uv=KIOSK_${A}_DB_USER
                 printf '%s %s' "${!dv:-kiosk_${a}_production}" "${!uv:-kiosk_${a}}")
@@ -273,12 +273,53 @@ section for them; `kiosk-demo-prove`'s migrations did not change, so drop
       ```
 - [ ] Verify as §8; `\d` on any table in `psql` shows the shape `db/schema.rb` states.
 
+## 7c. Move the KYC broker from `prove` to `proveli` (one-time)
+A box that runs the unit `kiosk-demo@prove` needs these steps once. They replace `deploy/deploy.sh` for
+that one deploy: its rollout reads the templates of the checkout on the box, and that checkout does
+not know the new names yet. The broker's migrations were collapsed into one fresh install, so its
+database is rebuilt empty. It holds only verifications that expire after 15 minutes. Every step is
+safe to run again.
+- [ ] Stop the old unit, and give the env files, the role and the database their new names:
+      ```
+      ssh <deploy-user>@<box> 'sudo bash -s' <<'SH'
+      set -eu
+      cd /etc/kiosk-demo
+      if [ -e prove.env ]; then
+        systemctl disable --now kiosk-demo@prove
+        sed -i -E 's/^KIOSK_PROVE_/KIOSK_PROVELI_/; s/^PROVE_/PROVELI_/' prove.env getgrocery.env skooti.env
+        sed -i -E 's/^KIOSK_PROVELI_DB=.*/KIOSK_PROVELI_DB=kiosk_proveli_production/
+                   s/^KIOSK_PROVELI_DB_USER=.*/KIOSK_PROVELI_DB_USER=kiosk_proveli/' prove.env
+        mv prove.env proveli.env
+      fi
+      pw=$(sed -n 's/^KIOSK_PROVELI_DB_PASSWORD=//p' proveli.env)
+      sudo -u postgres psql -v ON_ERROR_STOP=1 -q -v pw="$pw" <<'SQL'
+      SELECT 'ALTER ROLE kiosk_prove RENAME TO kiosk_proveli'
+        WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_prove')\gexec
+      ALTER ROLE kiosk_proveli PASSWORD :'pw';
+      DROP DATABASE IF EXISTS kiosk_prove_production WITH (FORCE);
+      SELECT 'CREATE DATABASE kiosk_proveli_production OWNER kiosk_proveli'
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_proveli_production')\gexec
+      REVOKE CONNECT ON DATABASE kiosk_proveli_production FROM PUBLIC;
+      GRANT CONNECT ON DATABASE kiosk_proveli_production TO kiosk_proveli;
+      SQL
+      SH
+      ```
+      The `ALTER ROLE … PASSWORD` sets the password again, because a rename clears an MD5 password.
+- [ ] Install the hook of this tree (§7), then push: `git -C reference push prod-demo HEAD:main`. The
+      push must end `deploy complete.`
+- [ ] Run `deploy/rollout.sh <deploy-user>@<box>` and restart each unit it names. It now reads the new
+      templates.
+- [ ] Enable the new unit and remove what the old checkout left:
+      `ssh <deploy-user>@<box> 'sudo systemctl enable kiosk-demo@proveli && sudo rm -rf /srv/kiosk/kiosk-demo-prove'`.
+- [ ] `deploy/kyc-pairing-audit.sh <deploy-user>@<box>` exits 0, and
+      `curl -s https://kyc.demo.kiosk.tech/proveli_key.pem` returns a public key.
+
 ## 8. Verify (per subdomain)
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery.
 - [ ] The demo **root page** loads (what it is + the live activity counters). The copy-paste curl
       flow lives in `deploy/README.md` §"Poke it"; no landing page carries one.
 - [ ] getgrocery, hoteling, skooti: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay.
-- [ ] KYC broker: `GET https://kyc.demo.kiosk.tech/` renders the human explainer (STUB-KYC notice; NO agent/kiosk signal); `GET /prove_key.pem` returns the public key; `GET /.well-known/kiosk.json` is **absent** (404 — it is an issuer, not an operator).
+- [ ] KYC broker: `GET https://kyc.demo.kiosk.tech/` renders the human explainer (STUB-KYC notice; NO agent/kiosk signal); `GET /proveli_key.pem` returns the public key; `GET /.well-known/kiosk.json` is **absent** (404 — it is an issuer, not an operator).
 - [ ] **KYC pairing — `deploy/kyc-pairing-audit.sh` exits 0 on the box.** Nothing probed from outside can stand in for
       it: `request_kyc` is reach `principal`, so an unauthenticated call answers 401 whatever the module is doing, and a
       misconfigured operator answers the authenticated call a cacheable `501 module_not_served` indistinguishable from an

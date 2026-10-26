@@ -31,7 +31,7 @@
 --   stylish     KIOSK_STYLISH_DB   / _DB_USER  -v st_db= / st_user=
 --   philslist   KIOSK_PHILSLIST_DB / _DB_USER  -v pl_db= / pl_user=
 --   tudu        KIOSK_TUDU_DB      / _DB_USER  -v td_db= / td_user=
---   prove       KIOSK_PROVE_DB     / _DB_USER  -v pv_db= / pv_user=
+--   proveli     KIOSK_PROVELI_DB   / _DB_USER  -v pv_db= / pv_user=
 -- (psql cannot read the env files itself — they are per-app and are sourced by
 -- systemd, not by this superuser shell — so the two sides are kept in sync by
 -- hand. Override nothing and there is nothing to keep in sync.)
@@ -53,7 +53,7 @@
 \if :{?st_db} \else \set st_db kiosk_stylish_production \endif
 \if :{?pl_db} \else \set pl_db kiosk_philslist_production \endif
 \if :{?td_db} \else \set td_db kiosk_tudu_production \endif
-\if :{?pv_db} \else \set pv_db kiosk_prove_production \endif
+\if :{?pv_db} \else \set pv_db kiosk_proveli_production \endif
 
 \if :{?gg_user} \else \set gg_user kiosk_getgrocery \endif
 \if :{?af_user} \else \set af_user kiosk_atablefor \endif
@@ -62,7 +62,7 @@
 \if :{?st_user} \else \set st_user kiosk_stylish \endif
 \if :{?pl_user} \else \set pl_user kiosk_philslist \endif
 \if :{?td_user} \else \set td_user kiosk_tudu \endif
-\if :{?pv_user} \else \set pv_user kiosk_prove \endif
+\if :{?pv_user} \else \set pv_user kiosk_proveli \endif
 
 -- ── Roles (LOGIN, no CREATEDB/SUPERUSER — least privilege) ──────────────────
 -- Idempotent per-role create in the OUTER SQL so \gexec can interpolate the
@@ -87,7 +87,7 @@ SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'pl_user', :'pl_pw')
   WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'pl_user')\gexec
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'td_user', :'td_pw')
   WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'td_user')\gexec
--- KYC broker (gem dir kiosk-demo-prove; deploy domain kyc.demo.kiosk.tech)
+-- KYC broker (gem dir kiosk-demo-proveli; deploy domain kyc.demo.kiosk.tech)
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'pv_user', :'pv_pw')
   WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'pv_user')\gexec
 

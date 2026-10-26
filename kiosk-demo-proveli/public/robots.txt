@@ -1,0 +1,15 @@
+# This is a PUBLIC live demo — crawling and indexing are welcome.
+User-agent: *
+Disallow:
+# How AI systems may use this site's content, in two vocabularies: Content
+# Signals (contentsignals.org) and the IETF AI Preferences drafts
+# (draft-ietf-aipref-vocab-08, draft-ietf-aipref-attach-05).
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+Content-Usage: search=y, ai-use=y, train-ai=n
+
+# robots.txt governs the human web, and this origin has no agent surface to
+# send you to. The broker is an ISSUER, not a Kiosk operator: it mounts no
+# Kiosk HTTP API, registers no verb and declares no discovery document. What it
+# serves is a verification page for a human, reached only from a link an
+# operator issues, and one document an operator fetches:
+#   /proveli_key.pem   — the Ed25519 public key this broker signs its callbacks with

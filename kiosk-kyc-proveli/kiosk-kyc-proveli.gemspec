@@ -1,0 +1,33 @@
+# frozen_string_literal: true
+
+require_relative 'lib/kiosk/kyc_providers/proveli/version'
+
+Gem::Specification.new do |spec|
+  spec.name        = 'kiosk-kyc-proveli'
+  spec.version     = Kiosk::KycProviders::ProveliVersion::VERSION
+  spec.authors     = ['Phil Pirozhkov']
+  spec.email       = ['hello@fili.pp.ru']
+
+  spec.summary     = 'Proveli KYC broker adapter for the Kiosk framework'
+  spec.description = <<~DESC
+    kiosk-kyc-proveli implements Kiosk::KycProviders::Base against the Proveli
+    anonymizing KYC broker: it opens a verification at the broker's intake,
+    and accepts only attestations the broker minted for this operator.
+    Assign an instance to Kiosk.configuration.kyc_provider and kiosk-server
+    serves request_kyc and the broker's callback.
+  DESC
+  spec.homepage    = 'https://kiosk.tech'
+  spec.license     = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
+
+  spec.metadata['homepage_uri']    = spec.homepage
+  spec.metadata['source_code_uri'] = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']   = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-kyc-proveli/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri'] = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
+
+  spec.files = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md]
+  spec.require_paths = ['lib']
+
+  spec.add_dependency 'kiosk-core', '~> 0.6.0'
+end

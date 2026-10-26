@@ -365,7 +365,7 @@ ARMS = [
 COURTESY = [
   { path: 'kiosk-demo-atablefor/CHANGELOG.md',
     why: "kept as append-only history of the demo's reshape; new lines go to the repository record" },
-  { path: 'kiosk-demo-prove/CHANGELOG.md',
+  { path: 'kiosk-demo-proveli/CHANGELOG.md',
     why: "kept as append-only history of the broker's security model; new lines go to the repository record" }
 ].freeze
 
@@ -735,7 +735,7 @@ GREEN = {
     - the same kind again, in a different release.
   MD
   'kiosk-demo-atablefor/CHANGELOG.md' => "# Changelog\n\n## [Unreleased]\n\n- a courtesy record.\n",
-  'kiosk-demo-prove/CHANGELOG.md' => "# Changelog\n\n## [Unreleased]\n\n- a courtesy record.\n"
+  'kiosk-demo-proveli/CHANGELOG.md' => "# Changelog\n\n## [Unreleased]\n\n- a courtesy record.\n"
 }.freeze
 
 def git!(dir, *args)
@@ -805,8 +805,8 @@ def plant_each_arm(failures, dir, base)
     arm[:plant].call(dir)
     expect_red(failures, dir, base, "plant #{arm[:id]}", "[#{arm[:id]}]")
   end
-  File.delete(File.join(dir, 'kiosk-demo-prove/CHANGELOG.md'))
-  expect_red(failures, dir, base, 'plant CL-5 (declared record deleted)', 'kiosk-demo-prove/CHANGELOG.md')
+  File.delete(File.join(dir, 'kiosk-demo-proveli/CHANGELOG.md'))
+  expect_red(failures, dir, base, 'plant CL-5 (declared record deleted)', 'kiosk-demo-proveli/CHANGELOG.md')
 end
 
 def self_test_fixture(failures)

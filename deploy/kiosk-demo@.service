@@ -6,7 +6,7 @@
 #
 #   systemctl enable --now kiosk-demo@getgrocery
 #   systemctl enable --now kiosk-demo@atablefor
-#   ... hoteling skooti stylish philslist tudu prove
+#   ... hoteling skooti stylish philslist tudu proveli
 #
 # ── How %i maps to app + port ───────────────────────────────────────────────
 # %i selects BOTH the app dir and its port, via two conventions:
@@ -16,14 +16,11 @@
 #      set from env/<app>.env — the single source of truth for the port.
 # Port map (keep in sync with Caddyfile + env files):
 #   getgrocery 3001 · atablefor 3002 · hoteling 3003 · skooti 3004 ·
-#   stylish 3005 · philslist 3006 · tudu 3007 · prove 3008
+#   stylish 3005 · philslist 3006 · tudu 3007 · proveli 3008
 #
-# EXCEPTION (prove): the gem dir is kiosk-demo-prove but the app serves the
-# kyc.demo.kiosk.tech domain (it is the KYC broker). Instance name is
-# `prove` — %i resolves WorkingDirectory=/srv/kiosk/kiosk-demo-prove and
-# EnvironmentFile=/etc/kiosk-demo/prove.env, so copy env/kyc-demo.env.example to
-# /etc/kiosk-demo/prove.env. The Caddy vhost (kyc.demo.kiosk.tech) proxies to
-# the same port 3008. the broker is an ISSUER, not a Kiosk operator.
+# The KYC broker is the instance `proveli`. It serves the domain
+# kyc.demo.kiosk.tech, whose Caddy vhost proxies to port 3008. The broker is an
+# ISSUER, not a Kiosk operator.
 #
 # ExecStart binds Rails' server to 127.0.0.1 explicitly (loopback only; Caddy
 # is the sole public ingress). Puma reads WEB_CONCURRENCY / RAILS_MAX_THREADS

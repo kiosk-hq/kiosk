@@ -58,9 +58,9 @@ PATTERNS = [
   {
     id: 'RN-1',
     what: 'a demo operator named at a domain this project does not own',
-    re: /(getgrocery|atablefor|hoteling|skooti|stylish|philslist|tudu|prove)\.(my|us|com|io|app|net|org|co)\b/,
+    re: /(getgrocery|atablefor|hoteling|skooti|stylish|philslist|tudu|proveli)\.(my|us|com|io|app|net|org|co)\b/,
     repair: 'name the hosted subdomain the demo serves on, or say what it is ("the KYC broker")',
-    example: ['# a budget hole the day a paid issuer sits behind prove.my']
+    example: ['# a budget hole the day a paid issuer sits behind proveli.my']
   },
   {
     id: 'ABS-1',
@@ -80,7 +80,7 @@ KEY_BANNER = 'DO NOT use in production'
 DECLARED_DEV_KEYS = {
   'kiosk-demo-skooti/config/dev_unlock_key.pem' =>
     'the Ed25519 rental-token vector reproduced in the lock firmware and its tests',
-  'kiosk-demo-prove/config/dev_prove_key.pem' =>
+  'kiosk-demo-proveli/config/dev_proveli_key.pem' =>
     'the Ed25519 broker key development and test sign attestations with'
 }.freeze
 

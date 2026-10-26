@@ -29,7 +29,7 @@ gem 'devise'
 # monorepo. Outside it, keep the gem lines and remove the `path` block around them.
 path '..' do
   gem 'kiosk-all'
-  gem 'kiosk-kyc-prove'
+  gem 'kiosk-kyc-proveli'
   gem 'kiosk-pay-stripe'
   gem 'kiosk-pow-equihash'
   gem 'kiosk-reputation'

@@ -38,8 +38,8 @@ module RolesTotal
   E2E_INIT  = File.join(REPO_ROOT, 'e2e/fixtures/initializer_kiosk.rb')
 
   # Demos that configure no Kiosk engine, so no `c.roles` line is expected.
-  # kiosk-demo-prove is the KYC broker: a consumer of a Kiosk operator, not one.
-  NO_ENGINE = %w[kiosk-demo-prove].freeze
+  # kiosk-demo-proveli is the KYC broker: a consumer of a Kiosk operator, not one.
+  NO_ENGINE = %w[kiosk-demo-proveli].freeze
 
   # The declared `#kiosk_role` definitions: repo-relative path =>
   # [body fingerprint, the reason it cannot answer nil].

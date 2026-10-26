@@ -5,7 +5,7 @@ PATH
       kiosk-core (~> 0.6.0)
       kiosk-server (~> 0.6.0)
     kiosk-core (0.6.26)
-    kiosk-kyc-prove (0.6.26)
+    kiosk-kyc-proveli (0.6.26)
       kiosk-core (~> 0.6.0)
     kiosk-pay-stripe (0.6.26)
       activerecord (~> 8.1)
@@ -332,7 +332,7 @@ DEPENDENCIES
   devise
   jbuilder
   kiosk-all!
-  kiosk-kyc-prove!
+  kiosk-kyc-proveli!
   kiosk-pay-stripe!
   kiosk-pow-equihash!
   kiosk-redteam!
@@ -388,7 +388,7 @@ CHECKSUMS
   jwt (3.2.0) sha256=5419b1fe37b1da0982bd07051f573a8b8789ab724c2aa7e785e4784a3ed217d7
   kiosk-all (0.6.26)
   kiosk-core (0.6.26)
-  kiosk-kyc-prove (0.6.26)
+  kiosk-kyc-proveli (0.6.26)
   kiosk-pay-stripe (0.6.26)
   kiosk-pow (0.6.26)
   kiosk-pow-equihash (0.6.26)

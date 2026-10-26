@@ -24,7 +24,7 @@ jobs:
         gem:
           - kiosk-all
           - kiosk-core
-          - kiosk-kyc-prove
+          - kiosk-kyc-proveli
           - kiosk-pay-stripe
           - kiosk-pow
           - kiosk-pow-argon2id
@@ -131,8 +131,8 @@ jobs:
           - { demo: kiosk-demo-atablefor }
           - { demo: kiosk-demo-getgrocery, stripe_mock: true }
           - { demo: kiosk-demo-hoteling, stripe_mock: true }
-          - { demo: kiosk-demo-prove }
-          - { demo: kiosk-demo-skooti, stripe_mock: true, prove_broker: true }
+          - { demo: kiosk-demo-proveli }
+          - { demo: kiosk-demo-skooti, stripe_mock: true, proveli_broker: true }
           - { demo: kiosk-demo-stylish }
           - { demo: kiosk-demo-philslist }
           - { demo: kiosk-demo-tudu }
@@ -171,8 +171,8 @@ jobs:
         working-directory: ${{ matrix.demo }}
         run: bundle install
       - name: Install the KYC broker's dependencies
-        if: matrix.prove_broker
-        working-directory: kiosk-demo-prove
+        if: matrix.proveli_broker
+        working-directory: kiosk-demo-proveli
         run: bundle install
       - name: Set up stripe-mock
         if: matrix.stripe_mock
@@ -187,15 +187,15 @@ jobs:
           KIOSK_POW_SECRET: ci-zeitwerk-check-throwaway-pow-secret-not-a-real-key
           KIOSK_ISSUER: https://ci-zeitwerk-check.example.test
           STRIPE_SECRET_KEY: sk_test_ci_zeitwerk_check
-          KIOSK_PROVE_BROKER_URL: https://kyc.example.test
-          KIOSK_PROVE_ISSUER: https://kyc.example.test
-          KIOSK_PROVE_INTAKE_SECRET: ci-zeitwerk-check-intake-secret
+          KIOSK_PROVELI_BROKER_URL: https://kyc.example.test
+          KIOSK_PROVELI_ISSUER: https://kyc.example.test
+          KIOSK_PROVELI_INTAKE_SECRET: ci-zeitwerk-check-intake-secret
         run: |
           # Keys are minted per run and never echoed.
           export KIOSK_SIGNING_KEY_B64="$(ruby -rbase64 -ropenssl -e 'print Base64.strict_encode64(OpenSSL::PKey.generate_key("ED25519").private_to_pem)')"
-          export KIOSK_PROVE_PUBLIC_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").public_to_pem')"
-          if [ "${{ matrix.demo }}" = "kiosk-demo-prove" ]; then
-            export PROVE_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").private_to_pem')"
+          export KIOSK_PROVELI_PUBLIC_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").public_to_pem')"
+          if [ "${{ matrix.demo }}" = "kiosk-demo-proveli" ]; then
+            export PROVELI_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").private_to_pem')"
           fi
           if [ "${{ matrix.demo }}" = "kiosk-demo-skooti" ]; then
             export KIOSK_UNLOCK_SIGNING_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").private_to_pem')"
@@ -209,7 +209,7 @@ jobs:
           if [ -d test ]; then bin/rails test; else bundle exec rspec; fi
 
       - name: Red-team battery
-        if: matrix.demo != 'kiosk-demo-prove'
+        if: matrix.demo != 'kiosk-demo-proveli'
         working-directory: ${{ matrix.demo }}
         env:
           KIOSK_ISSUER: http://127.0.0.1:3000
@@ -220,10 +220,10 @@ jobs:
             export STRIPE_MOCK_URL=http://127.0.0.1:12111
             ruby -I ../kiosk-test-support/lib -rkiosk/test_helpers/stripe_mock -e 'Kiosk::TestHelpers::StripeMock.start; sleep' &
           fi
-          if [ -n "${{ matrix.prove_broker }}" ]; then
+          if [ -n "${{ matrix.proveli_broker }}" ]; then
             # The broker runs in development: its intake secrets are the ones the demos' test environment sends.
             # Its callback host is the host of this job's KIOSK_ISSUER.
-            (cd ../kiosk-demo-prove && export RAILS_ENV=development KIOSK_PROVE_SKOOTI_CALLBACK_HOST=127.0.0.1 && bin/rails db:reset && bin/rails server -p 3020 -d)
+            (cd ../kiosk-demo-proveli && export RAILS_ENV=development KIOSK_PROVELI_SKOOTI_CALLBACK_HOST=127.0.0.1 && bin/rails db:reset && bin/rails server -p 3020 -d)
           fi
           bin/rails db:reset
           bin/rails server -p 3000 -d
@@ -547,22 +547,22 @@ jobs:
           mkdir -p "$KIOSK_ENV_DIR"
           ! ./deploy/rollout.sh --on-box
           [ -z "$(ls -A "$KIOSK_ENV_DIR")" ]
-          for u in atablefor getgrocery hoteling philslist skooti stylish tudu prove; do
+          for u in atablefor getgrocery hoteling philslist skooti stylish tudu proveli; do
             echo "KIOSK_$(echo "$u" | tr a-z A-Z)_DB_PASSWORD=pw-$u" >"$KIOSK_ENV_DIR/$u.env"
           done
           for u in getgrocery hoteling skooti; do echo 'STRIPE_SECRET_KEY=sk_test_ci' >>"$KIOSK_ENV_DIR/$u.env"; done
           printf 'KIOSK_UNLOCK_SIGNING_KEY_PEM="%s"\n' "$(openssl genpkey -algorithm ed25519)" >>"$KIOSK_ENV_DIR/skooti.env"
-          printf 'PROVE_KEY_PEM="%s"\n' "$(openssl genrsa 2048 2>/dev/null)" >>"$KIOSK_ENV_DIR/prove.env"
+          printf 'PROVELI_KEY_PEM="%s"\n' "$(openssl genrsa 2048 2>/dev/null)" >>"$KIOSK_ENV_DIR/proveli.env"
           ./deploy/rollout.sh --on-box
-          broker=$(sed -n '/^PROVE_KEY_PEM=/,/END/p' "$KIOSK_ENV_DIR/prove.env" | sed 's/^PROVE_KEY_PEM=//; s/"//g')
+          broker=$(sed -n '/^PROVELI_KEY_PEM=/,/END/p' "$KIOSK_ENV_DIR/proveli.env" | sed 's/^PROVELI_KEY_PEM=//; s/"//g')
           printf '%s\n' "$broker" | openssl pkey -noout -text | grep -q '^ED25519 Private-Key'
-          pin=$(sed -n '/^KIOSK_PROVE_PUBLIC_KEY_PEM=/,/END/p' "$KIOSK_ENV_DIR/getgrocery.env" | sed 's/^KIOSK_PROVE_PUBLIC_KEY_PEM=//; s/"//g')
+          pin=$(sed -n '/^KIOSK_PROVELI_PUBLIC_KEY_PEM=/,/END/p' "$KIOSK_ENV_DIR/getgrocery.env" | sed 's/^KIOSK_PROVELI_PUBLIC_KEY_PEM=//; s/"//g')
           [ "$pin" = "$(printf '%s\n' "$broker" | openssl pkey -pubout)" ]
           sed -n 's/^KIOSK_SIGNING_KEY_B64=//p' "$KIOSK_ENV_DIR/tudu.env" | openssl base64 -d -A | openssl pkey -noout -text | grep -q '^ED25519'
           ! ./deploy/rollout.sh --on-box | grep -q '^wrote'
           ! ./deploy/rollout.sh --on-box | grep -q 'pw-tudu'
-          s=$(sed -n 's/^KIOSK_PROVE_INTAKE_SECRET=//p' "$KIOSK_ENV_DIR/skooti.env")
-          [ -n "$s" ] && grep -qx "KIOSK_PROVE_SKOOTI_SECRET=$s" "$KIOSK_ENV_DIR/prove.env"
+          s=$(sed -n 's/^KIOSK_PROVELI_INTAKE_SECRET=//p' "$KIOSK_ENV_DIR/skooti.env")
+          [ -n "$s" ] && grep -qx "KIOSK_PROVELI_SKOOTI_SECRET=$s" "$KIOSK_ENV_DIR/proveli.env"
           [ "$(stat -c '%U:%G %a' "$KIOSK_ENV_DIR/tudu.env")" = "$KIOSK_OWNER 640" ]
 
   # THE PUBLISHED ARTEFACTS — the one job that checks kiosk.tech out beside this
@@ -724,7 +724,7 @@ jobs:
   # a simulated proxy+browser, and curl-asserts the surfaces those bugs broke:
   #   stylish — Devise sign-in, roles, the manage page (the original three-bug
   #             surface).
-  #   prove   — the KYC broker's /verify human page (K-462): a distinct
+  #   proveli   — the KYC broker's /verify human page (K-462): a distinct
   #             token-capability HTML surface with a form POST and no login,
   #             depending on no kiosk gem. The stylish-only smoke never covered
   #             it.
@@ -737,7 +737,7 @@ jobs:
   # Booting all seven in prod would still be heavier CI for little marginal
   # signal. See deploy/production-smoke.sh; any assertion miss fails the job.
   demo-production-smoke:
-    name: production-boot smoke (stylish + prove + tudu)
+    name: production-boot smoke (stylish + proveli + tudu)
     runs-on: ubuntu-latest
 
     services:
@@ -764,8 +764,8 @@ jobs:
       KIOSK_STYLISH_DB_USER: postgres
       KIOSK_STYLISH_DB_PASSWORD: ""
       # Same for the KYC broker's production database.yml.
-      KIOSK_PROVE_DB_USER: postgres
-      KIOSK_PROVE_DB_PASSWORD: ""
+      KIOSK_PROVELI_DB_USER: postgres
+      KIOSK_PROVELI_DB_PASSWORD: ""
       # ...and for tudu's (K-1085).
       KIOSK_TUDU_DB_USER: postgres
       KIOSK_TUDU_DB_PASSWORD: ""
@@ -793,12 +793,12 @@ jobs:
         run: bundle install
 
       - name: Install KYC broker dependencies
-        working-directory: kiosk-demo-prove
+        working-directory: kiosk-demo-proveli
         run: bundle install
 
       # tudu was added to this job by K-1085 without its own bundle install, so
       # a fresh runner booted it against uninstalled gems (GemNotFound) — the
-      # K-681 local-green-≠-runner-green shape, one step below the stylish/prove
+      # K-681 local-green-≠-runner-green shape, one step below the stylish/proveli
       # pair. This step is that missing install (K-1156).
       - name: Install tudu dependencies
         working-directory: kiosk-demo-tudu
@@ -835,7 +835,7 @@ jobs:
       # (live form + clean not-recognised + form POST behind the proxy) renders
       # rather than 500 — the K-462 gap the stylish-only smoke did not cover.
       - name: Production-boot smoke (KYC broker)
-        run: ./deploy/production-smoke.sh prove
+        run: ./deploy/production-smoke.sh proveli
 
       # Boot tudu in production and assert its housemate board (`/shared`) and
       # its open sign-up render — the hand-written-SQL-projection surface and

@@ -50,8 +50,8 @@ if ARGV.include?('--self-test')
       expect: %r{app/services/price_checker\.rb: `ships:` names skooti, which no longer ships} },
     { id: 'except-has-converged', rule: 'copy comparison',
       what: 'the excepted copy converges on its siblings',
-      ops: [[:copy, 'kiosk-demo-getgrocery/config/puma.rb', 'kiosk-demo-prove/config/puma.rb']],
-      expect: %r{config/puma\.rb: `except:` for prove is stale} },
+      ops: [[:copy, 'kiosk-demo-getgrocery/config/puma.rb', 'kiosk-demo-proveli/config/puma.rb']],
+      expect: %r{config/puma\.rb: `except:` for proveli is stale} },
     { id: 'new-copy-undeclared', rule: 'undeclared and stale entries',
       what: 'a helper lands in two demos with no manifest entry',
       ops: [[:write, 'kiosk-demo-tudu/app/services/self_test_probe.rb', SELF_TEST_PROBE_RB],
@@ -527,7 +527,7 @@ EXTRA_SCANNED = [
 
 OPERATOR_SEVEN = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
 
-PROVE_SKELETON = 'prove is a smaller API-only Rails app generated on its own'
+PROVELI_SKELETON = 'proveli is a smaller API-only Rails app generated on its own'
 
 # ── The manifest ─────────────────────────────────────────────────────────────
 # rule: :identical | :code | :per_demo. `ships:` pins which demos carry the file;
@@ -535,7 +535,7 @@ PROVE_SKELETON = 'prove is a smaller API-only Rails app generated on its own'
 COPIES = {
   'test/test_helper.rb' => {
     rule: :per_demo,
-    ships: %w[atablefor getgrocery philslist prove skooti stylish tudu],
+    ships: %w[atablefor getgrocery philslist proveli skooti stylish tudu],
     why: "Each demo's own Minitest setup."
   },
   'test/stories/discovery_test.rb' => {
@@ -604,7 +604,7 @@ COPIES = {
   },
   'config/puma.rb' => {
     rule: :identical,
-    except: { 'prove' => PROVE_SKELETON,
+    except: { 'proveli' => PROVELI_SKELETON,
               'philslist' => 'has no jobs, so it runs no `plugin :solid_queue`.',
               'tudu' => 'has no jobs, so it runs no `plugin :solid_queue`.' },
     why: 'Port and concurrency come from the environment, so nothing in it is per-demo.'
@@ -622,17 +622,17 @@ COPIES = {
   },
   'public/404.html' => {
     rule: :identical,
-    except: { 'prove' => PROVE_SKELETON },
+    except: { 'proveli' => PROVELI_SKELETON },
     why: 'The page behind every unhandled 404; without it the error is served with no body.'
   },
   'public/422.html' => {
     rule: :identical,
-    except: { 'prove' => PROVE_SKELETON },
+    except: { 'proveli' => PROVELI_SKELETON },
     why: 'The page a misconfigured CSRF setup renders.'
   },
   'public/500.html' => {
     rule: :identical,
-    except: { 'prove' => PROVE_SKELETON },
+    except: { 'proveli' => PROVELI_SKELETON },
     why: 'The page behind every production 500.'
   },
   'bin/setup' => {
@@ -763,7 +763,7 @@ SKELETON_NOT_COMPARED = {
 
 # Install-generator templates: `emits:` (every operator demo ships that migration) or `not_compared:`.
 GENERATOR_TEMPLATES_DIR = 'kiosk-server/lib/generators/kiosk/install/templates'
-NON_OPERATOR_DEMOS = %w[kiosk-demo-prove].freeze
+NON_OPERATOR_DEMOS = %w[kiosk-demo-proveli].freeze
 
 GENERATOR_TEMPLATES = {
   'initializer.rb.tt' => { not_compared: 'emits config/initializers/kiosk.rb, per-demo by design.' },
@@ -1297,7 +1297,7 @@ FRAGMENTS = {
   },
   'app/controllers/home_controller.rb#index' => {
     rule: :per_demo,
-    ships: %w[atablefor getgrocery hoteling philslist prove skooti stylish],
+    ships: %w[atablefor getgrocery hoteling philslist proveli skooti stylish],
     why: "Each storefront's own landing page."
   }
 }.freeze

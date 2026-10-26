@@ -15,12 +15,12 @@ require 'uri'
 require 'json'
 
 # KYC attestations: valid/expired signed with the broker's key, forged with a wrong key under the trusted issuer.
-require_relative '../support/prove_test_issuer'
+require_relative '../support/proveli_test_issuer'
 
 BASE_URL = ENV.fetch('SERVER_URL')
 # The KYC broker as the demo's development and test environments point this origin at it.
-BROKER_URL     = ENV.fetch('KIOSK_PROVE_BROKER_URL', 'http://127.0.0.1:3020')
-TRUSTED_ISSUER = ProveTestIssuer.issuer
+BROKER_URL     = ENV.fetch('KIOSK_PROVELI_BROKER_URL', 'http://127.0.0.1:3020')
+TRUSTED_ISSUER = ProveliTestIssuer.issuer
 # The seeded rider (db/seeds.rb).
 RIDER_EMAIL   = 'ada@example.com'
 DEMO_PASSWORD = 'skooti-demo-password'
@@ -34,7 +34,7 @@ LICENCE_ATTRIBUTES = { 'age_over_18' => true, 'licence_a' => true }.freeze
 def attest_forged(user_id)
   now = Time.now.to_i
   # Trusted issuer and correct audience: ONLY the signature is wrong.
-  claims = { sub: user_id, level: 'verified', iss: TRUSTED_ISSUER, aud: ProveTestIssuer.audience,
+  claims = { sub: user_id, level: 'verified', iss: TRUSTED_ISSUER, aud: ProveliTestIssuer.audience,
              iat: now, exp: now + 3600 }
   JWT.encode(claims, FORGED_KYC_KEY, 'EdDSA')
 end
@@ -125,8 +125,8 @@ profile = Kiosk::Redteam::Profile.new(
 
   pay_for: ->(_client, _customer, owned_ref) { owned_ref[:checkout_jwt] },
 
-  kyc_valid: ->(user_id) { ProveTestIssuer.attest(user_id: user_id) },
-  kyc_expired: ->(user_id) { ProveTestIssuer.attest_expired(user_id: user_id) },
+  kyc_valid: ->(user_id) { ProveliTestIssuer.attest(user_id: user_id) },
+  kyc_expired: ->(user_id) { ProveliTestIssuer.attest_expired(user_id: user_id) },
   kyc_forged: method(:attest_forged),
   # CallToll: a new account solves a proof of work on every 10th call (RecentSpend with no spend).
   tolled_calls_per_proof: 10,
@@ -201,7 +201,7 @@ module SkootiScenarios
     # rent_motorcycle's attribute gate runs first; clear it so the uuid check is reached.
     def licensed_customer(client)
       a = client.register!
-      kyc = client.kyc(a, attestation_jws: ProveTestIssuer.attest(user_id: a.user_id, attributes: LICENCE_ATTRIBUTES))
+      kyc = client.kyc(a, attestation_jws: ProveliTestIssuer.attest(user_id: a.user_id, attributes: LICENCE_ATTRIBUTES))
       raise "redteam(skooti): MalformedUuidArg fixture broken — /kyc returned #{kyc.status}" unless kyc.status == 200
 
       a
@@ -395,7 +395,7 @@ end
 def forged_licence_jws(customer)
   now = Time.now.to_i
   claims = { sub: customer.user_id, level: 'verified', iss: TRUSTED_ISSUER,
-             aud: ProveTestIssuer.audience, iat: now, exp: now + 3600, attributes: LICENCE_ATTRIBUTES }
+             aud: ProveliTestIssuer.audience, iat: now, exp: now + 3600, attributes: LICENCE_ATTRIBUTES }
   JWT.encode(claims, FORGED_KYC_KEY, 'EdDSA')
 end
 
@@ -506,7 +506,7 @@ end
 # A broker-shaped callback claim for `operator`, signed with `key`; the nonce is not under test.
 def callback_jws(customer, request_id, operator, key)
   now = Time.now.to_i
-  claims = { sub: customer.user_id, level: 'verified', iss: ProveTestIssuer.issuer,
+  claims = { sub: customer.user_id, level: 'verified', iss: ProveliTestIssuer.issuer,
              operator:, aud: operator, request_id:, nonce: 'any', iat: now, exp: now + 3600,
              attributes: LICENCE_ATTRIBUTES }
   JWT.encode(claims, key, 'EdDSA')
@@ -518,7 +518,7 @@ def cross_operator_replay
   # Open a real skooti request so the callback correlates to a pending row.
   request_id = request_kyc!(client, a, 'xop')
   # Signed with the broker key but addressed to another operator.
-  jws = callback_jws(a, request_id, 'other-operator', ProveTestIssuer.keypair)
+  jws = callback_jws(a, request_id, 'other-operator', ProveliTestIssuer.keypair)
   # The callback must reject (403/404), so no attestation reaches the agent.
   cb_rc  = post_kyc_callback(request_id:, kyc_jws: jws, nonce: 'any')
   events = kyc_events_for(a)
@@ -541,7 +541,7 @@ def forged_callback_no_sig
   client, a = new_customer
   request_id = request_kyc!(client, a, 'fcb')
   # Wrong key, trusted issuer, addressed to skooti — ONLY the signature is bad.
-  wrong_key_jws = callback_jws(a, request_id, ProveTestIssuer.audience, FORGED_KYC_KEY)
+  wrong_key_jws = callback_jws(a, request_id, ProveliTestIssuer.audience, FORGED_KYC_KEY)
   cb_wrong = post_kyc_callback(request_id:, kyc_jws: wrong_key_jws, nonce: 'any')
   # Also a callback with NO jws at all.
   cb_missing = post_kyc_callback(request_id:, nonce: 'any')

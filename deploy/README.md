@@ -15,14 +15,14 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the KYC broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). The reference an operator installs and adapts — `User`/`Group` and the Ruby on `PATH` are the box's to set; the hardening block (`NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths`, `PrivateTmp`, `ProtectHome`) is the part not to drop, and a Ruby installed under a home directory is invisible behind `ProtectHome=true`, so put the interpreter outside `/home` rather than remove the line. **The demo fleet does not run this file as shipped**, measured over ssh 2026-09-27 (`systemctl cat kiosk-demo@getgrocery`; every instance shares that one fragment, no drop-ins): the installed unit runs as `ubuntu`, calls a mise-installed `bundle` under `/home/ubuntu` by absolute path, has no hardening block and a 90-second start timeout, and the box has no `kiosk` user. Read the blast radius of a demo compromise off that unit, not off this one. |
 | `deploy.sh` | `deploy/deploy.sh [user@host]`: runs `rollout.sh`, which stops the deploy when an env file is incomplete, then pushes HEAD to the git remote `prod-demo` (the box's hook migrates, seeds and restarts). |
-| `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
+| `env/<app>.env.example` | Per-app env template (7 demos + `proveli.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
 | `rollout.sh` | **The only supported way `/etc/kiosk-demo/*.env` is set.** Run `deploy/rollout.sh [user@host]` from a checkout; it runs itself on the box as root. It is idempotent, so running it is also how you check. It renders every unit's env file from `env/<app>.env.example` (names, order, comments and every value this repository decides), keeps the `REPLACE_*` values the box already has, mints the ones nothing off the box holds a half of, and NAMES the four that someone else holds instead of writing a blank. Owner `ubuntu:ubuntu` and mode `0640` are two literal lines in it. Backs up what it changes, prints the `systemctl restart` line per changed unit, restarts nothing. See [Configuration is DECLARED](#configuration-is-declared). |
 | `deploy-caddy.sh` | **The only supported way `Caddyfile` reaches the box.** `deploy/deploy-caddy.sh [user@host] [--check|--apply]`. `--check` stages the file, has the BOX's own caddy validate it, and prints the diff, changing nothing; `--apply` backs up, installs, reloads, then verifies the LIVE HTTP API and rolls back if the protocol disagrees. It ships the whole file or nothing — never a patched line, never a merge — so a divergence in either direction shows up as a diff. `--self-test` exercises the derivation and the two posture arms (HSTS declared, limiter NOT enabled) and touches no host; it runs in CI. |
 | `check-live-hsts.sh` | **Run it from anywhere to audit the fleet, and after any Caddyfile change.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. It reads the PROTOCOL rather than a config, because a config check on the template says OK for as long as the box serves without the header. `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
 | `live-fleet-drive.rb` | **Run it by hand after a deploy — it is not a CI job.** Drives every vhost in `Caddyfile` with the drivers this repo ships (`Kiosk::TestHelpers::Wire`, `Kiosk::TestHelpers::Assistant`) and then runs `e2e/schema_conformance.rb` against the bytes each origin served — the only place §16.3's «every protocol object validates against its JSON Schema» is asserted about a DEPLOYED byte rather than a localhost one. **Every probe is read-only**: the two registration probes and the token request for an unknown client are the ones that must be REFUSED, and the query probes carry a forged bearer or none, so no row is created and none is deleted. It therefore cannot run the shipped `Scenarios::*` battery, each of which registers principals and stages state — including `RegistrationWithoutPow`, whose control registers successfully. It borrows a demo's bundle automatically (`KIOSK_DRIVE_BUNDLE` picks another). `--self-test` covers the vhost derivation and the TLS seam and touches no host, but it loads the drivers out of a demo's bundle, so unlike its two siblings above it is **not** a CI job — run it yourself. The live drive stays out of CI for `check-live-hsts.sh`'s reason: CI must not depend on a box this repo does not deploy. |
 | `demo-reset.sh` | Run `deploy/demo-reset.sh [user@host]` from a checkout; it runs the box's own copy. It puts demo data back to a clean, freshly-seeded state: drops + reseeds the six non-getgrocery demos, additively reseeds getgrocery (its orders are real third-party assistant runs and seeding cannot reproduce one); `--all` wipes getgrocery too. This is the disk-reclaim tool. |
-| `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface plus the one whose HTML is rendered from a hand-written SQL projection (`stylish` \| `prove` \| `tudu`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1`. |
-| `kyc-pairing-audit.sh` | **Run `deploy/kyc-pairing-audit.sh [user@host]` after any KYC-related env change, and on any box that predates 2026-08-13.** It runs itself on the box as root. Reads `/etc/kiosk-demo/*.env` and reports whether each KYC operator's intake secret actually pairs with the broker's registry entry, whether the pinned broker public key is the one the broker signs with, and whether an operator env still carries the retired `KIOSK_PROVE_<OP>_SECRET` spelling; `--fix-retired-names` renames it in place, after a backup. **It prints no value** — pairing comes out as PAIRED/MISMATCH and a key as a public SPKI fingerprint. It exists because nothing in the tree can see the values on the boxes: both operators answered `501 module_not_served` for thirty-five days with correct secrets stored under a name the app had stopped reading. |
+| `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface plus the one whose HTML is rendered from a hand-written SQL projection (`stylish` \| `proveli` \| `tudu`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1`. |
+| `kyc-pairing-audit.sh` | **Run `deploy/kyc-pairing-audit.sh [user@host]` after any KYC-related env change, and on any box that predates 2026-08-13.** It runs itself on the box as root. Reads `/etc/kiosk-demo/*.env` and reports whether each KYC operator's intake secret actually pairs with the broker's registry entry, whether the pinned broker public key is the one the broker signs with, and whether an operator env still carries the retired `KIOSK_PROVELI_<OP>_SECRET` spelling; `--fix-retired-names` renames it in place, after a backup. **It prints no value** — pairing comes out as PAIRED/MISMATCH and a key as a public SPKI fingerprint. It exists because nothing in the tree can see the values on the boxes: both operators answered `501 module_not_served` for thirty-five days with correct secrets stored under a name the app had stopped reading. |
 | `CHECKLIST.md` | The tick-through version of this runbook — what an operator actually ticks off on deploy day, incl. the recorded skips. |
 | `README.md` | This runbook. |
 
@@ -73,14 +73,14 @@ is worse than a refusal, for the reason in the first paragraph.
 
 Two values are derived rather than stored twice, so neither pair can be
 half-set: the broker's copy of an operator's intake secret
-(`KIOSK_PROVE_<OP>_SECRET`) is read from that operator's own
-`KIOSK_PROVE_INTAKE_SECRET`, and each operator's pinned
-`KIOSK_PROVE_PUBLIC_KEY_PEM` is the public half of the broker's `PROVE_KEY_PEM`.
+(`KIOSK_PROVELI_<OP>_SECRET`) is read from that operator's own
+`KIOSK_PROVELI_INTAKE_SECRET`, and each operator's pinned
+`KIOSK_PROVELI_PUBLIC_KEY_PEM` is the public half of the broker's `PROVELI_KEY_PEM`.
 
 **Key types.** Kiosk signs with Ed25519 keys only. A `KIOSK_SIGNING_KEY_B64`
 that is not an Ed25519 key is minted again, as if the slot were empty: the
 tokens and unpaid checkouts the old key signed stop verifying. The broker's
-`PROVE_KEY_PEM` follows the same rule, and the KYC operators pin the public
+`PROVELI_KEY_PEM` follows the same rule, and the KYC operators pin the public
 half of the new key in the same run: the attestations the old key signed stop
 verifying. An assistant registered with an RSA key no longer authenticates: it
 makes an Ed25519 key and registers again.
@@ -109,15 +109,15 @@ migrated or restarted, and the push ends in `DEPLOY FAILED`.
 | stylish    | `stylish.demo.kiosk.tech` | 3005 | n=168 k=7 | — |
 | philslist  | `philslist.demo.kiosk.tech` | 3006 | n=168 k=7 | — |
 | tudu       | `tudu.demo.kiosk.tech` | 3007 | n=168 k=7 | — |
-| prove (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not a Kiosk operator) | — |
+| proveli (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not a Kiosk operator) | — |
 
-**The KYC broker is the odd one out**: the gem dir is `kiosk-demo-prove` but it serves
+**The KYC broker is the odd one out**: its dir is `kiosk-demo-proveli` but it serves
 `kyc.demo.kiosk.tech` and is an **ISSUER, not a Kiosk operator** — no toll,
 no `/.well-known/kiosk.json`, no agent surface, no payment provider. It depends
-on no kiosk gem. Its env template is `env/kyc-demo.env.example` → copy to
-`/etc/kiosk-demo/prove.env` (the systemd instance is `prove`, matching the dir);
+on no kiosk gem. Its env template is `env/proveli.env.example` → copy to
+`/etc/kiosk-demo/proveli.env` (the systemd instance is `proveli`, matching the dir);
 its Caddy vhost is `kyc.demo.kiosk.tech → 127.0.0.1:3008`. skooti trusts it as
-its KYC issuer (skooti's env pins `KIOSK_PROVE_*` at this broker).
+its KYC issuer (skooti's env pins `KIOSK_PROVELI_*` at this broker).
 
 **Every demo tolls registration the same way**: one Equihash proof at the gem
 default n=168 k=7 (1.0 to 1.4 GiB and 9 to 20 s per proof on the reference solver,
@@ -213,7 +213,7 @@ its env file, defaulting to the shipped names:
 
 `<xx>` is the two-letter prefix already used for the passwords: `gg` getgrocery ·
 `af` atablefor · `ho` hoteling · `sk` skooti · `st` stylish · `pl` philslist ·
-`td` tudu · `pv` prove.
+`td` tudu · `pv` proveli.
 
 Leave the names alone and there is nothing to do — the templates ship the
 defaults and step 1 below provisions exactly those. **If you change a name, change
@@ -233,7 +233,7 @@ file, so it follows an override on its own.
 #    hardcode: kiosk-demo@.service's WorkingDirectory=/srv/kiosk/kiosk-demo-%i
 #    and demo-reset.sh's /srv/kiosk/deploy/demo-reset.sh.
 
-# 1. Postgres: create the 8 DBs + least-privilege roles (7 demos + prove).
+# 1. Postgres: create the 8 DBs + least-privilege roles (7 demos + proveli).
 #    Pass each password as a plain psql variable — the RAW password, no quotes
 #    (the script quote-escapes it safely via :'var').
 #    Names default to the shipped ones; add -v <xx>_db= / -v <xx>_user= ONLY if
@@ -255,19 +255,19 @@ done
 #    db:prepare creates the schema, runs migrations (incl. the kiosk_* tables),
 #    and seeds the shared catalog on first run.
 
-# 2b. The KYC broker (kiosk-demo-prove; serves kyc.demo.kiosk.tech). It is
+# 2b. The KYC broker (kiosk-demo-proveli; serves kyc.demo.kiosk.tech). It is
 #     an ISSUER, not a Kiosk operator — no kiosk gem, no assets manifest — so
 #     prepare it on its own (db:prepare only; assets:precompile is a no-op/absent).
-cd /srv/kiosk/kiosk-demo-prove
+cd /srv/kiosk/kiosk-demo-proveli
 bundle install
-set -a; . /etc/kiosk-demo/prove.env; set +a   # from env/kyc-demo.env.example
+set -a; . /etc/kiosk-demo/proveli.env; set +a   # from env/proveli.env.example
 RAILS_ENV=production bin/rails db:prepare
 
 # 3. systemd: install the template unit and enable one instance per app.
 sudo cp /srv/kiosk/deploy/kiosk-demo@.service /etc/systemd/system/
 sudo mkdir -p /etc/kiosk-demo   # env files live here (Operator step #3)
 sudo systemctl daemon-reload
-for app in getgrocery atablefor hoteling skooti stylish philslist tudu prove; do
+for app in getgrocery atablefor hoteling skooti stylish philslist tudu proveli; do
   sudo systemctl enable --now kiosk-demo@$app
 done
 #    Check: systemctl status kiosk-demo@getgrocery ; journalctl -u kiosk-demo@skooti -f

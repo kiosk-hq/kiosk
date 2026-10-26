@@ -42,7 +42,7 @@
 #   stylish  — Devise sign-in, roles, the manage page. Exercises the exact
 #              surfaces the three original bugs touched (assume_ssl sign-in +
 #              the governance-column render). The default when no arg is given.
-#   prove    — the KYC broker (kiosk-demo-prove): a NEW, distinct HTML
+#   proveli    — the KYC broker (kiosk-demo-proveli): a NEW, distinct HTML
 #              surface (the /verify human page) with a token-capability form
 #              POST and NO login. Depends on no kiosk gem, seeds no signing key.
 #              Verifies its four lib/ modules eager-load and /verify renders 200
@@ -133,7 +133,7 @@
 # on its own. Point this script at a real deploy database and `db:schema:load`
 # refuses — the platform control stays a control.
 #
-# Usage:  [KIOSK_SMOKE_I_AM_DISPOSABLE=1] production-smoke.sh [stylish|prove|tudu]
+# Usage:  [KIOSK_SMOKE_I_AM_DISPOSABLE=1] production-smoke.sh [stylish|proveli|tudu]
 #         (default demo: stylish)
 #
 # Requires: Postgres reachable (PGHOST), a psql/pg client, and the demo's
@@ -143,8 +143,8 @@ set -euo pipefail
 
 DEMO="${1:-stylish}"
 case "$DEMO" in
-  stylish | prove | tudu) ;;
-  *) echo "unknown demo '$DEMO' (expected: stylish | prove | tudu)"; exit 2 ;;
+  stylish | proveli | tudu) ;;
+  *) echo "unknown demo '$DEMO' (expected: stylish | proveli | tudu)"; exit 2 ;;
 esac
 
 FAILURES=0
@@ -454,14 +454,14 @@ smoke_stylish() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# prove: the KYC broker (kiosk-demo-prove). A distinct HTML surface — the
+# proveli: the KYC broker (kiosk-demo-proveli). A distinct HTML surface — the
 # /verify human page — reached by an unguessable token capability, with a form
 # POST but NO login. This app depends on NO kiosk gem and seeds NO signing key.
 # A surface the stylish smoke does not reach.
 # ─────────────────────────────────────────────────────────────────────────────
-smoke_prove() {
+smoke_proveli() {
   PORT="${PORT:-4140}"
-  HOST="prove.smoke.local"
+  HOST="proveli.smoke.local"
   BASE="http://127.0.0.1:${PORT}"
   ORIGIN="https://${HOST}"
   # The proxy shape Caddy presents (TLS-terminate → forward http + the headers).
@@ -474,27 +474,27 @@ smoke_prove() {
   # Origin would mismatch a http base_url → 422; with it on the POST is accepted.
   POST_HEADERS=(-H "Host: ${HOST}")
 
-  DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../kiosk-demo-prove" && pwd)"
-  SERVER_LOG="$(mktemp -t kiosk-smoke-prove.XXXXXX)"
+  DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../kiosk-demo-proveli" && pwd)"
+  SERVER_LOG="$(mktemp -t kiosk-smoke-proveli.XXXXXX)"
   cd "$DEMO_DIR"
 
   # ── Production env the broker needs. It has NO kiosk-gem dependency, so no
   # kiosk signing-key initializer, no PoW knobs — SECRET_KEY_BASE, the DB role,
-  # and its OWN Ed25519 signing key (the ProveKey). ─
+  # and its OWN Ed25519 signing key (the ProveliKey). ─
   export RAILS_ENV=production
   export SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(ruby -e 'require "securerandom"; print SecureRandom.hex(64)')}"
-  # The broker refuses to boot in production without PROVE_KEY_PEM, and
+  # The broker refuses to boot in production without PROVELI_KEY_PEM, and
   # the env file validates that it is an Ed25519 PRIVATE key — so generate a
-  # throwaway keypair (nothing pins it: assertion 6 only asserts /prove_key.pem
+  # throwaway keypair (nothing pins it: assertion 6 only asserts /proveli_key.pem
   # serves ITS public half).
-  export PROVE_KEY_PEM="${PROVE_KEY_PEM:-$(ruby -e 'require "openssl"; print OpenSSL::PKey.generate_key("ED25519").private_to_pem')}"
-  export KIOSK_PROVE_ISSUER="${KIOSK_PROVE_ISSUER:-https://kyc.smoke.test}"
+  export PROVELI_KEY_PEM="${PROVELI_KEY_PEM:-$(ruby -e 'require "openssl"; print OpenSSL::PKey.generate_key("ED25519").private_to_pem')}"
+  export KIOSK_PROVELI_ISSUER="${KIOSK_PROVELI_ISSUER:-https://kyc.smoke.test}"
   # database.yml (production) connects as this role (CI: postgres; local: login).
-  export KIOSK_PROVE_DB_USER="${KIOSK_PROVE_DB_USER:-postgres}"
-  export KIOSK_PROVE_DB_PASSWORD="${KIOSK_PROVE_DB_PASSWORD:-}"
+  export KIOSK_PROVELI_DB_USER="${KIOSK_PROVELI_DB_USER:-postgres}"
+  export KIOSK_PROVELI_DB_PASSWORD="${KIOSK_PROVELI_DB_PASSWORD:-}"
   # PINNED, not inherited, and a throwaway `_smoke` name rather than the deploy
-  # `kiosk_prove_production` — see the stylish smoke above.
-  export KIOSK_PROVE_DB="kiosk_prove_smoke"
+  # `kiosk_proveli_production` — see the stylish smoke above.
+  export KIOSK_PROVELI_DB="kiosk_proveli_smoke"
 
   SERVER_PID=""
   cleanup() {
@@ -504,8 +504,8 @@ smoke_prove() {
   }
   trap cleanup EXIT
 
-  echo "── Preparing the throwaway smoke DB ${KIOSK_PROVE_DB} (drop/create/schema:load/seed) ──"
-  drop_smoke_db "$KIOSK_PROVE_DB" "$KIOSK_PROVE_DB_USER" "$KIOSK_PROVE_DB_PASSWORD"
+  echo "── Preparing the throwaway smoke DB ${KIOSK_PROVELI_DB} (drop/create/schema:load/seed) ──"
+  drop_smoke_db "$KIOSK_PROVELI_DB" "$KIOSK_PROVELI_DB_USER" "$KIOSK_PROVELI_DB_PASSWORD"
   bundle exec rails db:create db:schema:load db:seed >/dev/null
 
   # Seed ONE pending request so /verify?request=<id> renders the live yes/no form
@@ -514,7 +514,7 @@ smoke_prove() {
   # the live-form path is never rendered under eager-load.
   echo "── Seeding one pending verification request ──"
   REQ="$(bundle exec rails runner '
-    r = ProveRequest.create!(
+    r = ProveliRequest.create!(
       request_id:       "smoke-request-token-0001",
       operator_id:      "skooti",
       audience:         "skooti",
@@ -593,9 +593,9 @@ smoke_prove() {
     fail "POST /verify expected 200, got $post_code (422 = CSRF-Origin rejection)"
   fi
 
-  echo "── Assertion 6: GET /prove_key.pem → 200 (the ProveKey operators pin) ──"
-  code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/prove_key.pem")"
-  [ "$code" = "200" ] && pass "GET /prove_key.pem → 200" || fail "GET /prove_key.pem expected 200, got $code"
+  echo "── Assertion 6: GET /proveli_key.pem → 200 (the ProveliKey operators pin) ──"
+  code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/proveli_key.pem")"
+  [ "$code" = "200" ] && pass "GET /proveli_key.pem → 200" || fail "GET /proveli_key.pem expected 200, got $code"
 
   echo "── Assertion 7: unknown path → 404 with a BODY (public/404.html) ──"
   # Same class as the stylish assertion: with no public/404.html, PublicExceptions
@@ -782,9 +782,9 @@ smoke_tudu() {
 # case and not the other.
 case "$DEMO" in
   stylish) smoke_stylish ;;
-  prove)   smoke_prove ;;
+  proveli)   smoke_proveli ;;
   tudu)    smoke_tudu ;;
-  *) echo "unknown demo '$DEMO' (expected: stylish | prove | tudu)"; exit 2 ;;
+  *) echo "unknown demo '$DEMO' (expected: stylish | proveli | tudu)"; exit 2 ;;
 esac
 
 echo

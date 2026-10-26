@@ -63,7 +63,7 @@ Rails:
     - "kiosk-demo-skooti/firmware/**/*"
     - "kiosk-demo-skooti/app/services/rental_token_issuer.rb"
     - "kiosk-core/**/*"
-    - "kiosk-kyc-prove/**/*"
+    - "kiosk-kyc-proveli/**/*"
     - "kiosk-pow/**/*"
     - "kiosk-pow-argon2id/**/*"
     - "kiosk-pow-cuckoo/**/*"

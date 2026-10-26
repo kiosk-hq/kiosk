@@ -102,9 +102,9 @@ their names, `require!(%w[age_over_18])`, and may pass its own `detail:`.
 ```ruby
 Kiosk.configure do |c|
   c.kyc_claims   = %w[age_over_18]
-  c.kyc_provider = Kiosk::KycProviders::Prove.new(operator_id: "acme",
-                                                  intake_secret: ENV.fetch("KIOSK_PROVE_INTAKE_SECRET"),
-                                                  public_key: ENV.fetch("KIOSK_PROVE_PUBLIC_KEY_PEM"))
+  c.kyc_provider = Kiosk::KycProviders::Proveli.new(operator_id: "acme",
+                                                    intake_secret: ENV.fetch("KIOSK_PROVELI_INTAKE_SECRET"),
+                                                    public_key: ENV.fetch("KIOSK_PROVELI_PUBLIC_KEY_PEM"))
 end
 ```
 

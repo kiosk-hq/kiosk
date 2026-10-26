@@ -10,12 +10,12 @@ ENV['KIOSK_SIGNING_KEY_B64']        ||= Base64.strict_encode64(OpenSSL::PKey.gen
 ENV['KIOSK_POW_SECRET']             ||= 'skooti-local-pow-secret-not-a-secret'
 ENV['STRIPE_SECRET_KEY']            ||= 'sk_test_mock'
 ENV['STRIPE_MOCK_URL']              ||= Kiosk::TestHelpers::StripeMock.url
-# The KYC broker kiosk-demo-prove runs locally: its URL, issuer, intake secret and signing key.
-ENV['KIOSK_PROVE_BROKER_URL']       ||= 'http://127.0.0.1:3020'
-ENV['KIOSK_PROVE_ISSUER']           ||= 'https://kyc.test.local'
-ENV['KIOSK_PROVE_INTAKE_SECRET']    ||= 'prove-skooti-demo-shared-secret'
-ENV['KIOSK_PROVE_PUBLIC_KEY_PEM']   ||=
-  OpenSSL::PKey.read(File.read(File.expand_path('../../../kiosk-demo-prove/config/dev_prove_key.pem', __dir__))).public_to_pem
+# The KYC broker kiosk-demo-proveli runs locally: its URL, issuer, intake secret and signing key.
+ENV['KIOSK_PROVELI_BROKER_URL']     ||= 'http://127.0.0.1:3020'
+ENV['KIOSK_PROVELI_ISSUER']         ||= 'https://kyc.test.local'
+ENV['KIOSK_PROVELI_INTAKE_SECRET']  ||= 'proveli-skooti-demo-shared-secret'
+ENV['KIOSK_PROVELI_PUBLIC_KEY_PEM'] ||=
+  OpenSSL::PKey.read(File.read(File.expand_path('../../../kiosk-demo-proveli/config/dev_proveli_key.pem', __dir__))).public_to_pem
 # The fixed dev keypair the KAT vector, the firmware fixtures and the lock simulator are pinned to.
 ENV['KIOSK_UNLOCK_SIGNING_KEY_PEM'] ||= File.read(File.expand_path('../dev_unlock_key.pem', __dir__))
 

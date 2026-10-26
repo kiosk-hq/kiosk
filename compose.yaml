@@ -1,7 +1,7 @@
 # The whole demo fleet in containers: `docker compose up` in this directory.
 #
 # It runs what the deployed box runs: the seven operator demos, the KYC broker
-# (kiosk-demo-prove) and one Postgres, all on one host. Every container joins
+# (kiosk-demo-proveli) and one Postgres, all on one host. Every container joins
 # the network of the `db` container, so the apps reach each other on
 # 127.0.0.1 and localhost, as they do on the box and on a laptop. The ports
 # are published on `db` for that reason: it owns the network.
@@ -53,7 +53,7 @@ services:
       - "3005:3005" # stylish
       - "3006:3006" # philslist
       - "3007:3007" # tudu
-      - "3020:3020" # prove, the KYC broker
+      - "3020:3020" # proveli, the KYC broker
 
   # The release .github/workflows/ci.yml pins as STRIPE_MOCK_VERSION. Move both together.
   stripe-mock:
@@ -69,9 +69,9 @@ services:
     working_dir: /kiosk/kiosk-test-support
     command: ["ruby", "-Ilib", "-rkiosk/test_helpers/stripe_mock", "-e", "Kiosk::TestHelpers::StripeMock.serve(12111, 12112)"]
 
-  prove:
+  proveli:
     <<: *demo
-    working_dir: /kiosk/kiosk-demo-prove
+    working_dir: /kiosk/kiosk-demo-proveli
     environment:
       <<: *db-env
       PORT: "3020"

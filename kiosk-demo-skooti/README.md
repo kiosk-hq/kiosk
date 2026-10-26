@@ -107,7 +107,7 @@ bin/rails test         # the tests; CI runs exactly this
 `bin/setup` does the first two. The tests drive the origin over HTTP the way an
 assistant does; the KYC tests stand in for the broker with
 `Kiosk::TestHelpers::Kyc`. CI's red-team battery (`../kiosk-redteam/suites/skooti.rb`)
-runs against the live broker in `kiosk-demo-prove`.
+runs against the live broker in `kiosk-demo-proveli`.
 
 Two more entry points are hardware-side. `bin/make-qr` renders the unlock QR of
 one rental from its token: the QR the `unlock_url` page shows. Its usage is in
@@ -138,7 +138,7 @@ at the repository root runs the whole fleet with the KYC broker and stripe-mock,
 and both work.
 
 On your own machine, `request_kyc` needs the KYC broker on port 3020. In a third
-terminal, in `../kiosk-demo-prove`, run `bin/rails db:reset`, then
+terminal, in `../kiosk-demo-proveli`, run `bin/rails db:reset`, then
 `bin/rails server -p 3020`.
 
 `bin/setup` seeds this demo and leaves the origin running on

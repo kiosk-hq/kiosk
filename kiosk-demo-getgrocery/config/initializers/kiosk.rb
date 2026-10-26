@@ -3,7 +3,7 @@
 require 'base64'
 require 'stripe'
 require 'kiosk/payment_providers/stripe'
-require 'kiosk/kyc_providers/prove'
+require 'kiosk/kyc_providers/proveli'
 require 'kiosk/user_identity_providers/devise'
 
 Kiosk.configure do |c|
@@ -39,10 +39,10 @@ end
 # KYC: the broker that checks the customer, and the claims this origin asks for.
 Kiosk.configure do |c|
   c.kyc_claims     = %w[age_over_18]
-  c.kyc_provider   = Kiosk::KycProviders::Prove.new(
-    operator_id: 'getgrocery', intake_secret: ENV.fetch('KIOSK_PROVE_INTAKE_SECRET'),
-    url: ENV.fetch('KIOSK_PROVE_BROKER_URL'), issuer: ENV.fetch('KIOSK_PROVE_ISSUER'),
-    public_key: ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')
+  c.kyc_provider   = Kiosk::KycProviders::Proveli.new(
+    operator_id: 'getgrocery', intake_secret: ENV.fetch('KIOSK_PROVELI_INTAKE_SECRET'),
+    url: ENV.fetch('KIOSK_PROVELI_BROKER_URL'), issuer: ENV.fetch('KIOSK_PROVELI_ISSUER'),
+    public_key: ENV.fetch('KIOSK_PROVELI_PUBLIC_KEY_PEM')
   )
 end
 

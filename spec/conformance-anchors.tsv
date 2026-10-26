@@ -792,7 +792,7 @@ kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_saved_method_spec.rb	return
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	'#setup_url' do
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	creates a Checkout Session in setup mode for an existing customer and returns the url
 kiosk-pow-argon2id/README.md	## Cross-implementation parity check
-kiosk-pow-argon2id/README.md	> **Retired / optional.** The shipped default PoW backend is
+kiosk-pow-argon2id/README.md	> **Opt-in.** The shipped default proof-of-work backend is
 kiosk-pow-argon2id/README.md	Both sides produce byte-identical Argon2id digests (verified by `rake parity`).
 kiosk-pow-argon2id/README.md	Computes the same Argon2id digest in Ruby and Python, asserts hex-equal, then
 kiosk-pow-argon2id/Rakefile	task :parity do
@@ -928,11 +928,11 @@ kiosk-redteam/suites/tudu.rb	BATTERY.record('ChosenNameNeverTheAddress',
 kiosk-redteam/suites/tudu.rb	BATTERY.record('NoLoginAddressOnTheRoster',
 kiosk-redteam/suites/tudu.rb	BATTERY.record('PreLinkTokenAfterLink', rc == 401,
 kiosk-reputation/README.md	      "salt":   "<base64 of 16 raw bytes, fresh per challenge>",
-kiosk-reputation/README.md	  is the shipped default; `argon2id` is legacy.
+kiosk-reputation/README.md	  is the shipped default; `argon2id` and `cuckatoo` are opt-in.
 kiosk-reputation/README.md	## Anti-DoS invariant: cheap checks before the expensive backend eval
 kiosk-reputation/README.md	### Proof — client re-sends the same request, proof(s) in the `Kiosk-PoW` header
 kiosk-reputation/README.md	### `Policies::RecentSpend` — a toll on every Nth call, and spend makes N larger
-kiosk-reputation/README.md	**Pure Ruby — no dependency on kiosk-pow or kiosk-core.** A PoW backend registers
+kiosk-reputation/README.md	**Pure Ruby — no dependency on kiosk-pow or kiosk-core.** A proof-of-work backend registers
 kiosk-reputation/README.md	- `alg` + `params` are **mandated** — no client negotiation field. `equihash`
 kiosk-reputation/README.md	A single proof may be sent bare (`Kiosk-PoW: {"challenge":{…},"nonce":{…}}`), as a
 kiosk-reputation/README.md	Cuckatoo Cycle (opt-in, registers as `cuckatoo`).
@@ -943,8 +943,8 @@ kiosk-reputation/README.md	`WWW-Authenticate: Kiosk-PoW realm="<issuer>"`) whose
 kiosk-reputation/README.md	`kiosk-reputation` decides *when* and *how hard* to challenge a request with a
 kiosk-reputation/README.md	burning a backend eval. This is not optional; it is tested.
 kiosk-reputation/README.md	pluggable reputation policy interface.
-kiosk-reputation/README.md	proof-of-work, issues and verifies the signed challenge, and provides a
-kiosk-reputation/README.md	provides Argon2id (legacy, registers as `argon2id`); `kiosk-pow-cuckoo` provides
+kiosk-reputation/README.md	proof of work, issues and verifies the signed challenge, and provides a
+kiosk-reputation/README.md	provides Argon2id (opt-in, registers as `argon2id`); `kiosk-pow-cuckoo` provides
 kiosk-reputation/README.md	registers itself at boot; the host registers any other backend (see
 kiosk-reputation/README.md	same path, same query string, same body — with the proof(s) in a **`Kiosk-PoW`
 kiosk-reputation/README.md	the shipped default is **equihash** (`kiosk-pow-equihash`); `kiosk-pow-argon2id`

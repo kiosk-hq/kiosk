@@ -2,22 +2,22 @@
 
 Argon2id memory-hard proof-of-work backend for the [Kiosk](https://kiosk.tech) framework.
 
-> **Retired / optional.** The shipped default PoW backend is
-> [`kiosk-pow-equihash`](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-pow-equihash) — one PoW backend, Equihash.
+> **Opt-in.** The shipped default proof-of-work backend is
+> [`kiosk-pow-equihash`](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-pow-equihash).
 > Argon2id's `verify` costs one `m`-sized eval (~64 MiB),
 > so a flood of bad proofs is a DoS on the *verifier* — the exact failure the
-> asymmetric-verify goal exists to prevent. This gem stays in the repo as an
-> opt-in backend and reference; no demo, harness or deploy runbook uses it.
+> asymmetric-verify goal exists to prevent. No demo, harness or deploy runbook
+> uses this backend.
 
 ## What it is
 
 `kiosk-pow-argon2id` implements a
-**search-form Argon2id PoW**: a client finds the smallest nonce `n ≥ 0` such
+**search-form Argon2id proof of work**: a client finds the smallest nonce `n ≥ 0` such
 that `Argon2id(password=str(n), salt=raw_salt, ...)` has ≥ `d` leading zero
-bits. The provider verifies by computing **one** Argon2id eval — the solve:verify
+bits. The operator verifies by computing **one** Argon2id eval — the solve:verify
 lever is exactly `2^d`.
 
-Providers can demand this PoW on any query or action endpoint
+Operators can demand this proof of work on any query or action
 (`GET /kiosk/<query-name>`, `POST /kiosk/<action-name>`) — and, as an optional
 registration toll, on `/kiosk/oauth/register` — at their discretion, via
 `kiosk-reputation`'s policy layer. `pay` is tolled the same way, so it may
@@ -53,9 +53,9 @@ Kiosk::Pow::Argon2id.digest(salt: raw_bytes, params: { m: 65_536, t: 1, p: 1, d:
 | `m` default | `65_536` KiB (64 MiB) | ASIC-resistance knob; sets verify cost and solve cost equally |
 | `t` default | `1` | Iterations |
 | `p` default | `1` | Parallelism |
-| `d` | provider-chosen | Required leading zero bits; escalation knob; solve ≈ `2^d` evals |
+| `d` | operator-chosen | Required leading zero bits; escalation knob; solve ≈ `2^d` evals |
 
-## The canonical PoW computation
+## The canonical proof-of-work computation
 
 Both the Ruby verifier and the Python solver compute the same primitive:
 
@@ -106,8 +106,8 @@ Agent-facing guidance is **not** duplicated in this gem. The canonical skill is
 [kiosk.tech/skill.md](https://kiosk.tech/skill.md); it teaches the `402
 pow_required` retry — the same request body, unchanged, with the proof(s) in a
 `Kiosk-PoW` request header as raw JSON — and it teaches it for the
-shipped Equihash default, not for this legacy backend. An operator that opts
-back into Argon2id is off that path: it must tell its own assistants to run the
+shipped Equihash default, not for this backend. An operator that opts into
+Argon2id is off that path: it must tell its own assistants to run the
 `solve.py` above and echo the challenge verbatim in the `Kiosk-PoW` header.
 
 ## Difficulty tiers (guidance)
@@ -118,7 +118,7 @@ KiB (64 MiB), `t = 1`, `p = 1`.
 | `d` | Expected solve time | Typical use |
 |----:|:-------------------:|:------------|
 | 0   | instant             | no challenge (policy returns nil) |
-| 5–6 | 2–4 s               | light friction for unproven principals |
+| 5–6 | 2–4 s               | light friction for unproven customers |
 | 8   | 20–40 s             | medium throttle |
 | 11  | 3–6 min             | hard throttle for high-suspicion/high-rate |
 
@@ -149,10 +149,10 @@ Kiosk::Reputation::Backends.register("argon2id", Kiosk::Pow::Argon2id)
 
 ## Honesty / guardrails
 
-- **PoW is economic friction, not a wall.** A determined ASIC attacker still
+- **Proof of work is economic friction, not a wall.** A determined ASIC attacker still
   gets in; the point is to make free-riding cost more than buying. Combine with
   `kiosk-reputation` for the full picture.
-- **The provider mandates `alg` + `params`.** Clients comply or are denied.
+- **The operator mandates `alg` + `params`.** Clients comply or are denied.
   There is no negotiation path — do not add one.
 - **Default verify costs `m` KiB of memory** — one full Argon2id eval.
   Only challenge on suspicion/rate, not on every cheap call. The challenge

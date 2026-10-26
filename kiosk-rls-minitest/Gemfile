@@ -13,3 +13,5 @@ gem 'kiosk-pow-equihash',    path: '../kiosk-pow-equihash'
 gem 'kiosk-server',          path: '../kiosk-server'
 gem 'kiosk-test-support',    path: '../kiosk-test-support'
 gem 'kiosk-user-idp-devise', path: '../kiosk-user-idp-devise'
+
+gem 'pg', '~> 1.5' # The README example runs against Postgres.

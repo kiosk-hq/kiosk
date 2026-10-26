@@ -42,31 +42,41 @@ Kiosk::TestHelpers.executor = Kiosk::TestHelpers::NullExecutor.new
 
 ## Example
 
+The example needs an `orders` table whose policy shows a customer only the rows
+with their own `user_id`, and `c.enforce_db_role`, so that each scope runs as
+`c.app_role` (see the kiosk-rls README). Each `as_*` scope runs in a
+transaction that rolls back. `kiosk_seed` writes outside the scopes, so a test
+reads the rows that it seeds:
+
 ```ruby
-RSpec.describe "orders flow", type: :kiosk_journey do
-  it "isolates orders per user" do
-    alice = create_user
-    bob   = create_user
+RSpec.describe "orders", type: :kiosk_journey do
+  let(:alice) { User.create!(email: "alice@example.com") }
+  let(:bob)   { User.create!(email: "bob@example.com") }
 
-    as_agent_of(alice) { run_action :create_order, items: ["oranges"] }
-    as_agent_of(bob)   { run_action :create_order, items: ["bread"]   }
+  before do
+    kiosk_seed :orders, owner: alice, item: "oranges"
+    kiosk_seed :orders, owner: bob,   item: "bread"
+  end
 
+  it "shows each customer only their own orders" do
     as_agent_of(alice) do
       expect(query("select item from orders")).to contain_exactly({ item: "oranges" })
     end
   end
 
-  it "denies anonymous reads" do
-    as_anonymous do
-      expect { query("select * from orders") }.to be_rls_denied
+  it "refuses an order written for another customer" do
+    as_agent_of(bob) do
+      expect { query("insert into orders (user_id, item) values ('#{alice.id}', 'tea')") }.to be_rls_denied
     end
   end
 end
 ```
 
+`spec/kiosk/readme_example_spec.rb` runs this block against Postgres.
+
 ## Status
 
-Pre-v1.0 alpha. DSL surface and matchers are stable across pre-v1.0 minor bumps.
+Pre-v1.0 alpha: the DSL and the matchers may change between releases.
 
 ## License
 

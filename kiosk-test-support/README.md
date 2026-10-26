@@ -5,7 +5,7 @@ Test helpers for [Kiosk](https://kiosk.tech) origins, and the journey-test DSL o
 ## What it does
 
 - `Kiosk::TestHelpers::Assistant` — registers, solves tolls, queries, runs actions, pays and listens for events against an origin, as an AI assistant does.
-- `Kiosk::TestHelpers::Wire` — the same transport without a principal: any method, any path, any headers.
+- `Kiosk::TestHelpers::Wire` — the same transport without an assistant's credential: any method, any path, any headers.
 - `Kiosk::StoryTest` / `Kiosk::TestHelpers::Story` — a test told as a business story by customers' assistants and the people on the operator's site.
 - `Kiosk::TestHelpers::Kyc` — stands in for the operator's KYC provider, so a test decides how an identity check ends.
 - `Kiosk::TestHelpers::StripeMock` — starts a local stripe-mock that answers a confirmed charge as paid.
@@ -32,17 +32,21 @@ Your bundle brings what the helpers drive: `puma` for `LiveServer` (`rails new` 
 
 ## DSL
 
-```ruby
-as_agent_of(alice) do
-  run_action :create_order, items: ["bread"]
-end
+Each `as_*` scope runs in a transaction that rolls back. `kiosk_seed` writes
+outside the scopes, so a test reads the rows that it seeds. With an `orders`
+table whose policy shows a customer only their own rows (kiosk-rls) and
+`c.enforce_db_role`:
 
-as_user(alice) do
+```ruby
+kiosk_seed :orders, owner: alice, item: "bread"
+
+as_agent_of(alice) do
   expect(query("select item from orders")).to contain_exactly({ item: "bread" })
 end
 
-as_anonymous do
-  expect { query("select * from orders") }.to be_rls_denied
+as_agent_of(bob) do
+  expect(query("select item from orders")).to be_empty
+  expect { query("insert into orders (user_id, item) values ('#{alice.id}', 'tea')") }.to be_rls_denied
 end
 ```
 
@@ -70,7 +74,7 @@ The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; produc
 
 ## Driving the protocol as an assistant
 
-`Kiosk::TestHelpers::Assistant` registers its key as an OAuth client and gets DPoP-bound tokens, solves proof-of-work tolls, queries, runs, pays with closed AP2 mandates (SD-JWT) and listens on `<endpoint>/events`, against any origin — a test's own live server or a deployment:
+`Kiosk::TestHelpers::Assistant` registers its key as an OAuth client and gets DPoP-bound tokens, solves proof-of-work tolls, queries, runs, pays with closed AP2 mandates (SD-JWT) and listens on `/kiosk/events`. It calls the `/kiosk/...` paths, so it works against an origin that mounts the engine at the default path `/kiosk` — a test's own live server or a deployment. `Person` and the events client call the same paths:
 
 ```ruby
 require "kiosk/test_helpers/assistant"
@@ -82,7 +86,7 @@ events.subscribe("kyc_verification")
 assistant.run(rider, name: "reserve", scooter_code: "SK-001")
 ```
 
-Every answer carries its status, parsed body and headers. `Kiosk::TestHelpers::Wire` is the same transport without a principal: any method, any path, any headers.
+Every answer carries its status, parsed body and headers. `Kiosk::TestHelpers::Wire` is the same transport without an assistant's credential: any method, any path, any headers.
 
 ## Telling a business story
 
@@ -129,7 +133,7 @@ class LicenceStory < Kiosk::StoryTest   # or an RSpec group including Kiosk::Tes
 end
 ```
 
-`kyc_attestation(principal, **attributes)` signs an attestation an assistant submits to `POST <endpoint>/agents/kyc`. A check the human refuses sends nothing, so there is no helper for it.
+`kyc_attestation(principal, **attributes)` signs an attestation an assistant submits to `POST /kiosk/agents/kyc`. A check the human refuses sends nothing, so there is no helper for it.
 
 `Kiosk::TestHelpers::StripeMock.start` fronts a local [stripe-mock](https://github.com/stripe/stripe-mock) that answers a confirmed charge as paid. stripe-mock lists a saved card for every Customer, so once `payment_setup` has mapped one, `pay` settles.
 
@@ -175,7 +179,7 @@ After an update of kiosk-server to a release with a different skill, the test fa
 
 ## Status
 
-Pre-v1.0 alpha. The Journey DSL surface is stable across pre-v1.0 minor bumps; the executor contract may still evolve pre-v1.0 (`Kiosk::TestHelpers::InProcessExecutor` implements it today).
+Pre-v1.0 alpha: the Journey DSL and the executor contract may change between releases. `Kiosk::TestHelpers::InProcessExecutor` implements the contract.
 
 ## License
 

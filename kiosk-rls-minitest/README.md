@@ -39,35 +39,45 @@ Kiosk::TestHelpers.executor = Kiosk::TestHelpers::NullExecutor.new
 
 ## Example
 
+The example needs an `orders` table whose policy shows a customer only the rows
+with their own `user_id`, and `c.enforce_db_role`, so that each scope runs as
+`c.app_role` (see the kiosk-rls README). Each `as_*` scope runs in a
+transaction that rolls back. `kiosk_seed` writes outside the scopes, so a test
+reads the rows that it seeds:
+
 ```ruby
 require "test_helper"
 
-class OrdersFlowTest < Minitest::Test
+class OrdersTest < Minitest::Test
   include Kiosk::TestHelpers
 
-  def test_isolates_orders_per_user
-    alice = create_user
-    bob   = create_user
+  def setup
+    super
+    @alice = User.create!(email: "alice@example.com")
+    @bob   = User.create!(email: "bob@example.com")
+    kiosk_seed :orders, owner: @alice, item: "oranges"
+    kiosk_seed :orders, owner: @bob,   item: "bread"
+  end
 
-    as_agent_of(alice) { run_action :create_order, items: ["oranges"] }
-    as_agent_of(bob)   { run_action :create_order, items: ["bread"]   }
-
-    as_agent_of(alice) do
+  def test_shows_each_customer_only_their_own_orders
+    as_agent_of(@alice) do
       assert_equal [{ item: "oranges" }], query("select item from orders")
     end
   end
 
-  def test_denies_anonymous_reads
-    as_anonymous do
-      assert_rls_denied { query("select * from orders") }
+  def test_refuses_an_order_written_for_another_customer
+    as_agent_of(@bob) do
+      assert_rls_denied { query("insert into orders (user_id, item) values ('#{@alice.id}', 'tea')") }
     end
   end
 end
 ```
 
+`test/kiosk/readme_example_test.rb` runs this block against Postgres.
+
 ## Status
 
-Pre-v1.0 alpha. DSL surface and assertions are stable across pre-v1.0 minor bumps.
+Pre-v1.0 alpha: the DSL and the assertions may change between releases.
 
 ## License
 

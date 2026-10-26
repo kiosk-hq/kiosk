@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.26] — 2026-10-26
+
+- 2026-10-26: Version 0.6.26, the tree cut that matches skill 0.6.26.
 - 2026-10-26: The spending cap is the most one `pay` may charge. `spending_cap_window_days` and the running total are removed; the manage page shows all the spend of an assistant.
 - 2026-10-26: The PoW gate and the auth toll raise their ConfigurationError when kiosk-reputation or kiosk-pow-equihash is not required and only its version file is loaded.
 

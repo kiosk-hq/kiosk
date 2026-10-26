@@ -11,6 +11,9 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.26] — 2026-10-26
+
+- 2026-10-26: **Every gem and `API_VERSION` are 0.6.26, matching skill 0.6.26; the engine default is `skill-v0.6.26.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.
 - 2026-10-26: kiosk-server: the spending cap is the most one `pay` may charge. `spending_cap_window_days` and the running total of settled and unfinished charges are removed.
 - 2026-10-26: ROADMAP: 0.7 adds a client script, DNS-AID, Poppy business side and UCP to consider; 0.8 adds Shared Payment Tokens and MPP; rejected ideas are gone.
 - 2026-10-26: kiosk-server: the PoW gate and the auth toll raise their ConfigurationError when only a gem's version file is loaded, as a path bundle loads it, and no NoMethodError or NameError.

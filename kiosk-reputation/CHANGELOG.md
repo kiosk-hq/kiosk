@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.26] — 2026-10-26
+
+- 2026-10-26: Version 0.6.26, the tree cut that matches skill 0.6.26.
 - 2026-10-26: `RecentSpend` asks the Equihash params only when the gem is loaded. When only its version file is loaded, the toll asks n=168, k=7.
 
 ## [0.6.25] — 2026-10-26

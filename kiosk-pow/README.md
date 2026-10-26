@@ -21,7 +21,7 @@ kiosk-pow is pure Ruby. It has no runtime dependencies, and it does not need
 |-----|-------|--------|
 | `kiosk-pow-equihash` | `equihash` | The shipped default. Registers itself in a Rails app. |
 | `kiosk-pow-cuckoo` | `cuckatoo` | Opt-in. The host registers it. |
-| `kiosk-pow-argon2id` | `argon2id` | Legacy. The host registers it. |
+| `kiosk-pow-argon2id` | `argon2id` | Opt-in. The host registers it. |
 
 `kiosk-reputation` holds the registry. It mints and signs each challenge, and it
 checks the signature and the expiry before it calls a backend.
@@ -54,6 +54,8 @@ module Kiosk
       def self.params(bits: 20) = { bits: }
 
       def self.verify(salt:, params:, nonce:)
+        return false unless nonce.is_a?(Hash)
+
         bits  = Integer(Pow.param(params, :bits))
         value = Pow.param(nonce, :value)
         return false unless value.is_a?(Integer) && value.between?(0, (1 << 64) - 1)
@@ -75,14 +77,17 @@ end
 | `NAME` | Yes | The `alg` string of the signed challenge. |
 | `.params(**)` | Yes | Returns the `params` Hash of a challenge. The host calls it when it writes its policy. |
 | `.verify(salt:, params:, nonce:)` | Yes | Returns `true` when `nonce` is a valid proof for `salt` and `params`. Returns `false` for all other input. |
-| `.valid_params?(params)` | No | Returns `false` when no proof can verify at `params`. `kiosk-server`'s PoW toll calls it through `Kiosk::Reputation::Backends.valid_params?` before it mints a challenge. A wrong configuration then fails at once. |
+| `.valid_params?(params)` | No | Returns `false` when no proof can verify at `params`. `kiosk-server`'s proof-of-work toll calls it through `Kiosk::Reputation::Backends.valid_params?` before it mints a challenge. A wrong configuration then fails at once. |
 
 ### 4. Read the inputs of `.verify` correctly
 
 - `salt` is raw bytes. `kiosk-reputation` decodes the base64 of the protocol.
 - `params` is the signed `params` of the challenge, with Symbol keys.
-- `nonce` is the `nonce` of the proof, as the `Kiosk-PoW` header carries it. It
-  is parsed JSON, so its keys are Strings. Read it with `Kiosk::Pow.param`.
+- `nonce` is the `nonce` of the proof, as the `Kiosk-PoW` header carries it.
+  kiosk-server parses the header with Symbol keys. The nonce can be any JSON
+  value: an object, an array, a string, a number, `true`, `false` or `null`.
+  Check its type first. Read its keys with `Kiosk::Pow.param`, which reads a
+  Symbol key and a String key.
 - Each key and each value of `params` must not contain `|`, `,` or `=`. These
   characters separate the fields of the signed string, and `kiosk-reputation`
   refuses such a challenge.

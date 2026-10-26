@@ -34,13 +34,16 @@ your own toolchain — `kiosk-demo-getgrocery/mise.toml.example` is the tracked
 template).
 
 - **Ruby 4.0 or newer.** Every gemspec declares it, and CI runs on 4.0.
-- **PostgreSQL.** Kiosk's `kiosk_*` tables are Postgres.
-  `e2e/run.sh` additionally creates a group role, so
-  running the harness needs the privilege to `CREATE ROLE` — managed Postgres
-  and shared dev servers refuse it.
-- **Python 3 with numpy.** Only for *solving* proof-of-work, which is what the
-  demos' register step and the e2e harness do on the client side. Verifying a
-  proof is pure Ruby and needs neither.
+- **PostgreSQL**, with `psql` on the `PATH`. Kiosk's `kiosk_*` tables are
+  Postgres.
+- **Python 3**, with the packages in `e2e/requirements.txt`. The demos' register
+  step and the e2e harness solve proof of work with numpy. The harness also signs
+  every DPoP proof with `e2e/dpop.py` (pyjwt, cryptography) and listens to the
+  event stream (websockets). Set `KIOSK_PYTHON` to a virtual environment's
+  `python` when your system Python refuses the install. Verifying a proof is pure
+  Ruby and needs no Python.
+- **`stripe-mock`** (`brew install stripe-mock`). The harness charges it in the
+  pay flow.
 - **`curl` and `jq`**, for the harness and for the demo flow drivers.
 
 `e2e/run.sh` refuses to start with a named prerequisite missing rather than
@@ -78,7 +81,7 @@ published JSON Schemas, and tears down.
 ./e2e/run.sh
 ```
 
-**The guards.** `bin/check-*` holds properties a test suite cannot: that nothing
+**The checks.** `bin/check-*` holds properties a test suite cannot: that nothing
 shipped cites material that does not ship with it, that copies shared between
 demos agree, that the skill every demo pins is the newest published cut, and a
 few more. They are plain scripts —
@@ -89,7 +92,7 @@ bin/check-publication-paths
 ```
 
 Most of them also take `--self-test`, which plants a break of every rule it
-holds and fails unless the script goes red on each one. If you change a guard,
+holds and fails unless the script goes red on each one. If you change a check,
 run its self-test; if you add a rule to one, add an arm for it.
 
 ```bash
@@ -108,7 +111,8 @@ bin/lint
 
 RuboCop runs with its default cops and the `rubocop-rails`, `rubocop-minitest`,
 `rubocop-rake`, `rubocop-rspec` and `rubocop-rspec_rails` plugins, new cops
-included; only `Layout/LineLength` and `Style/Documentation` are off. The Rails
+included; only `Layout/LineLength`, `Style/Documentation`,
+`RSpec/MultipleExpectations` and `RSpec/ExampleLength` are off. The Rails
 cops read the code that runs in a Rails app; `.rubocop.yml` lists the plain Ruby
 paths they skip. Fix an offense rather than disable the cop. An
 inline `# rubocop:disable` is for a line where the cop is wrong, and it carries
@@ -118,41 +122,42 @@ its reason after `--`. A Brakeman false positive goes into that app's
 ## The merge gate
 
 Tests covering the change must be green before merge. For this repository that
-means **the touched gem's own suite plus `./e2e/run.sh`**, and the guards that
+means **the touched gem's own suite plus `./e2e/run.sh`**, and the checks that
 own whatever you touched. CI (`.github/workflows/ci.yml`) runs all of it — every
-gem suite, every gated demo task, the e2e harness, and each guard as its own job
+gem suite, every gated demo task, the e2e harness, and each check as its own job
 — so a pull request tells you the same thing your laptop does. It is much faster
 to find out locally.
 
-Two things CI does *not* do, and they are yours:
+**The changelog is yours.** CI checks the form of each entry
+(`bin/check-changelog`), but it does not check that an entry exists. A
+significant change — anything that alters behaviour, spec text, skill
+instructions, or a claim this project makes — gets an entry: the root
+`CHANGELOG.md` for a repository-wide change, `<gem>/CHANGELOG.md` for a change
+to that package. Keep each entry under 200 characters and one or two sentences,
+with only the essence of the change. The commit message keeps the details.
+Tests-only changes, refactors and typos do not qualify. Nothing already written
+is edited: history is append-only, and an entry that turns out to be wrong is
+superseded by a new one that names it.
 
-- **The changelog.** A significant change — anything that alters behaviour, spec
-  text, skill instructions, or a claim this project makes — gets an entry: the
-  root `CHANGELOG.md` for a repository-wide change, `<gem>/CHANGELOG.md` for a
-  change to that package. **Keep the entries short, always under 200 characters
-  and one-two sentences; only keep the essence of the change.** The commit
-  message keeps the details. That rule binds every `CHANGELOG.md` here. Tests-only changes, refactors and typos do not qualify. Nothing
-  already written is edited: history is append-only, and an entry that turns out
-  to be wrong is superseded by a new one that names it.
-- **Shared code across demos.** The demos are separate applications, so shared
-  code is hand-copied on purpose. `bin/check-demo-copies` declares every file
-  that exists in two or more of them and holds the copies in lockstep. If you
-  edit one, that check tells you which siblings you also have to edit — and
-  fails until you do.
+**Shared code across demos.** The demos are separate applications, so shared
+code is hand-copied on purpose. `bin/check-demo-copies` declares every file that
+exists in two or more of them and holds the copies in lockstep. If you edit one,
+that check tells you which siblings you also have to edit — and fails until you
+do.
 
 ## Style, as this repository actually practises it
 
 - **A comment explains the code, never its history.** So does a document: a
-  public artefact describes what *is*. The afterlife of a removed endpoint,
+  public artefact describes what *is*. The afterlife of a removed path,
   configuration key or protocol element is one short changelog line — not a README
   paragraph, not a "note that X no longer…". A reader arriving today has no
   memory to correct. A *live* caveat that still binds someone is the opposite:
   that is what the document is for.
 - **A number in prose is a measurement, and measurements rot.** Prefer the
-  command that produces it over the integer it produced. Several guards exist
+  command that produces it over the integer it produced. Several checks exist
   because a hand-kept count went quietly false.
-- **Commit messages** carry a short area prefix (`spec:`, `demos:`, `guard:`,
-  `kiosk-server:`, or the demo's name) and a subject that says what changed and
+- **Commit messages** carry a short area prefix (`spec:`, `demos:`, `kiosk-server:`, the
+  check's name, or the demo's name) and a subject that says what changed and
   why. Small, one-concern commits, please, rather than one pile.
 
 ## Licensing

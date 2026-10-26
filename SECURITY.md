@@ -5,7 +5,7 @@ repository that carry security weight are the ones an origin exposes to the open
 internet: the OAuth client registration and the token endpoint that
 authenticates a client assertion and a DPoP proof, the token-bearing data
 plane, the proof-of-work toll in front of registration, the payment path that
-settles a cart mandate against a card saved on the provider's own PSP account,
+settles a cart mandate against a card saved on the operator's own PSP account,
 and the optional Postgres row-level-security backstop. A flaw in any of those
 lets someone reach data or money that is not theirs on a **running operator's**
 server.
@@ -57,9 +57,12 @@ section says which lines are supported.
 
 ## What is in scope
 
-Anything in the shipped gems (`kiosk-core`, `kiosk-server`, the PoW backends,
-`kiosk-reputation`, `kiosk-rls*`, the IdP and PSP adapters, `kiosk-test-support`,
-`kiosk-redteam`) and anything in the `e2e/` harness. A flaw in one of the
+Anything in a shipped gem (each directory with a `*.gemspec` that is not a
+`kiosk-demo-*` application: `kiosk-all`, `kiosk-core`, `kiosk-server`,
+`kiosk-pow` and its three backends, `kiosk-reputation`, `kiosk-rls` and its two
+test gems, `kiosk-user-idp-devise`, `kiosk-pay-stripe`, `kiosk-kyc-prove`,
+`kiosk-test-support`, `kiosk-redteam`), anything in the `e2e/` harness, and
+anything in the `deploy/` runbook. A flaw in one of the
 `kiosk-demo-*` applications is in scope too when it is a flaw a reader would
 copy — these demos exist to be read and imitated, so a bad pattern in one of
 them propagates.
@@ -83,7 +86,9 @@ enough to be worth naming:
   top. Abuse resistance comes from the reputation policy's proof-count knob and
   caps. "A GPU solves this faster than a laptop" is the design, not a bug.
 - **Demo seed data, demo credentials and demo hosts.** The `kiosk-demo-*` apps
-  seed fictional people and orders and log in without a password in development.
+  seed fictional people and orders. Each operator demo seeds its accounts with
+one shared password that its `db/seeds.rb` and its README publish, for example
+`getgrocery-demo-password`.
 - **Findings your own `kiosk-redteam` battery reports against your own origin.**
   That gem is an adversarial test harness; a red beat against an application you
   wrote is the harness working. A gap it reveals in the **engine** — a check the

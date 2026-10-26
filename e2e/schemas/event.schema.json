@@ -3,15 +3,9 @@
   "$id": "https://kiosk.tech/spec/schemas/event.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/event.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk event",
-  "description": "One message the operator pushes on the event stream at <endpoint>/events. The root is CLOSED: an event carries the five members declared here. The topic's `payload_schema` in the catalog gives the shape of `data`.",
+  "description": "One message the operator pushes on the event stream at <endpoint>/events. The root is CLOSED: an event carries the five members declared here. The topic's `payload_schema` in the catalog gives the shape of `data`. `$defs` holds the two other messages of a subscription: `subscribed` and `unsubscribed`.",
   "type": "object",
-  "required": [
-    "id",
-    "topic",
-    "subject",
-    "occurred_at",
-    "data"
-  ],
+  "required": ["id", "topic", "subject", "occurred_at", "data"],
   "additionalProperties": false,
   "properties": {
     "id": {
@@ -26,10 +20,7 @@
       "description": "The topic this event belongs to, as declared in the catalog."
     },
     "subject": {
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": ["string", "null"],
       "description": "What the event is ABOUT within the topic -- an order id, a list id. Null for a topic that has no subject. A subject-scoped subscription sees only its own."
     },
     "occurred_at": {
@@ -39,6 +30,32 @@
     },
     "data": {
       "description": "The payload, validating against the topic's payload_schema."
+    }
+  },
+  "$defs": {
+    "subscribed": {
+      "type": "object",
+      "description": "The first message of an accepted subscription (Section 8.5.4).",
+      "required": ["type", "topic", "subject", "head", "truncated"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "subscribed" },
+        "topic": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "The topic of the subscription." },
+        "subject": { "type": ["string", "null"], "description": "The subject of the subscription. Null for a subscription that names no subject." },
+        "head": { "type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "The origin's current event id: the cursor that the subscriber records." },
+        "truncated": { "type": "boolean", "description": "True when the operator cannot prove that the subscriber saw every event after its `since`. The subscriber then reads the state one time through the verb that owns it." }
+      }
+    },
+    "unsubscribed": {
+      "type": "object",
+      "description": "The message that ends a subscription when the operator withdraws the subscriber's reach (Section 8.5.6).",
+      "required": ["type", "topic", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "unsubscribed" },
+        "topic": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "The topic of the subscription." },
+        "reason": { "type": "string", "description": "Why the subscription ended: `reach_revoked` when the subscriber's reach to the subject is withdrawn." }
+      }
     }
   }
 }

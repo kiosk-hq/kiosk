@@ -19,6 +19,7 @@ module Kiosk
         'POST <endpoint>/auth/claim' => 'binding.schema.json#/$defs/claimRequest',
         'POST <endpoint>/auth/unlink' => 'binding.schema.json#/$defs/unlinkRequest',
         'POST <endpoint>/agents/kyc' => 'kyc.schema.json#/$defs/request',
+        'POST <endpoint>/kyc/callback' => 'kyc.schema.json#/$defs/callback',
         'POST <endpoint>/pay' => 'mandates.schema.json#/$defs/payRequest'
       }.freeze
 

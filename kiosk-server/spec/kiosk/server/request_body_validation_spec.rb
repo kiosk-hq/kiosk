@@ -31,6 +31,7 @@ module RequestBodyValidationSpec
                                       client_assertion: 'eyJ.eyJ.SIG' },
     'POST <endpoint>/auth/unlink' => { agent_id: 'a-1' },
     'POST <endpoint>/agents/kyc' => { kyc_jws: 'eyJ.eyJ.SIG' },
+    'POST <endpoint>/kyc/callback' => { request_id: 'req-1', nonce: 'n-1', kyc_jws: 'eyJ.eyJ.SIG' },
     'POST <endpoint>/pay' => { checkout_mandate: 'eyJ.eyJ.SIG~WyJz~',
                                payment_mandate: 'eyJ.eyJ.SIG~WyJz~' }
   }.freeze
@@ -43,6 +44,7 @@ module RequestBodyValidationSpec
     'POST <endpoint>/auth/claim' => :code,
     'POST <endpoint>/auth/unlink' => :agent_id,
     'POST <endpoint>/agents/kyc' => :kyc_jws,
+    'POST <endpoint>/kyc/callback' => :request_id,
     'POST <endpoint>/pay' => :checkout_mandate
   }.freeze
 

@@ -301,6 +301,12 @@ RSpec.describe Kiosk::Server::Kyc do
       expect(store.head).to eq(0)
     end
 
+    it 'answers 400 bad_request naming kyc_jws when it is not a string' do
+      status, problem = callback(request_id: request_id, nonce: nonce, kyc_jws: 42)
+      expect([status, problem['code']]).to eq([400, 'bad_request'])
+      expect(problem['detail']).to include('kyc_jws')
+    end
+
     describe 'against the published kyc.schema.json' do
       def published(definition) = Kiosk::Server::RequestValidation::Schemas.wire("kyc.schema.json#/$defs/#{definition}")
 
@@ -314,6 +320,12 @@ RSpec.describe Kiosk::Server::Kyc do
         data = store.since('u-1', 0).first['data']
         expect(published('verificationEvent').validate(data).to_a).to be_empty
         expect(published('verificationEvent').valid?(data.except('kyc_jws'))).to be(false)
+      end
+
+      it 'accepts the callback body and the answer to it' do
+        body = { 'request_id' => request_id, 'nonce' => nonce, 'kyc_jws' => attestation }
+        expect(published('callback').validate(body).to_a).to be_empty
+        expect(published('callbackAnswer').validate(callback(body).last).to_a).to be_empty
       end
     end
   end

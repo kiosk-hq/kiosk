@@ -7,7 +7,9 @@ module Kiosk
     class KycCallbackController < WireController
       def create
         Kyc.served!
-        Kyc.callback(parse_body!)
+        body = parse_body!
+        RequestValidation.validate_body!(body, exchange: 'POST <endpoint>/kyc/callback')
+        Kyc.callback(body)
         render json: { ok: true }, status: :ok
       end
     end

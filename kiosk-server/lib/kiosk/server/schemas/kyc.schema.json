@@ -3,7 +3,7 @@
   "$id": "https://kiosk.tech/spec/schemas/kyc.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/kyc.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk KYC attestation",
-  "description": "The decoded JWS payload of a KYC attestation, the POST /kiosk/agents/kyc request body, the request_kyc answer, and the data of the kyc_verification event that delivers the attestation.",
+  "description": "The decoded JWS payload of a KYC attestation, the POST /kiosk/agents/kyc request body, the request_kyc answer, the body that the KYC provider posts to the callback and its answer, and the data of the kyc_verification event that delivers the attestation.",
   "$defs": {
     "attestation": {
       "type": "object",
@@ -40,6 +40,25 @@
         "request_id": { "type": "string", "description": "The provider's id for this verification; the kyc_verification event carries it back." },
         "verification_url": { "type": "string", "description": "The provider page the human completes." },
         "status": { "const": "pending" }
+      }
+    },
+    "callback": {
+      "type": "object",
+      "description": "The body that the KYC provider posts to POST <endpoint>/kyc/callback when the human approves (Section 12.4.1). The operator answers 403 unless nonce equals the one that it kept.",
+      "required": ["request_id", "kyc_jws"],
+      "properties": {
+        "request_id": { "type": "string", "description": "The provider's id for the verification that request_kyc opened." },
+        "nonce": { "type": "string", "description": "The one-time nonce that the provider gave the operator when it opened the verification." },
+        "kyc_jws": { "type": "string", "description": "The attestation as a compact EdDSA JWS." }
+      }
+    },
+    "callbackAnswer": {
+      "type": "object",
+      "description": "The operator's 200 answer to a callback that it accepted.",
+      "additionalProperties": false,
+      "required": ["ok"],
+      "properties": {
+        "ok": { "const": true }
       }
     },
     "verificationEvent": {

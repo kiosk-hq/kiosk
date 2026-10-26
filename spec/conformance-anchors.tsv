@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2059 anchors.
+# 2060 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-proveli'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -680,7 +680,6 @@ kiosk-demo-stylish/test/stories/linking_test.rb	assert_predicate second.signs_ba
 kiosk-demo-stylish/test/stories/linking_test.rb	signs_in(:alice).approves(request['user_code'])
 kiosk-demo-stylish/test/stories/linking_test.rb	test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
 kiosk-demo-stylish/test/stories/linking_test.rb	test 'Alice approves the code her assistant shows her, and it books in her name' do
-kiosk-demo-stylish/test/stories/linking_test.rb	unlinking the first leaves the second
 kiosk-demo-stylish/test/stories/privacy_test.rb	Alice's assistant sees Alice's appointment and not Bob's
 kiosk-demo-stylish/test/stories/privacy_test.rb	an appointment belongs to whoever booked it, whoever the arguments name
 kiosk-demo-stylish/test/stories/privacy_test.rb	class PrivacyStory < StoryTest
@@ -1024,7 +1023,6 @@ kiosk-server/README.md	- **Account binding** — the claim/link ceremonies bind 
 kiosk-server/README.md	A block-less `kiosk` only mounts.
 kiosk-server/README.md	The full host-side surface is shipped and covered by the gem's own suite
 kiosk-server/README.md	in this directory runs it and prints how many examples that is
-kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	@notice = 'Assistant unlinked — its key no longer signs in.'
 kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	class AssistantsController < ApplicationController
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	def link
@@ -1072,7 +1070,6 @@ kiosk-server/lib/kiosk/payable.rb	return PENDING  if status == Kiosk::Server::Pa
 kiosk-server/lib/kiosk/server/account_binding.rb	      def bind!(agent_id:, user_id:, requested_role: nil)
 kiosk-server/lib/kiosk/server/account_binding.rb	# Remaps the holder and role, keeps agent_id and reputation.
 kiosk-server/lib/kiosk/server/account_binding.rb	always comes from a human's identity, never the request.
-kiosk-server/lib/kiosk/server/account_binding.rb	def unlink!(agent_id:, user_id:)
 kiosk-server/lib/kiosk/server/account_binding.rb	if transition && config.assistant_claimed
 kiosk-server/lib/kiosk/server/account_binding.rb	role ? [', allowed_roles = ARRAY[$3]::text[]', [role]]
 kiosk-server/lib/kiosk/server/account_holder_gate.rb	@identity = Kiosk.configuration.user_idp&.verify(request)
@@ -1096,6 +1093,7 @@ kiosk-server/lib/kiosk/server/configuration_extension.rb	        @skill_url ||= 
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      attr_accessor :spending_cap
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	# Decides when and how hard to challenge. Default nil: never.
 kiosk-server/lib/kiosk/server/configuration_extension.rb	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
 kiosk-server/lib/kiosk/server/configuration_extension.rb	def reputation_policy=
 kiosk-server/lib/kiosk/server/device_code_grant.rb	# The claim ceremony on the RFC 8628 device-grant endpoints: binds a registered
@@ -1179,6 +1177,7 @@ kiosk-server/lib/kiosk/server/pow_gate.rb	factors = ReputationFactors.for(identi
 kiosk-server/lib/kiosk/server/pow_gate.rb	policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
 kiosk-server/lib/kiosk/server/pow_gate.rb	return :proceed if policy.nil?
 kiosk-server/lib/kiosk/server/pow_gate.rb	return :proceed if spec.nil?
+kiosk-server/lib/kiosk/server/pow_gate.rb	spec    = policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
 kiosk-server/lib/kiosk/server/pow_toll.rb	# Not bad faith (clock skew, a difficulty change): release the claim
 kiosk-server/lib/kiosk/server/pow_toll.rb	# The cheap checks first, so only a live challenge this origin signed
 kiosk-server/lib/kiosk/server/pow_toll.rb	A lost claim is a replay: skipped, not penalised.
@@ -1806,6 +1805,7 @@ kiosk-server/spec/kiosk/server/pow_gate_spec.rb	PowRequired has HTTP status 402
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	PowRequired#to_problem renders a pow_required 402 problem document
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	buys no later call made with the same access token
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	carries a hint steering to the shipped reference solver
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	def always_challenge_policy = @always_challenge_policy ||= AlwaysChallengePolicy.new
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	does not disclose the construction, the parameters, or which check failed
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	expect(error).not_to respond_to(:to_envelope)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	flattens a proxy comma-combined value {A},{B} (RFC 7230)
@@ -1815,6 +1815,7 @@ kiosk-server/spec/kiosk/server/pow_gate_spec.rb	is exactly SHA256(
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	issues `count` challenges with distinct ids AND salts (no amortisation)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	it 'raises Forbidden' do
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	it 'raises PowRequired'
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	it 'raises PowRequired' do
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	nil reputation_policy (the default)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	parses a JSON-array value into the proofs list
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	pow_spent_store defaults to the database-backed store

@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-26 at 77d93b82
-# 2059 anchors.
+# recorded: 2026-10-26 at a5a498fa
+# 2060 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	7def39e3	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	f917a3b8a01e4bef	7def39e3	        if: matrix.demo != 'kiosk-demo-proveli'
 .github/workflows/ci.yml	0a24a48db9aa7ca6	7def39e3	      - name: Red-team battery
@@ -651,17 +651,16 @@ kiosk-demo-stylish/test/book_appointment_test.rb	7ac62782885c3c4c	7def39e3	a slo
 kiosk-demo-stylish/test/book_appointment_test.rb	91215efe9c4a3e9d	7def39e3	one instant in any spelling is one booking, answered on the salon's clock
 kiosk-demo-stylish/test/stories/discovery_test.rb	876c5760e9019d12	7def39e3	an assistant that knows nothing finds out, without an account, what the salon offers and how to book
 kiosk-demo-stylish/test/stories/discovery_test.rb	a005d7c7f9d3f9ff	7def39e3	class DiscoveryStory < StoryTest
-kiosk-demo-stylish/test/stories/linking_test.rb	8b58f903b3d6038b	7def39e3	  test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
-kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	7def39e3	  test 'Alice approves the code her assistant shows her, and it books in her name' do
-kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	7def39e3	Alice approves the code her assistant shows her, and it books in her name
-kiosk-demo-stylish/test/stories/linking_test.rb	86d98d116b09eab1	7def39e3	assert first.signs_back_in.refused?(:invalid_client)
-kiosk-demo-stylish/test/stories/linking_test.rb	1fc5aed79fe347a6	7def39e3	assert_equal [booked], second.appointments
-kiosk-demo-stylish/test/stories/linking_test.rb	0bb22e663f8fc1e9	7def39e3	assert_equal account_of(:alice), Appointment.find(alice.books['appointment_id']).user_id
-kiosk-demo-stylish/test/stories/linking_test.rb	c76363319de56dd3	7def39e3	assert_predicate second.signs_back_in, :ok?
-kiosk-demo-stylish/test/stories/linking_test.rb	7b07ddeb7f4668c7	7def39e3	signs_in(:alice).approves(request['user_code'])
-kiosk-demo-stylish/test/stories/linking_test.rb	8b58f903b3d6038b	7def39e3	test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
-kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	7def39e3	test 'Alice approves the code her assistant shows her, and it books in her name' do
-kiosk-demo-stylish/test/stories/linking_test.rb	8b58f903b3d6038b	7def39e3	unlinking the first leaves the second
+kiosk-demo-stylish/test/stories/linking_test.rb	8b58f903b3d6038b	a5a498fa	  test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
+kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	a5a498fa	  test 'Alice approves the code her assistant shows her, and it books in her name' do
+kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	a5a498fa	Alice approves the code her assistant shows her, and it books in her name
+kiosk-demo-stylish/test/stories/linking_test.rb	86d98d116b09eab1	a5a498fa	assert first.signs_back_in.refused?(:invalid_client)
+kiosk-demo-stylish/test/stories/linking_test.rb	1fc5aed79fe347a6	a5a498fa	assert_equal [booked], second.appointments
+kiosk-demo-stylish/test/stories/linking_test.rb	0bb22e663f8fc1e9	a5a498fa	assert_equal account_of(:alice), Appointment.find(alice.books['appointment_id']).user_id
+kiosk-demo-stylish/test/stories/linking_test.rb	c76363319de56dd3	a5a498fa	assert_predicate second.signs_back_in, :ok?
+kiosk-demo-stylish/test/stories/linking_test.rb	7b07ddeb7f4668c7	a5a498fa	signs_in(:alice).approves(request['user_code'])
+kiosk-demo-stylish/test/stories/linking_test.rb	8b58f903b3d6038b	a5a498fa	test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
+kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	a5a498fa	test 'Alice approves the code her assistant shows her, and it books in her name' do
 kiosk-demo-stylish/test/stories/privacy_test.rb	ac1129ed6ae567bd	7def39e3	Alice's assistant sees Alice's appointment and not Bob's
 kiosk-demo-stylish/test/stories/privacy_test.rb	3057d9e0db95008f	7def39e3	an appointment belongs to whoever booked it, whoever the arguments name
 kiosk-demo-stylish/test/stories/privacy_test.rb	3841ec5370cbfb3c	7def39e3	class PrivacyStory < StoryTest
@@ -1005,8 +1004,7 @@ kiosk-server/README.md	3b31a39dbc36aca9	7def39e3	- **Account binding** — the c
 kiosk-server/README.md	31f66197dff96819	7def39e3	A block-less `kiosk` only mounts.
 kiosk-server/README.md	1ffb51c6835073f3	7def39e3	The full host-side surface is shipped and covered by the gem's own suite
 kiosk-server/README.md	fe179f99c73c7446	7def39e3	in this directory runs it and prints how many examples that is
-kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	83790324d4c19dff	7def39e3	@notice = 'Assistant unlinked — its key no longer signs in.'
-kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	011b90c7f30cf563	7def39e3	class AssistantsController < ApplicationController
+kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	011b90c7f30cf563	a5a498fa	class AssistantsController < ApplicationController
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	0a1244f50f31a73e	7def39e3	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	07cb305eb3126bb0	7def39e3	def link
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	c883ff6ae18af688	7def39e3	identity = Kiosk.configuration.user_idp&.verify(request)
@@ -1050,12 +1048,11 @@ kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_mandates.rb.tt	
 kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_visits.rb.tt	fb80c60768dafd9e	7def39e3	create_table <%= table :visits %>, id: :uuid do |t|
 kiosk-server/lib/kiosk/owned.rb	f2491003775fa347	7def39e3	scope :own, -> { owned_by(Kiosk.current_user_id) }
 kiosk-server/lib/kiosk/payable.rb	4cd521db644c8c44	7def39e3	return PENDING  if status == Kiosk::Server::PaymentClaim::PAYING
-kiosk-server/lib/kiosk/server/account_binding.rb	7250a682b1fae422	7def39e3	      def bind!(agent_id:, user_id:, requested_role: nil)
-kiosk-server/lib/kiosk/server/account_binding.rb	317bfddf490b28b2	7def39e3	# Remaps the holder and role, keeps agent_id and reputation.
-kiosk-server/lib/kiosk/server/account_binding.rb	c2e03d7e96294efa	7def39e3	always comes from a human's identity, never the request.
-kiosk-server/lib/kiosk/server/account_binding.rb	c69115af671824fc	7def39e3	def unlink!(agent_id:, user_id:)
-kiosk-server/lib/kiosk/server/account_binding.rb	23e31174a81a4d3f	7def39e3	if transition && config.assistant_claimed
-kiosk-server/lib/kiosk/server/account_binding.rb	62945665eaf34ae7	7def39e3	role ? [', allowed_roles = ARRAY[$3]::text[]', [role]]
+kiosk-server/lib/kiosk/server/account_binding.rb	7250a682b1fae422	a5a498fa	      def bind!(agent_id:, user_id:, requested_role: nil)
+kiosk-server/lib/kiosk/server/account_binding.rb	317bfddf490b28b2	a5a498fa	# Remaps the holder and role, keeps agent_id and reputation.
+kiosk-server/lib/kiosk/server/account_binding.rb	c2e03d7e96294efa	a5a498fa	always comes from a human's identity, never the request.
+kiosk-server/lib/kiosk/server/account_binding.rb	23e31174a81a4d3f	a5a498fa	if transition && config.assistant_claimed
+kiosk-server/lib/kiosk/server/account_binding.rb	62945665eaf34ae7	a5a498fa	role ? [', allowed_roles = ARRAY[$3]::text[]', [role]]
 kiosk-server/lib/kiosk/server/account_holder_gate.rb	9bc2331b61cb76b8	7def39e3	@identity = Kiosk.configuration.user_idp&.verify(request)
 kiosk-server/lib/kiosk/server/actions.rb	2608a060da8db686	7def39e3	module Actions
 kiosk-server/lib/kiosk/server/agent_identity_providers/default_agent_idp.rb	05213139ac67ecc8	7def39e3	def authorization_for(request)
@@ -1073,12 +1070,13 @@ kiosk-server/lib/kiosk/server/client_assertion.rb	7b38dcb6424b5f76	7def39e3	issu
 kiosk-server/lib/kiosk/server/client_registration.rb	93acfb9b02cf3a3a	7def39e3	# RFC 7591 open registration of an AI assistant's public key, with no human:
 kiosk-server/lib/kiosk/server/client_registration.rb	08037059c8fd4ec7	7def39e3	AuthToll.gate(verb: 'oauth/register', body: { key: AssistantKey.thumbprint(key) }, pow: pow, config: config)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	c1e0f9e32b401aa9	7def39e3	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	424787bb935b92ec	7def39e3	        @skill_url ||= 'https://kiosk.tech/skill-v
-kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	7def39e3	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
-kiosk-server/lib/kiosk/server/configuration_extension.rb	d463cdaf59bff685	7def39e3	      attr_accessor :spending_cap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	7def39e3	      def computed_capabilities
-kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	7def39e3	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
-kiosk-server/lib/kiosk/server/configuration_extension.rb	59e6dd41e77efef5	7def39e3	def reputation_policy=
+kiosk-server/lib/kiosk/server/configuration_extension.rb	424787bb935b92ec	a5a498fa	        @skill_url ||= 'https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	a5a498fa	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
+kiosk-server/lib/kiosk/server/configuration_extension.rb	d463cdaf59bff685	a5a498fa	      attr_accessor :spending_cap
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	a5a498fa	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	b3c25f51ead41bac	a5a498fa	# Decides when and how hard to challenge. Default nil: never.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	a5a498fa	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	59e6dd41e77efef5	a5a498fa	def reputation_policy=
 kiosk-server/lib/kiosk/server/device_code_grant.rb	0127c4b9e1aef66b	7def39e3	# The claim ceremony on the RFC 8628 device-grant endpoints: binds a registered
 kiosk-server/lib/kiosk/server/device_code_grant.rb	8077327e193a9d87	7def39e3	da = authorization_of(client, store.lookup_by_device_code_hash(hash))
 kiosk-server/lib/kiosk/server/engine.rb	9a04fe52f1e0a44f	7def39e3	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
@@ -1153,13 +1151,14 @@ kiosk-server/lib/kiosk/server/mandate_verifier.rb	b0fb1e572de7b6c2	7def39e3	retu
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	6b809a1afffa9b8f	7def39e3	value.to_s.downcase
 kiosk-server/lib/kiosk/server/oauth_error.rb	98903b60029909a4	7def39e3	invalid_request invalid_client invalid_grant unsupported_grant_type invalid_dpop_proof
 kiosk-server/lib/kiosk/server/payment_claim.rb	c85c9f17995d9694	7def39e3	return if total == price
-kiosk-server/lib/kiosk/server/pow_gate.rb	7bf0b3eb868bfe4e	77d93b82	      def proofs_from_header(raw)
-kiosk-server/lib/kiosk/server/pow_gate.rb	fcf8ead0ed5e8fa4	77d93b82	# One proof, a JSON array, repeated header lines (Rack joins them with
-kiosk-server/lib/kiosk/server/pow_gate.rb	7bf0b3eb868bfe4e	77d93b82	def proofs_from_header(raw)
-kiosk-server/lib/kiosk/server/pow_gate.rb	7f1a07a420aaf0e7	77d93b82	factors = ReputationFactors.for(identity:, policy:)
-kiosk-server/lib/kiosk/server/pow_gate.rb	731694884cd770e9	77d93b82	policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
-kiosk-server/lib/kiosk/server/pow_gate.rb	6414af56f4011a3b	77d93b82	return :proceed if policy.nil?
-kiosk-server/lib/kiosk/server/pow_gate.rb	d4d85aaf252282cb	77d93b82	return :proceed if spec.nil?
+kiosk-server/lib/kiosk/server/pow_gate.rb	7bf0b3eb868bfe4e	a5a498fa	      def proofs_from_header(raw)
+kiosk-server/lib/kiosk/server/pow_gate.rb	fcf8ead0ed5e8fa4	a5a498fa	# One proof, a JSON array, repeated header lines (Rack joins them with
+kiosk-server/lib/kiosk/server/pow_gate.rb	7bf0b3eb868bfe4e	a5a498fa	def proofs_from_header(raw)
+kiosk-server/lib/kiosk/server/pow_gate.rb	7f1a07a420aaf0e7	a5a498fa	factors = ReputationFactors.for(identity:, policy:)
+kiosk-server/lib/kiosk/server/pow_gate.rb	731694884cd770e9	a5a498fa	policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
+kiosk-server/lib/kiosk/server/pow_gate.rb	6414af56f4011a3b	a5a498fa	return :proceed if policy.nil?
+kiosk-server/lib/kiosk/server/pow_gate.rb	d4d85aaf252282cb	a5a498fa	return :proceed if spec.nil?
+kiosk-server/lib/kiosk/server/pow_gate.rb	731694884cd770e9	a5a498fa	spec    = policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
 kiosk-server/lib/kiosk/server/pow_toll.rb	ee0f7f352425e9d5	7def39e3	# Not bad faith (clock skew, a difficulty change): release the claim
 kiosk-server/lib/kiosk/server/pow_toll.rb	2e76d554d27efce4	7def39e3	# The cheap checks first, so only a live challenge this origin signed
 kiosk-server/lib/kiosk/server/pow_toll.rb	ff351f5960767e29	7def39e3	A lost claim is a replay: skipped, not penalised.
@@ -1782,33 +1781,35 @@ kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	dbdb057f43f91090	7d
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	b339bc911356c7cb	7def39e3	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	4e8273537416e849	7def39e3	re-challenges when the VERB differs (a catalog proof is not an orders proof)
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	a97277806838285b	7def39e3	rejects a WRONG nonce through the real verifier (403)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e5973ceb4762537e	7def39e3	PowRequired carries a well-formed challenge
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c0b55b913e0d87ca	7def39e3	PowRequired has HTTP status 402
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c8818a213e37a07e	7def39e3	PowRequired#to_problem renders a pow_required 402 problem document
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	64906d83ddf07db1	7def39e3	buys no later call made with the same access token
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	9fce75b0b1f5087b	7def39e3	carries a hint steering to the shipped reference solver
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	746f4737f42fe428	7def39e3	does not disclose the construction, the parameters, or which check failed
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	4195d90b15a82a4d	7def39e3	expect(error).not_to respond_to(:to_envelope)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	6bebde0903760d9d	7def39e3	flattens a proxy comma-combined value {A},{B} (RFC 7230)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	b6b1a5daccdd4256	7def39e3	flattens repeated header lines (Rack joins duplicates with
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	0b11f2218f3e1d63	7def39e3	is deterministic: same inputs → same fingerprint
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	1d5fc28918d929e8	7def39e3	is exactly SHA256(
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	afccf25f154f6298	7def39e3	issues `count` challenges with distinct ids AND salts (no amortisation)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	d8d8d8750a9d0a27	7def39e3	it 'raises Forbidden' do
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ce31dd7320e0a70b	7def39e3	it 'raises PowRequired'
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	dbb855c1a71cffb4	7def39e3	nil reputation_policy (the default)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c73461958a9f39f2	7def39e3	parses a JSON-array value into the proofs list
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	7e520d8d761cc816	7def39e3	pow_spent_store defaults to the database-backed store
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	253a673191cf8ea0	7def39e3	re-challenge carries a well-formed NEW challenge (different id from the spent one)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	b3f559bf6dc155d3	7def39e3	re-challenges when the ARGUMENTS differ
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	72ac62ac8c8a900c	7def39e3	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	61c991cbcb9ed1cd	7def39e3	re-challenges when the VERB differs (a catalog proof is not an orders proof)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ef885d83fd77e23b	7def39e3	re-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	a02a012be872b420	7def39e3	renders the documented forbidden problem document, carrying the hint
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	923ba26b26934295	7def39e3	scales the challenge TTL by `count`, so a sequential solver does not lose the first
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	d30635fc6ca088f7	7def39e3	still issues a 402 at the shipped equihash default — accepted set unchanged
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	3e3301774dc50ff0	7def39e3	verifies for the identical method + verb + args (the control)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	951be4e4c59169fd	7def39e3	wraps a single {…} proof into a one-element proofs list
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e5973ceb4762537e	a5a498fa	PowRequired carries a well-formed challenge
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c0b55b913e0d87ca	a5a498fa	PowRequired has HTTP status 402
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c8818a213e37a07e	a5a498fa	PowRequired#to_problem renders a pow_required 402 problem document
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	64906d83ddf07db1	a5a498fa	buys no later call made with the same access token
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	9fce75b0b1f5087b	a5a498fa	carries a hint steering to the shipped reference solver
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	acfbc2e7833add53	a5a498fa	def always_challenge_policy = @always_challenge_policy ||= AlwaysChallengePolicy.new
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	746f4737f42fe428	a5a498fa	does not disclose the construction, the parameters, or which check failed
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	4195d90b15a82a4d	a5a498fa	expect(error).not_to respond_to(:to_envelope)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	6bebde0903760d9d	a5a498fa	flattens a proxy comma-combined value {A},{B} (RFC 7230)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	b6b1a5daccdd4256	a5a498fa	flattens repeated header lines (Rack joins duplicates with
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	0b11f2218f3e1d63	a5a498fa	is deterministic: same inputs → same fingerprint
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	1d5fc28918d929e8	a5a498fa	is exactly SHA256(
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	afccf25f154f6298	a5a498fa	issues `count` challenges with distinct ids AND salts (no amortisation)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	d8d8d8750a9d0a27	a5a498fa	it 'raises Forbidden' do
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ce31dd7320e0a70b	a5a498fa	it 'raises PowRequired'
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ce31dd7320e0a70b	a5a498fa	it 'raises PowRequired' do
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	dbb855c1a71cffb4	a5a498fa	nil reputation_policy (the default)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c73461958a9f39f2	a5a498fa	parses a JSON-array value into the proofs list
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	7e520d8d761cc816	a5a498fa	pow_spent_store defaults to the database-backed store
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	253a673191cf8ea0	a5a498fa	re-challenge carries a well-formed NEW challenge (different id from the spent one)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	b3f559bf6dc155d3	a5a498fa	re-challenges when the ARGUMENTS differ
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	72ac62ac8c8a900c	a5a498fa	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	61c991cbcb9ed1cd	a5a498fa	re-challenges when the VERB differs (a catalog proof is not an orders proof)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ef885d83fd77e23b	a5a498fa	re-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	a02a012be872b420	a5a498fa	renders the documented forbidden problem document, carrying the hint
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	923ba26b26934295	a5a498fa	scales the challenge TTL by `count`, so a sequential solver does not lose the first
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	d30635fc6ca088f7	a5a498fa	still issues a 402 at the shipped equihash default — accepted set unchanged
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	3e3301774dc50ff0	a5a498fa	verifies for the identical method + verb + args (the control)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	951be4e4c59169fd	a5a498fa	wraps a single {…} proof into a one-element proofs list
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	f01606b795344abc	7def39e3	is idempotent and visible to a second instance
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	e133a65a09d35140	7def39e3	is laid down by the install generator
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	4e20db37947db123	7def39e3	leaves exactly one row for N racing claims of one id

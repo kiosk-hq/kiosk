@@ -49,5 +49,5 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'activerecord', '~> 8.1'
   spec.add_dependency 'kiosk-core', '~> 0.6.0'
-  spec.add_dependency 'stripe', '~> 19'
+  spec.add_dependency 'stripe', '>= 19', '< 21'
 end

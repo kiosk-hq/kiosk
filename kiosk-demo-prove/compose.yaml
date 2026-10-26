@@ -9,18 +9,16 @@
 # the `pgdata` volume this file declares, so the drop cannot reach a Postgres
 # on your machine.
 #
-# To run one of this demo's own tasks instead of the server:
+# To run a command of this demo instead of the server, for example to list
+# its routes:
 #
-#     docker compose run --rm app bin/rails <task>
-#
-# with any task from the list in README.md.
+#     docker compose run --rm app bin/rails routes
 #
 # The image is shared by every demo in this repository and is built from the
-# Dockerfile one directory up. It has to be: the kiosk gems are resolved
-# from the repository root (`path '..'`) wherever a demo depends on them, so the
-# build context is the repository rather than any one demo directory — and one
-# image carrying all of them is also what lets the tasks that boot a sibling
-# demo work.
+# Dockerfile one directory up. The kiosk gems are resolved from the repository
+# root (`path '..'`), so the build context is the whole repository. The image
+# holds every demo, so the two demos with an identity check can read the
+# development key of the KYC demo in its directory.
 name: kiosk-demo-prove
 
 services:

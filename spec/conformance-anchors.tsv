@@ -968,7 +968,7 @@ kiosk-reputation/lib/kiosk/reputation/challenge.rb	{ id:, alg:, params:, salt: f
 kiosk-reputation/lib/kiosk/reputation/factors.rb	Factors = Data.define(:settled_purchases_count, :settled_purchases_cents, :calls_since_proof) do
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	BASE_INTERVAL = 10
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	Rational(BASE_INTERVAL * @cap_cents, @cap_cents - cents).ceil if cents < @cap_cents
-kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def equihash_params = defined?(::Kiosk::Pow::Equihash) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def equihash_params = defined?(::Kiosk::Pow::Equihash.params) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def initialize(within:, cap:)
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	{ alg: 'equihash', params: equihash_params, count: 1 }
 kiosk-reputation/lib/kiosk/reputation/policy.rb	@return [Hash{alg: String, params: Hash, count: Integer}, nil]

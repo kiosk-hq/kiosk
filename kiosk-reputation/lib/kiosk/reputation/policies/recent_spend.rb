@@ -37,7 +37,7 @@ module Kiosk
         private
 
         # The Equihash gem's default params when it is loaded, so a test that shrinks them shrinks this toll too.
-        def equihash_params = defined?(::Kiosk::Pow::Equihash) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
+        def equihash_params = defined?(::Kiosk::Pow::Equihash.params) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
       end
     end
   end

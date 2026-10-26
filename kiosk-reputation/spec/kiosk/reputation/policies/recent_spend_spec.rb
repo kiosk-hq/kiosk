@@ -40,4 +40,14 @@ RSpec.describe Kiosk::Reputation::Policies::RecentSpend do
   it 'publishes its window for the engine to count spend in' do
     expect(policy.within).to eq(7 * 86_400)
   end
+
+  it 'asks the params of the loaded Equihash gem' do
+    stub_const('Kiosk::Pow::Equihash', Module.new { def self.params = { n: 96, k: 5 } })
+    expect(toll(nil, 10)).to eq(proof.merge(params: { n: 96, k: 5 }))
+  end
+
+  it 'asks n=168, k=7 when only the Equihash version file is loaded, as a gemspec in a path bundle loads it' do
+    stub_const('Kiosk::Pow::Equihash::VERSION', '0.6.25')
+    expect(toll(nil, 10)).to eq(proof)
+  end
 end

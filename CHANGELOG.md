@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: kiosk-reputation: `RecentSpend` asks the Equihash params only when the gem is loaded, so a path bundle that loads only its version file gets n=168, k=7 and no NoMethodError.
+
 ## [0.6.25] — 2026-10-26
 
 - 2026-10-26: **Every gem and `API_VERSION` are 0.6.25, matching skill 0.6.25; the engine default is `skill-v0.6.25.md` and every demo pins its digest.** `MIN_CLIENT` stays 0.6.0.

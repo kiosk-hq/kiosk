@@ -99,8 +99,16 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       it 'answers 400 for an exp or iat that is not an integer, before Time.at' do
         expect { verify_checkout(resign(mandates[:checkout], exp: (Time.now.to_i + 60).to_s)) }
           .to refused(/exp must be an integer/, Kiosk::Server::Errors::BadRequest)
+        expect { verify_checkout(resign(mandates[:checkout], iat: 1.5)) }
+          .to refused(/iat must be an integer/, Kiosk::Server::Errors::BadRequest)
+      end
+
+      # `resign` drops a nil member, so these mandates carry no iat or no exp.
+      it 'answers 400 for an absent iat or exp' do
         expect { verify_checkout(resign(mandates[:checkout], iat: nil)) }
           .to refused(/iat must be an integer/, Kiosk::Server::Errors::BadRequest)
+        expect { verify_checkout(resign(mandates[:checkout], exp: nil)) }
+          .to refused(/exp must be an integer/, Kiosk::Server::Errors::BadRequest)
       end
 
       it 'answers 400 for an exp beyond the maximum lifetime, and accepts one within it' do

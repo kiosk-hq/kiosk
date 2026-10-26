@@ -744,8 +744,8 @@ kiosk-demo-tudu/test/stories/privacy_test.rb	a housemate reads the list, and a s
 kiosk-demo-tudu/test/stories/privacy_test.rb	only queries the catalog says reach past the assistant's own account ever show a shared list
 kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	requested_claims: claims,
 kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	super(issuer:, public_key:, audience: operator_id.to_s)
-kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
+kiosk-pay-stripe/README.md	adapter does not check whether the key is a test-mode key (`sk_test_…`) or a
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	Generate the migration for the kiosk_stripe_customers table of kiosk-pay-stripe.
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	class_option :user_id_type, type: :string, default: 'uuid'
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/templates/create_kiosk_pay_stripe_customers.rb.tt	t.column :user_id, :<%= options[:user_id_type] %>, null: false

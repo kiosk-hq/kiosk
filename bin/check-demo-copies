@@ -508,6 +508,7 @@ EXTRA_SCANNED = [
   'test/stories/household_test.rb',
   'test/stories/link_test.rb',
   'test/stories/privacy_test.rb',
+  'test/sign_in_page_test.rb',
   'test/kiosk_skill_pin_test.rb',
   'app/views/crawler/robots.text.erb',
   'app/views/privacy/_kiosk.html.erb',
@@ -579,6 +580,10 @@ COPIES = {
     rule: :identical,
     ships: OPERATOR_SEVEN,
     why: 'What the Kiosk engine stores, read from the origin configuration, on every operator privacy page.'
+  },
+  'test/sign_in_page_test.rb' => {
+    rule: :per_demo,
+    why: "Each names the demo's own sign-in title; tudu's layout gives every page one title."
   },
   'app/views/privacy/show.html.erb' => {
     rule: :per_demo,
@@ -1220,6 +1225,7 @@ FRAGMENT_PATHS = %w[
 ].freeze
 
 FRAGMENT_EXCLUDED = {
+  'test/sign_in_page_test.rb' => 'One test with no helper; the copies differ only in the title they read.',
   'test/test_helper.rb' => "Each demo's own test setup.",
   'test/stories/discovery_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
   'test/stories/household_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',

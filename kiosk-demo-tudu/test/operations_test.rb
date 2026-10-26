@@ -27,6 +27,20 @@ class OperationsTest < ActiveSupport::TestCase
     end
   end
 
+  test 'a list title or a todo longer than a list shows is refused' do
+    as(@bob) do
+      refusal = assert_raises(ActiveRecord::RecordInvalid) do
+        AddTodoOperation.call(agent_id: nil, list_id: @list.id, title: 'x' * (Todo::TITLE_MAX_LENGTH + 1))
+      end
+
+      assert_equal "Validation failed: Title is too long (maximum is #{Todo::TITLE_MAX_LENGTH} characters)",
+                   refusal.message
+      assert_raises(ActiveRecord::RecordInvalid) do
+        CreateListOperation.call(member_id: @bob.id, title: 'x' * (List::TITLE_MAX_LENGTH + 1))
+      end
+    end
+  end
+
   test 'only a member completes a todo' do
     todo = @list.todos.create!(title: 'Buy dish soap')
 

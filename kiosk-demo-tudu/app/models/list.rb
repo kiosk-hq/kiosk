@@ -8,7 +8,10 @@ class List < ApplicationRecord
   has_many :todos, dependent: :destroy
   has_many :invites, dependent: :destroy
 
-  validates :title, presence: true
+  # The longest title the lists show; the create_list schema holds the same limit.
+  TITLE_MAX_LENGTH = 100
+
+  validates :title, presence: true, length: { maximum: TITLE_MAX_LENGTH }
 
   def owner = memberships.find(&:owner?).account
 

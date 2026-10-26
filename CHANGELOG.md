@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-26: kiosk-demo-philslist and kiosk-demo-tudu: every public text an assistant writes has a maximum length, in the action's input schema and in the model.
+
 ## [0.6.28] — 2026-10-26
 
 - 2026-10-26: **Every gem and `API_VERSION` are 0.6.28, matching skill 0.6.28, which says only the human sets the ask-first amount.** Every demo pins its digest.

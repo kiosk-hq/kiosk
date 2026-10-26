@@ -34,7 +34,7 @@ module Kiosk
     input_schema type: 'object',
                  additionalProperties: false,
                  properties: {
-                   title: { type: 'string', minLength: 1, description: 'The list title.' }
+                   title: { type: 'string', minLength: 1, maxLength: List::TITLE_MAX_LENGTH, description: 'The list title.' }
                  },
                  required: ['title']
     output_schema type: 'object',

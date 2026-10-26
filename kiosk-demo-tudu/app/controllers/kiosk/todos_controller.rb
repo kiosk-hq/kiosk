@@ -56,7 +56,7 @@ module Kiosk
                  additionalProperties: false,
                  properties: {
                    list_id: { type: 'string', format: 'uuid', description: 'A `list_id` from my_lists.' },
-                   title: { type: 'string', minLength: 1, description: 'The todo text.' },
+                   title: { type: 'string', minLength: 1, maxLength: Todo::TITLE_MAX_LENGTH, description: 'The todo text.' },
                    due_at: { type: 'string', format: 'date-time',
                              description: 'The deadline, with its time-zone offset. Work out «tomorrow at ' \
                                           'two» in the time zone of the person who said it.' }

@@ -23,7 +23,7 @@
 <% end %>
 
 <%= form_with url: list_todos_path(@list_id), method: :post do %>
-  <%= text_field_tag :title, nil, placeholder: "New todo", required: true %>
+  <%= text_field_tag :title, nil, placeholder: "New todo", required: true, maxlength: Todo::TITLE_MAX_LENGTH %>
   <%= submit_tag "Add" %>
 <% end %>
 

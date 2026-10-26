@@ -27,7 +27,7 @@
 
   <h3>New list</h3>
   <%= form_with url: lists_path, method: :post do %>
-    <%= text_field_tag :title, nil, placeholder: "List title", required: true %>
+    <%= text_field_tag :title, nil, placeholder: "List title", required: true, maxlength: List::TITLE_MAX_LENGTH %>
     <%= submit_tag "Create" %>
   <% end %>
 

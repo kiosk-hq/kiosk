@@ -807,7 +807,6 @@ kiosk-pow-cuckoo/lib/kiosk/pow/cuckoo.rb	      NAME = 'cuckatoo'
 kiosk-pow-cuckoo/spec/kiosk/pow/cuckoo_spec.rb	the unique valid 42-cycle for that header, from Grin's test suite.
 kiosk-pow-equihash/README.md	## Solver (Python + numpy)
 kiosk-pow-equihash/README.md	(0.30 ms), against ~22 ms for a complete one. That gap is the point, because
-kiosk-pow-equihash/README.md	(PoW = metered pricing, not a hardware wall).
 kiosk-pow-equihash/README.md	(`BUCKET_CAP`) to keep work and memory bounded — the real solution comes from
 kiosk-pow-equihash/README.md	(~9.6 s, *Performance* below) over a valid proof's verify (~22 ms, *Verify* above);
 kiosk-pow-equihash/README.md	**A wrong proof costs far less, deliberately.** The list above is also the
@@ -824,9 +823,9 @@ kiosk-pow-equihash/README.md	Buffer reuse: yes. Work reuse: no
 kiosk-pow-equihash/README.md	Checks performed (in order):
 kiosk-pow-equihash/README.md	Default: **n=168, k=7** — benchmark-chosen (see [bench/](bench/README.md)):
 kiosk-pow-equihash/README.md	Its job is a **cheap-to-verify metered toll**, not a hardware equaliser.
-kiosk-pow-equihash/README.md	Memory-hard proof-of-work for Kiosk. Default PoW backend.
+kiosk-pow-equihash/README.md	Memory-hard proof of work for Kiosk. The default proof-of-work backend.
 kiosk-pow-equihash/README.md	No hardware-parity claim is made — none of Argon2id, Cuckatoo, or Equihash
-kiosk-pow-equihash/README.md	Normal client:   solve 1 PoW   (1× memory, 1× work)
+kiosk-pow-equihash/README.md	Normal client:   solve 1 proof    (1× memory, 1× work)
 kiosk-pow-equihash/README.md	Suspicious:
 kiosk-pow-equihash/README.md	Verification cost: **~22 ms for a valid proof**
 kiosk-pow-equihash/README.md	Verification cost: **~22 ms for a valid proof** (128 BLAKE2b-256 hashes, pure
@@ -836,7 +835,8 @@ kiosk-pow-equihash/README.md	consumer-laptop budget (p95 ~10 s on one M-series l
 kiosk-pow-equihash/README.md	data). However, the _computational work_ cannot be reused:
 kiosk-pow-equihash/README.md	global sort rejects every genuine k≥2 solution. We use Zcash "algorithm
 kiosk-pow-equihash/README.md	hardware the seconds have ever been measured on; the ~1.3 GiB peak is THIS
-kiosk-pow-equihash/README.md	memory-bandwidth-bound). What it buys the provider is a few-KB, ~22 ms
+kiosk-pow-equihash/README.md	memory-bandwidth-bound). What it buys the operator is a few-KB, ~22 ms
+kiosk-pow-equihash/README.md	metered pricing, not a hardware wall).
 kiosk-pow-equihash/README.md	no amortization
 kiosk-pow-equihash/README.md	not cancel. Rubbish indices are rejected without a single hash (0.012 ms
 kiosk-pow-equihash/README.md	pip install numpy          # REQUIRED — see performance note below

@@ -1,19 +1,19 @@
 # Kiosk::Pow::Equihash
 
-Memory-hard proof-of-work for Kiosk. Default PoW backend.
+Memory-hard proof of work for Kiosk. The default proof-of-work backend.
 
 Its job is a **cheap-to-verify metered toll**, not a hardware equaliser.
 Equihash is not ASIC- or GPU-proof — it was ASIC'd on Zcash (Antminer Z9/Z15)
 and GPUs solve it well (the Wagner sort/collide parallelises, and it is
-memory-bandwidth-bound). What it buys the provider is a few-KB, ~22 ms
-`verify` against a solve that costs the client real time and memory, plus an
-`N×PoW` count knob. Abuse resistance comes from reputation and caps
-(PoW = metered pricing, not a hardware wall).
+memory-bandwidth-bound). What it buys the operator is a few-KB, ~22 ms
+`verify` against a solve that costs the client real time and memory, plus a
+proof-count knob. Abuse resistance comes from reputation and caps (the toll is
+metered pricing, not a hardware wall).
 
 ## Install
 
 Default does not mean bundled: neither `kiosk-server` nor `kiosk-all` depends
-on a PoW backend, so an origin that gates on PoW adds this gem itself.
+on a proof-of-work backend, so an origin that asks a toll adds this gem itself.
 
 ```ruby
 gem "kiosk-pow-equihash"
@@ -50,13 +50,13 @@ parameters cost real time and memory to solve.
 | Verify time | ~ms (1 Argon2id) | 42 SipHash + walk (unbenched) | **~22 ms valid / 0.3 ms wrong (Ruby)** |
 | Lever (solve/verify) | tens× | unbenched | **~440×** (9.6 s / 22 ms) |
 | Dependencies | argon2 gem (C-ext) | Pure Ruby | **Pure Ruby (kiosk-pow only)** |
-| Difficulty tuning | D=0..256 (smooth) | edgebits | **N×PoW (discrete)** |
+| Difficulty tuning | D=0..256 (smooth) | edgebits | **proof count N (discrete)** |
 
 **The lever is measured, not asserted.** `~440×` is this README's own two
 numbers divided: the p50 reference-solver solve at the shipped n=168 k=7
 (~9.6 s, *Performance* below) over a valid proof's verify (~22 ms, *Verify* above);
 p95 solve gives ~470×. With YJIT (~15 ms verify) the p50 lever is ~640×. It is a cross-language ratio — a numpy solver against a
-pure-Ruby verifier — so read it as the order of magnitude a provider actually
+pure-Ruby verifier — so read it as the order of magnitude an operator actually
 buys, and note that it moves the WRONG way with a faster solver and the right way
 with a native verifier. It is not millions at any tuning in the tables below
 (192/7, at ~155 s of solve, gives ~7000×), and the number matters
@@ -70,15 +70,15 @@ The one property that actually matters for a gateway is **cheap verify**:
   wrong proof, see below) to check — the
   memory footprint is the point: Argon2id needs 64 MiB to _verify_, so a flood
   of bad proofs is a DoS on the verifier itself — unacceptable for a
-  high-throughput endpoint.
+  high-throughput origin.
 - **No native code.** Pure Ruby BLAKE2b-256 from `kiosk-pow`. Argon2id needs a C extension.
-- **Progressive difficulty via N×PoW.** Instead of a continuous dial the policy
+- **Progressive difficulty via proof count.** Instead of a continuous dial the policy
   asks for _N independent proofs_: "1 normally, 10 if you're scraping." Prices
   throughput, not latency (a solver with enough memory runs them in parallel).
 
 No hardware-parity claim is made — none of Argon2id, Cuckatoo, or Equihash
-delivers it. Equihash wins on verify cost + no native code, which is what a
-provider's own machine pays on every request.
+delivers it. Equihash wins on verify cost + no native code, which is what an
+operator's own machine pays on every request.
 
 ## Parameters
 
@@ -100,7 +100,7 @@ to ~144 MB and made it ASIC-able). Cost is driven by `n_div = n/(k+1)`.
 | Verify cost | **128 BLAKE2b** | 128 BLAKE2b | 512 BLAKE2b | 8 BLAKE2b |
 
 192/7 measures ~155 s and ~5.4 GiB on the reference numpy
-solver — too heavy for a laptop, which is why 168/7 is the default. Providers
+solver — too heavy for a laptop, which is why 168/7 is the default. Operators
 pick their own `(n, k)` and proof count for their own cost/latency trade-off.
 
 ## Memory reuse across parallel challenges
@@ -117,16 +117,16 @@ data). However, the _computational work_ cannot be reused:
 - Different salt → completely different BLAKE2b-256 outputs
 - The sorted nonce table must be rebuilt from scratch
 
-This is a deliberate design property: honest clients doing occasional PoWs pay the allocation cost once (buffer reuse). Attackers doing many parallel PoWs must do the full computational work for each — no amortization.
+This is a deliberate design property: honest clients solving occasional proofs pay the allocation cost once (buffer reuse). Attackers solving many proofs in parallel must do the full computational work for each — no amortization.
 
-## Anti-abuse strategy: N×PoW
+## Anti-abuse strategy: proof count
 
 Equihash has discrete difficulty — only via (n, k) parameter changes. Instead of a continuous difficulty dial, the protocol uses **proof count**. A policy picks the count for each client, for example:
 
 ```
-Normal client:   solve 1 PoW   (1× memory, 1× work)
-Suspicious:      solve 3 PoWs   (3× work; parallel if RAM allows)
-Abuser:          solve 10 PoWs  (10× work)
+Normal client:   solve 1 proof    (1× memory, 1× work)
+Suspicious:      solve 3 proofs   (3× work; parallel if RAM allows)
+Abuser:          solve 10 proofs  (10× work)
 ```
 
 N prices _throughput_, not latency: a solver with enough memory runs the N
@@ -208,7 +208,7 @@ a salt that is fresh per challenge.
 
 ### Verification contract (why it is XOR-cancellation, not prefix-equality)
 
-Equihash is a *generalized-birthday* PoW: a valid solution is a binary tree of
+Equihash is a *generalized-birthday* proof of work: a valid solution is a binary tree of
 2^k leaf hashes where **sibling XORs cancel** one n_div-bit block per level.
 The leaves in a group do **not** share a common prefix — only their XOR is
 zero on that block. Two consequences the verifier must respect:
@@ -272,7 +272,7 @@ optional**: the Wagner sort/collide steps are vectorised, and without numpy
 `solve.py` refuses to run (exit 3). These numbers are the honest-client
 *floor* (slowest participant): a native or GPU solver is faster, since Equihash
 parallelises well — which is exactly why the security story is verify-asymmetry
-+ reputation, not hardware parity. A provider that needs faster
++ reputation, not hardware parity. An operator that needs faster
 honest solves lowers `n`; the Ruby verifier stays ~22 ms either way.
 
 See `solve.py` for the implementation.

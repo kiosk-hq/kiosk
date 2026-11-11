@@ -40,8 +40,9 @@ skill is `skill.md` on the same site.
 
 ## Repo specifics
 
-- Ruby 4.0.1, as `.github/workflows/ci.yml` installs it; every gemspec
-  declares `>= 4.0`. No toolchain pin is tracked. Per gem:
+- Ruby 4.0.1 on ubuntu-24.04, as `.github/workflows/ci.yml` installs it.
+  setup-ruby builds only the newest 4.0 patch for newer runner images. Every
+  gemspec declares `>= 4.0`. No toolchain pin is tracked. Per gem:
   `cd <gem> && bundle install && bundle exec rspec`
   (`kiosk-rls-minitest`: `bundle exec rake test`).
 - Demos: `bin/rails db:reset` prepares one, `bin/rails test` tests it

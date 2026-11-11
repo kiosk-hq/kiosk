@@ -52,8 +52,11 @@ RSpec.describe Kiosk::Server::CallerTimezone do
         .to raise_error(Kiosk::Server::Errors::BadRequest)
     end
 
+    # EST resolves only where tzdata ships its legacy names (Ubuntu 26.04 does
+    # not), so the example makes it resolve: the shape refuses it, not a lookup.
     it 'refuses a single-word tz abbreviation even though ActiveSupport resolves it' do
-      expect(Time.find_zone('EST')).not_to be_nil
+      allow(Time).to receive(:find_zone).and_call_original
+      allow(Time).to receive(:find_zone).with('EST').and_return(Time.find_zone('America/Panama'))
       expect { described_class.from_value('EST') }
         .to raise_error(Kiosk::Server::Errors::BadRequest)
     end

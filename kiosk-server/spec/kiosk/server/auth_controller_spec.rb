@@ -29,7 +29,7 @@ RSpec.describe Kiosk::Server::AuthController do
     status, headers, body = response
     expect(status).to eq(http)
     expect(headers['Content-Type']).to include('application/problem+json')
-    expect(body).to include('type' => "https://kiosk.tech/problems/#{code}", 'status' => http, 'code' => code,
+    expect(body).to include('type' => "https://kiosk-hq.github.io/problems/#{code}", 'status' => http, 'code' => code,
                             'title' => Kiosk::Server::Errors::TITLES.fetch(code))
     expect(body['detail']).to include(detail) if detail
   end

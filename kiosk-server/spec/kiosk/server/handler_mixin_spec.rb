@@ -688,7 +688,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
       expect(status).to eq(400)
       expect(headers['Content-Type']).to start_with('application/problem+json')
       expect(problem['code']).to eq('bad_request')
-      expect(problem['type']).to eq('https://kiosk.tech/problems/bad_request')
+      expect(problem['type']).to eq('https://kiosk-hq.github.io/problems/bad_request')
       expect(problem['detail']).to eq('at least one item is required')
       expect(problem['hint']).to eq('pass items: [{sku:, quantity:}]')
     end
@@ -771,7 +771,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
       expect(status).to eq(404)
       expect(content_type).to start_with(Kiosk::Server::Errors::PROBLEM_CONTENT_TYPE)
       expect(problem).to include(
-        'type' => 'https://kiosk.tech/problems/verb_not_found',
+        'type' => 'https://kiosk-hq.github.io/problems/verb_not_found',
         'title' => 'No such verb',
         'status' => 404,
         'code' => 'verb_not_found'

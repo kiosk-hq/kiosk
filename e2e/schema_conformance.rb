@@ -108,7 +108,7 @@ end
 #
 # Loaded from disk and registered under their own `$id`s, so `problem`'s
 # cross-file `$ref` to `pow.schema.json#/$defs/challenge` resolves LOCALLY —
-# a validator that reached out to https://kiosk.tech to resolve it would be
+# a validator that reached out to https://kiosk-hq.github.io to resolve it would be
 # testing the network, and would pass on a stale cache.
 DOCS = [SCHEMA_DIR, ENGINE_SCHEMA_DIR].flat_map { Dir[File.join(it, '*.schema.json')] }
                                       .to_h { |path| JSON.parse(File.read(path)).then { [it.fetch('$id'), it] } }
@@ -177,7 +177,7 @@ end
 
 def parse(raw) = JSON.parse(raw)
 
-B = 'https://kiosk.tech/spec/schemas'
+B = 'https://kiosk-hq.github.io/spec/schemas'
 
 puts "\n\e[1m=== published JSON Schemas vs this origin's LIVE bytes (§16.3 anchor 1) ===\e[0m"
 

@@ -31,7 +31,7 @@ policy that asks for more than one proof gets one challenge per proof:
 
 ```json
 {
-  "type":   "https://kiosk.tech/problems/pow_required",
+  "type":   "https://kiosk-hq.github.io/problems/pow_required",
   "title":  "Proof-of-work required",
   "status": 402,
   "detail": "proof-of-work required",

@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-11-11: A problem `type` is https://kiosk-hq.github.io/problems/<code>. auth.md, the OpenAPI document, the toll hint and a schema refusal link that host.
 - 2026-11-11: The homepage, the README and the install template name https://kiosk-hq.github.io, the address of the Kiosk site.
 - 2026-10-26: The README's KYC example passes the operator's own broker `url:`; the default demo broker serves only the Kiosk demos.
 

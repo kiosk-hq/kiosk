@@ -92,7 +92,7 @@ RSpec.describe Kiosk::Server::BindingModuleGate do
           problem = JSON.parse(body, symbolize_names: true)
           expect(problem[:code]).to   eq('module_not_served')
           expect(problem[:status]).to eq(501)
-          expect(problem[:type]).to   eq('https://kiosk.tech/problems/module_not_served')
+          expect(problem[:type]).to   eq('https://kiosk-hq.github.io/problems/module_not_served')
           # `detail` NAMES the module: it is the only thing telling "no binding
           # here" from "no payments here" to whoever reads the answer.
           expect(problem[:detail]).to include('account binding')

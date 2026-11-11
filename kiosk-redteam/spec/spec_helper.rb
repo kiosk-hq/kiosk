@@ -6,7 +6,7 @@ require 'webmock/rspec'
 # Every error on the Kiosk HTTP API is an RFC 9457 problem document served as
 # `application/problem+json`, and a problem document is FLAT:
 #
-#   { "type": "https://kiosk.tech/problems/<code>", "title": "…",
+#   { "type": "https://kiosk-hq.github.io/problems/<code>", "title": "…",
 #     "status": 403, "detail": "…", "code": "…", "hint": "…" }
 #
 # `code` is a top-level extension member, and every verdict in this gem
@@ -80,7 +80,7 @@ PROBLEM_CONTENT_TYPE = 'application/problem+json'
 def problem(code, status: nil, detail: nil, **extensions)
   code = code.to_s
   {
-    'type' => "https://kiosk.tech/problems/#{code}",
+    'type' => "https://kiosk-hq.github.io/problems/#{code}",
     'title' => code.tr('_', ' ').capitalize,
     'status' => status || PROBLEM_STATUS.fetch(code),
     'detail' => detail || "#{code} (redteam spec stub)",

@@ -49,12 +49,12 @@ module Kiosk
         an RFC 8288 `Link` response header with `rel="next"`, and the count of
         matching rows in `X-Total-Count`.
 
-        Normative specification: https://kiosk.tech/specification.html
+        Normative specification: https://kiosk-hq.github.io/specification.html
       TEXT
 
       EXTERNAL_DOCS = {
         description: 'The Kiosk specification (normative)',
-        url: 'https://kiosk.tech/specification.html'
+        url: 'https://kiosk-hq.github.io/specification.html'
       }.freeze
 
       TAGS = [

@@ -132,7 +132,7 @@ RSpec.describe Kiosk::Server::WireController do
         expect(status).to eq(400)
         expect(headers['Content-Type']).to include('application/problem+json')
         expect(problem[:code]).to   eq('bad_request')
-        expect(problem[:type]).to   eq('https://kiosk.tech/problems/bad_request')
+        expect(problem[:type]).to   eq('https://kiosk-hq.github.io/problems/bad_request')
         expect(problem[:status]).to eq(400)
         expect(problem[:hint]).to include('challenge')
         expect(problem[:hint]).to include('nonce')

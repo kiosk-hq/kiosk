@@ -109,7 +109,7 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       declare_query('menu')
       unpinned = digest
 
-      Kiosk.configure { |c| c.skill_url = 'https://kiosk.tech/skill-v9.9.9.md' }
+      Kiosk.configure { |c| c.skill_url = 'https://kiosk-hq.github.io/skill-v9.9.9.md' }
       described_class.reset!
       expect(digest).not_to eq(unpinned)
     end

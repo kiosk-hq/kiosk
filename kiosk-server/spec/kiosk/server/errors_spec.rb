@@ -19,7 +19,7 @@ module ErrorsSpecHelpers
   # So the expected value comes out of `e2e/schemas/problem.schema.json`, the
   # VENDORED copy of the published normative schema, whose `allOf` carries one
   # `if code == X then status == N` branch per vocabulary entry. That copy
-  # equals what kiosk.tech publishes; this file needs no sibling checkout, so it runs in public CI exactly as it
+  # equals what kiosk-hq.github.io publishes; this file needs no sibling checkout, so it runs in public CI exactly as it
   # runs locally.
   #
   # WHAT THIS DOES NOT CLOSE, stated rather than implied: vendored-equals-published
@@ -118,7 +118,7 @@ RSpec.describe Kiosk::Server::Errors do
     it 'mints one problem type URI per code and nothing else' do
       types = described_class::CODES.keys.map { described_class.problem_type(it) }
       expect(types.uniq.size).to eq(described_class::CODES.size)
-      expect(types).to all(start_with('https://kiosk.tech/problems/'))
+      expect(types).to all(start_with('https://kiosk-hq.github.io/problems/'))
     end
   end
 
@@ -207,7 +207,7 @@ RSpec.describe Kiosk::Server::Errors do
       expect(e.code).to        eq('rls_denied')
       expect(e.http_status).to eq(403)
       expect(e.to_problem).to eq(
-        type: 'https://kiosk.tech/problems/rls_denied',
+        type: 'https://kiosk-hq.github.io/problems/rls_denied',
         title: described_class.problem_title('rls_denied'),
         status: 403,
         detail: 'row policy said no',
@@ -258,7 +258,7 @@ RSpec.describe Kiosk::Server::Errors do
     it 'carries the vocabulary code TWICE: as the type URI and as the branch point' do
       e = Kiosk::Server::Errors::KycRequired.new('needs age_over_18', hint: 'attest, then retry')
       expect(e.to_problem).to eq(
-        type: 'https://kiosk.tech/problems/kyc_required',
+        type: 'https://kiosk-hq.github.io/problems/kyc_required',
         title: 'KYC attestation required',
         status: 403,
         detail: 'needs age_over_18',
@@ -269,7 +269,7 @@ RSpec.describe Kiosk::Server::Errors do
 
     it 'drops a nil hint and never emits `instance`' do
       problem = Kiosk::Server::Errors::BadRequest.new('nope').to_problem
-      expect(problem).to eq(type: 'https://kiosk.tech/problems/bad_request',
+      expect(problem).to eq(type: 'https://kiosk-hq.github.io/problems/bad_request',
                             title: 'Malformed request', status: 400,
                             detail: 'nope', code: 'bad_request')
       expect(problem).not_to have_key(:instance)
@@ -294,7 +294,7 @@ RSpec.describe Kiosk::Server::Errors do
 
     it 'drops a nil hint' do
       expect(Kiosk::Server::Errors::BadRequest.new('nope').to_problem).to eq(
-        type: 'https://kiosk.tech/problems/bad_request',
+        type: 'https://kiosk-hq.github.io/problems/bad_request',
         title: described_class.problem_title('bad_request'),
         status: 400,
         detail: 'nope',

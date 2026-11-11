@@ -48,7 +48,7 @@ module Kiosk
       }.freeze
 
       # An identifier, not a page: clients branch on `code`, never on this URI.
-      PROBLEM_TYPE_BASE = 'https://kiosk.tech/problems/'
+      PROBLEM_TYPE_BASE = 'https://kiosk-hq.github.io/problems/'
 
       PROBLEM_CONTENT_TYPE = 'application/problem+json'
 

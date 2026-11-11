@@ -193,7 +193,7 @@ RSpec.describe Kiosk::Server::HandlerServing do
 
       expect { execute(:run, { name: 'self_titled' }) }
         .to raise_error(Kiosk::Server::Errors::Base) { |e|
-          expect(e.to_problem).to eq(type: 'https://kiosk.tech/problems/conflict', title: 'State conflict',
+          expect(e.to_problem).to eq(type: 'https://kiosk-hq.github.io/problems/conflict', title: 'State conflict',
                                      status: 409, detail: 'taken', code: 'conflict', slot: 'S-1')
         }
     end

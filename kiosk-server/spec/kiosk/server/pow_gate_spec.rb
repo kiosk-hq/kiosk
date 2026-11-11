@@ -421,7 +421,7 @@ RSpec.describe Kiosk::Server::PowGate do
       end
 
       problem = error.to_problem
-      expect(problem[:type]).to   eq('https://kiosk.tech/problems/pow_required')
+      expect(problem[:type]).to   eq('https://kiosk-hq.github.io/problems/pow_required')
       expect(problem[:title]).to  eq('Proof-of-work required')
       expect(problem[:status]).to eq(402)
       expect(problem[:detail]).to eq('proof-of-work required')
@@ -503,7 +503,7 @@ RSpec.describe Kiosk::Server::PowGate do
       # pin. The two URLs are therefore NOT the same string and must not be
       # made so.
       expect(error.hint).to eq(
-        'solve with the reference solver at https://kiosk.tech/pow/solve.py — ' \
+        'solve with the reference solver at https://kiosk-hq.github.io/pow/solve.py — ' \
         'a hand-written Equihash solver will not match this verifier'
       )
     end
@@ -522,7 +522,7 @@ RSpec.describe Kiosk::Server::PowGate do
       # Whole-document equality, as the envelope assertion was: nothing else
       # rides along, and `hint` keeps its own member name under RFC 9457.
       expect(error.to_problem).to eq(
-        type: 'https://kiosk.tech/problems/forbidden',
+        type: 'https://kiosk-hq.github.io/problems/forbidden',
         title: 'Forbidden',
         status: 403,
         detail: 'invalid proof of work',
@@ -920,7 +920,7 @@ RSpec.describe Kiosk::Server::PowGate do
 
     it 'serialises to the correct problem document (plural challenges)' do
       expect(error.to_problem).to eq(
-        type: 'https://kiosk.tech/problems/pow_required',
+        type: 'https://kiosk-hq.github.io/problems/pow_required',
         title: 'Proof-of-work required',
         status: 402,
         detail: 'proof-of-work required',

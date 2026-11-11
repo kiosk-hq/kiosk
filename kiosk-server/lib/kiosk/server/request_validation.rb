@@ -60,7 +60,7 @@ module Kiosk
       def body_hint(pointer)
         file, fragment = pointer.split('#', 2)
         "the body must satisfy #{file} #{fragment}, published at " \
-          "https://kiosk.tech/spec/schemas/#{file}."
+          "https://kiosk-hq.github.io/spec/schemas/#{file}."
       end
 
       # Runs on the coerced arguments. On a query an undeclared `limit`/`cursor`

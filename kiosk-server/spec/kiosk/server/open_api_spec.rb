@@ -525,7 +525,7 @@ RSpec.describe Kiosk::Server::OpenApi do
     end
 
     it 'points at the normative specification as the authority' do
-      expect(document.dig(:externalDocs, :url)).to eq('https://kiosk.tech/specification.html')
+      expect(document.dig(:externalDocs, :url)).to eq('https://kiosk-hq.github.io/specification.html')
     end
 
     it 'serialises to JSON' do

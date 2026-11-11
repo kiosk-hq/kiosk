@@ -77,7 +77,7 @@ module Kiosk
         'back verbatim.'
 
       # Unversioned: the server cannot know which skill cut its caller read.
-      POW_SOLVER_URL = 'https://kiosk.tech/pow/solve.py'
+      POW_SOLVER_URL = 'https://kiosk-hq.github.io/pow/solve.py'
 
       POW_INVALID_HINT =
         "solve with the reference solver at #{POW_SOLVER_URL} — " \

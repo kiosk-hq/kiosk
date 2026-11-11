@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# check-vendored-schemas — every JSON Schema this tree vendors from kiosk.tech is
+# check-vendored-schemas — every JSON Schema this tree vendors from kiosk-hq.github.io is
 # the published schema: equal as parsed JSON once the top-level `$comment` is
 # removed from both. A vendored copy names its source in that `$comment`. Reads
 # ../kiosk.tech; without it prints SKIP and exits 0, unless
@@ -16,7 +16,7 @@ end
 
 ROOT   = File.expand_path('..', __dir__)
 SITE   = File.expand_path('../kiosk.tech', ROOT)
-SOURCE = %r{\AVENDORED copy of the normative kiosk\.tech schema at (spec/schemas/[\w.-]+\.json)\b}
+SOURCE = %r{\AVENDORED copy of the normative kiosk-hq\.github\.io schema at (spec/schemas/[\w.-]+\.json)\b}
 
 unless File.directory?(SITE)
   if ENV['KIOSK_REQUIRE_SITE_SIBLING'] == '1'
@@ -33,7 +33,7 @@ copies = Dir.chdir(ROOT) { `git ls-files -z -- '*.schema.json'`.split("\0") }.fi
   source = JSON.parse(File.read(File.join(ROOT, path)))['$comment'].to_s[SOURCE, 1]
   [path, source] if source
 end
-abort 'x vendored schemas: no file names a kiosk.tech source in its $comment' if copies.empty?
+abort 'x vendored schemas: no file names a kiosk-hq.github.io source in its $comment' if copies.empty?
 
 failures = copies.reject do |path, source|
   published = File.join(SITE, source)

@@ -44,7 +44,7 @@ module ControllerAuthSpecHelpers
   end
 
   def expect_problem_members(body, http:, code:)
-    expect(body[:type]).to   eq("https://kiosk.tech/problems/#{code}")
+    expect(body[:type]).to   eq("https://kiosk-hq.github.io/problems/#{code}")
     expect(body[:title]).to  eq(Kiosk::Server::Errors::TITLES.fetch(code))
     expect(body[:status]).to eq(http)
     expect(body[:code]).to   eq(code)

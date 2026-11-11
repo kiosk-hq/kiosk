@@ -281,7 +281,7 @@ module Kiosk
 
             How AI assistants authenticate against this provider's Kiosk
             endpoint (`#{endpoint}`). Protocol: the Kiosk specification
-            (https://kiosk.tech/specification.html). This file follows the
+            (https://kiosk-hq.github.io/specification.html). This file follows the
             auth.md section order. Registration and tokens use OAuth 2.0
             standards: RFC 7591, RFC 7523, RFC 9449 and RFC 8628.
 
@@ -426,14 +426,14 @@ module Kiosk
               answer an error as an RFC 9457 problem document, served as
               `application/problem+json`:
 
-                  {"type":"https://kiosk.tech/problems/pow_required",
+                  {"type":"https://kiosk-hq.github.io/problems/pow_required",
                    "title":"Proof-of-work required","status":402,
                    "detail":"proof-of-work required","code":"pow_required"}
 
               Use `code` to decide what to do. It is a FLAT member of the
               document, not nested, from the closed vocabulary
               (`unauthenticated`, `not_found`, `conflict`, `pow_required`, …);
-              `type` is `https://kiosk.tech/problems/<code>` and names the same
+              `type` is `https://kiosk-hq.github.io/problems/<code>` and names the same
               fact. Some codes add members of their own, such as the
               `challenges` array on a `402 pow_required`.
             - Three codes say "it is not here", and each has a different

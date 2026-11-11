@@ -228,7 +228,7 @@ RSpec.describe Kiosk::Server::VerbController do
       status, body = call_verb(:get, 'frobnicate')
       expect(status).to eq(404)
       expect(last_headers['Content-Type']).to include('application/problem+json')
-      expect(body[:type]).to   eq('https://kiosk.tech/problems/verb_not_found')
+      expect(body[:type]).to   eq('https://kiosk-hq.github.io/problems/verb_not_found')
       expect(body[:title]).to  eq('No such verb')
       expect(body[:status]).to eq(404)
       expect(body[:code]).to   eq('verb_not_found')
@@ -541,7 +541,7 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(status).to eq(405)
       expect(last_headers['Allow']).to eq('POST')
       expect(body[:code]).to   eq('method_not_allowed')
-      expect(body[:type]).to   eq('https://kiosk.tech/problems/method_not_allowed')
+      expect(body[:type]).to   eq('https://kiosk-hq.github.io/problems/method_not_allowed')
       expect(body[:detail]).to include('is an action, not a query')
       expect(body[:hint]).to   include('POST /kiosk/book_appointment')
     end
@@ -713,7 +713,7 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(status).to eq(400)
       expect(last_headers['Content-Type']).to include('application/problem+json')
       expect(problem[:code]).to   eq('bad_request')
-      expect(problem[:type]).to   eq('https://kiosk.tech/problems/bad_request')
+      expect(problem[:type]).to   eq('https://kiosk-hq.github.io/problems/bad_request')
       expect(problem[:status]).to eq(400)
       expect(problem[:detail]).to include('invalid JSON body')
       expect(problem[:hint]).to   include('query string')
@@ -757,7 +757,7 @@ RSpec.describe Kiosk::Server::VerbController do
 
       expect(status).to eq(404)
       expect(headers['Content-Type']).to include('application/problem+json')
-      expect(body[:type]).to   eq('https://kiosk.tech/problems/verb_not_found')
+      expect(body[:type]).to   eq('https://kiosk-hq.github.io/problems/verb_not_found')
       expect(body[:status]).to eq(404)
       expect(body[:code]).to   eq('verb_not_found')
       # Not the 0.3 envelope, and not a hint that the old protocol moved: the

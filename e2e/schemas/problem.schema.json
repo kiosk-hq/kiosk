@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://kiosk.tech/spec/schemas/problem.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/problem.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
+  "$id": "https://kiosk-hq.github.io/spec/schemas/problem.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk-hq.github.io schema at spec/schemas/problem.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk problem document",
   "description": "Every error response is an RFC 9457 problem document, served as application/problem+json. Success responses carry no wrapper at all -- the body is the verb's result, described by the verb's own output_schema -- so this is the only response schema the protocol defines.",
   "type": "object",
@@ -15,8 +15,8 @@
     "type": {
       "type": "string",
       "format": "uri",
-      "description": "RFC 9457 problem type: https://kiosk.tech/problems/<code>, one URI per vocabulary entry. An identifier, not a document locator -- the normative documentation for every code is the error vocabulary in the specification. Clients MUST NOT parse it to recover the code; read `code`.",
-      "pattern": "^https://kiosk\\.tech/problems/[a-z_]+$"
+      "description": "RFC 9457 problem type: https://kiosk-hq.github.io/problems/<code>, one URI per vocabulary entry. An identifier, not a document locator -- the normative documentation for every code is the error vocabulary in the specification. Clients MUST NOT parse it to recover the code; read `code`.",
+      "pattern": "^https://kiosk-hq\\.github\\.io/problems/[a-z_]+$"
     },
     "title": {
       "type": "string",
@@ -62,7 +62,7 @@
       "type": "array",
       "description": "Extension member, present ONLY on pow_required: the list of PoW challenges to solve.",
       "items": {
-        "$ref": "https://kiosk.tech/spec/schemas/pow.schema.json#/$defs/challenge"
+        "$ref": "https://kiosk-hq.github.io/spec/schemas/pow.schema.json#/$defs/challenge"
       }
     }
   },

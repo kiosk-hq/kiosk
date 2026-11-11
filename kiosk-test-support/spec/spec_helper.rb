@@ -35,6 +35,6 @@ end
 
 # A WebMock answer carrying a problem document for `code`.
 def problem_return(code, status: 400, **members)
-  json_return(status, { 'type' => "https://kiosk.tech/problems/#{code}", 'status' => status, 'code' => code }
+  json_return(status, { 'type' => "https://kiosk-hq.github.io/problems/#{code}", 'status' => status, 'code' => code }
                         .merge(members.transform_keys(&:to_s)))
 end

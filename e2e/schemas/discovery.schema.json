@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://kiosk.tech/spec/schemas/discovery.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/discovery.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
+  "$id": "https://kiosk-hq.github.io/spec/schemas/discovery.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk-hq.github.io schema at spec/schemas/discovery.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk discovery document",
   "description": "The JSON served at GET /.well-known/kiosk.json (Kiosk protocol 0.6).",
   "type": "object",
@@ -96,8 +96,8 @@
           "properties": {
             "url": {
               "type": "string",
-              "description": "A versioned, immutable skill URL on kiosk.tech (skill-vX.Y.Z.md). An assistant refuses a skill on any other host.",
-              "pattern": "^https://kiosk\\.tech/skill-v[0-9]+\\.[0-9]+\\.[0-9]+\\.md$"
+              "description": "A versioned, immutable skill URL on kiosk-hq.github.io (skill-vX.Y.Z.md). An assistant refuses a skill on any other host.",
+              "pattern": "^https://kiosk-hq\\.github\\.io/skill-v[0-9]+\\.[0-9]+\\.[0-9]+\\.md$"
             },
             "sha256": {
               "type": "string",

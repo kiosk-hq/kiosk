@@ -1126,7 +1126,7 @@ kiosk-server/lib/kiosk/server/errors.rb	'pow_required' => 402,
 kiosk-server/lib/kiosk/server/errors.rb	'spending_cap_exceeded' => 403,
 kiosk-server/lib/kiosk/server/errors.rb	CODE        = 'spending_cap_exceeded'
 kiosk-server/lib/kiosk/server/errors.rb	PROBLEM_CONTENT_TYPE = 'application/problem+json'
-kiosk-server/lib/kiosk/server/errors.rb	PROBLEM_TYPE_BASE = 'https://kiosk.tech/problems/'
+kiosk-server/lib/kiosk/server/errors.rb	PROBLEM_TYPE_BASE = 'https://kiosk-hq.github.io/problems/'
 kiosk-server/lib/kiosk/server/errors.rb	TITLES = {
 kiosk-server/lib/kiosk/server/errors.rb	class Forbidden < Base
 kiosk-server/lib/kiosk/server/errors.rb	class NotFound < Base
@@ -1204,8 +1204,8 @@ kiosk-server/lib/kiosk/server/routing.rb	def queries(*names) = draw(:get, :query
 kiosk-server/lib/kiosk/server/routing.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-server/lib/kiosk/server/routing.rb	registry = HandlerMixin.registry_for(@kind)
 kiosk-server/lib/kiosk/server/schema_document.rb	    module SchemaDocument
-kiosk-server/lib/kiosk/server/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
-kiosk-server/lib/kiosk/server/schemas/binding.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
+kiosk-server/lib/kiosk/server/schemas/auth.schema.json	VENDORED copy of the normative kiosk-hq.github.io schema at spec/schemas/auth.schema.json.
+kiosk-server/lib/kiosk/server/schemas/binding.schema.json	VENDORED copy of the normative kiosk-hq.github.io schema at spec/schemas/binding.schema.json.
 kiosk-server/lib/kiosk/server/tolled_calls.rb	The count belongs to the account: the
 kiosk-server/lib/kiosk/server/verb_registry.rb	          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
 kiosk-server/lib/kiosk/server/verb_wire.rb	PowGate.gate(

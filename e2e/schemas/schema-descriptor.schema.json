@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://kiosk.tech/spec/schemas/schema-descriptor.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/schema-descriptor.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
+  "$id": "https://kiosk-hq.github.io/spec/schemas/schema-descriptor.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk-hq.github.io schema at spec/schemas/schema-descriptor.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk schema descriptor",
   "description": "The body of the unauthenticated GET <endpoint>/schema: the origin's verbs and their contracts. The root is CLOSED. The module set is in `capabilities` in /.well-known/kiosk.json.",
   "type": "object",

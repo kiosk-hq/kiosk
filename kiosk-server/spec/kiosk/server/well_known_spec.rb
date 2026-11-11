@@ -155,7 +155,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     # IMMUTABLE versioned cut, never the mutable `skill.md` alias.
     #
     # Which version that is belongs to kiosk-test-support's skill_pin_spec,
-    # which holds it against the bytes kiosk.tech actually publishes.
+    # which holds it against the bytes kiosk-hq.github.io actually publishes.
     it 'advertises the skill descriptor when skill_sha256 is set' do
       Kiosk.configure { |c| c.skill_sha256 = 'abc123' }
       d = described_class.build(base_url: 'https://api.acme.example')
@@ -166,11 +166,11 @@ RSpec.describe Kiosk::Server::WellKnown do
 
     it 'respects an overridden skill_url' do
       Kiosk.configure do |c|
-        c.skill_url    = 'https://kiosk.tech/skill-v1.1.md'
+        c.skill_url    = 'https://kiosk-hq.github.io/skill-v1.1.md'
         c.skill_sha256 = 'def456'
       end
       d = described_class.build(base_url: 'https://api.acme.example')
-      expect(d[:kiosk][:skill]).to eq(url: 'https://kiosk.tech/skill-v1.1.md', sha256: 'def456')
+      expect(d[:kiosk][:skill]).to eq(url: 'https://kiosk-hq.github.io/skill-v1.1.md', sha256: 'def456')
     end
 
     it 'raises if issuer is not configured' do
@@ -216,7 +216,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     it 'emits a Skills directive pointing at the configured skill URL' do
-      # Deliberately synthetic (not a published kiosk.tech artifact): this is a
+      # Deliberately synthetic (not a published kiosk-hq.github.io artifact): this is a
       # round-trip on whatever skill_url is configured, and a synthetic value
       # cannot go stale — and cannot be mistaken for the shipped default, which
       # is asserted separately above.
@@ -509,7 +509,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     it 'teaches the RFC 9457 problem document, with the code FLAT' do
       expect(body).to include('RFC 9457 problem document')
       expect(body).to include('application/problem+json')
-      expect(body).to include('https://kiosk.tech/problems/<code>')
+      expect(body).to include('https://kiosk-hq.github.io/problems/<code>')
       expect(body).to match(/`code`.*FLAT member/)
       # The retired envelope must not survive anywhere in the document.
       expect(body).not_to include('ok: false')

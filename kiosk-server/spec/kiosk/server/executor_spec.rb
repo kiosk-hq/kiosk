@@ -934,7 +934,7 @@ RSpec.describe Kiosk::Server::Executor do
         .to raise_error(Kiosk::Server::Errors::ModuleNotServed) { |e|
           expect(e.code).to        eq('module_not_served')
           expect(e.http_status).to eq(501)
-          expect(e.to_problem[:type]).to eq('https://kiosk.tech/problems/module_not_served')
+          expect(e.to_problem[:type]).to eq('https://kiosk-hq.github.io/problems/module_not_served')
           # `detail` NAMES the module — the only thing separating "no payments
           # here" from "no KYC here" to a reader of the answer.
           expect(e.to_problem[:detail]).to include('payment')

@@ -291,9 +291,9 @@ printf "\n\033[1m=== /auth.md (cold-start pointers) ===\033[0m\n"
 
 authmd_body=$(curl -sf "$SERVER_URL/auth.md")
 assert "auth.md names the skill" \
-  "$(printf '%s' "$authmd_body" | grep -c 'Skill for AI assistants: https://kiosk.tech/skill-v')" "1"
+  "$(printf '%s' "$authmd_body" | grep -c 'Skill for AI assistants: https://kiosk-hq.github.io/skill-v')" "1"
 assert "auth.md names the published solver" \
-  "$(printf '%s' "$authmd_body" | grep -c 'https://kiosk.tech/pow/solve.py')" "1"
+  "$(printf '%s' "$authmd_body" | grep -c 'https://kiosk-hq.github.io/pow/solve.py')" "1"
 assert "auth.md forbids a hand-rolled solver" \
   "$(printf '%s' "$authmd_body" | grep -c 'Do not write your own Equihash solver')" "1"
 # Non-vacuity control: this grep really is reading the served document.
@@ -849,7 +849,7 @@ kyc_ms_status=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/
 assert "KYC at an origin that serves no KYC → 501" "$kyc_ms_status" "501"
 assert "…code is module_not_served"  "$(echo "$kyc_ms" | jq -r '.code')" "module_not_served"
 assert "…and NOT forbidden"          "$(echo "$kyc_ms" | jq -r '.code == "forbidden"')" "false"
-assert "…type names the code"        "$(echo "$kyc_ms" | jq -r '.type')" "https://kiosk.tech/problems/module_not_served"
+assert "…type names the code"        "$(echo "$kyc_ms" | jq -r '.type')" "https://kiosk-hq.github.io/problems/module_not_served"
 assert "…title is the code's, not the incident's" "$(echo "$kyc_ms" | jq -r '.title')" "Module not served"
 assert "…status restates the HTTP status"         "$(echo "$kyc_ms" | jq -r '.status')" "501"
 assert "…detail names the module"    "$(echo "$kyc_ms" | jq -r '.detail | test("KYC")')" "true"
@@ -1096,7 +1096,7 @@ assert "binding: token request after unlink → invalid_client" \
 # serves the binding module, and `auth/claim` is a path it very much has.
 assert "binding: claim of an unknown code → 404" "$(echo "$bind_out" | jq -r '.unknown_code_claim')"           "404"
 assert "binding: …and the code is not_found"  "$(echo "$bind_out" | jq -r '.unknown_code_claim_code')"              "not_found"
-assert "binding: …type names it"              "$(echo "$bind_out" | jq -r '.unknown_code_claim_type')"              "https://kiosk.tech/problems/not_found"
+assert "binding: …type names it"              "$(echo "$bind_out" | jq -r '.unknown_code_claim_type')"              "https://kiosk-hq.github.io/problems/not_found"
 
 # THE DISCRIMINATOR, and the point of the split. Two situations that could
 # share one code, dialled at this booted origin, must answer with TWO
@@ -1356,7 +1356,7 @@ assert "audit: …and neither does kiosk_actions" \
 # subscriber that was already waiting.
 #
 # It runs `kiosk-server/listen.py`, which is the SAME FILE an assistant fetches
-# from kiosk.tech and verifies by SHA-256 before executing. Driving the shipped
+# from kiosk-hq.github.io and verifies by SHA-256 before executing. Driving the shipped
 # client rather than a bespoke one is the point: a harness that spoke the socket
 # its own way would prove the server and say nothing about the thing every
 # assistant actually runs.

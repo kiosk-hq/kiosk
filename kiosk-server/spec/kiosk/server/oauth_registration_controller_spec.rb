@@ -56,7 +56,7 @@ RSpec.describe Kiosk::Server::OauthRegistrationController do
       expect(status).to eq(402)
       expect(headers['WWW-Authenticate']).to eq(%(Kiosk-PoW realm="#{OauthClients::ISSUER}"))
       expect(headers['Content-Type']).to include('application/problem+json')
-      expect(problem).to include('type' => 'https://kiosk.tech/problems/pow_required', 'status' => 402,
+      expect(problem).to include('type' => 'https://kiosk-hq.github.io/problems/pow_required', 'status' => 402,
                                  'code' => 'pow_required', 'challenges' => be_an(Array))
       # A challenge is single-use and bound to this request: a cache must not keep it.
       expect(headers['Cache-Control']).to eq('no-store')

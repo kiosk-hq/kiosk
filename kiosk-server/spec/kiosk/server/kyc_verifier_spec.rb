@@ -171,7 +171,7 @@ RSpec.describe Kiosk::Server::KycVerifier do
           .to raise_error(Kiosk::Server::Errors::ModuleNotServed) { |e|
             expect(e.code).to        eq('module_not_served')
             expect(e.http_status).to eq(501)
-            expect(e.to_problem[:type]).to   eq('https://kiosk.tech/problems/module_not_served')
+            expect(e.to_problem[:type]).to   eq('https://kiosk-hq.github.io/problems/module_not_served')
             expect(e.to_problem[:detail]).to include('KYC')
             # An assistant that branches on `forbidden` must not catch this.
             expect(e).not_to be_a(Kiosk::Server::Errors::Forbidden)

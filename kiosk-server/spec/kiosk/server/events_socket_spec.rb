@@ -20,7 +20,7 @@ module EventsSocketSpec
   PROBE = File.expand_path('../../support/events_socket_probe_app.rb', __dir__)
 
   MODULE_NOT_SERVED = {
-    'type' => 'https://kiosk.tech/problems/module_not_served',
+    'type' => 'https://kiosk-hq.github.io/problems/module_not_served',
     'title' => 'Module not served',
     'status' => 501,
     'detail' => 'this operator does not serve the events module',

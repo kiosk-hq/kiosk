@@ -255,7 +255,7 @@ RSpec.describe Kiosk::Server::WireController do
       expect(headers['WWW-Authenticate']).to eq('Kiosk-PoW realm="https://demo.example"')
       expect(headers['Content-Type']).to include('application/problem+json')
       expect(problem[:code]).to   eq('pow_required')
-      expect(problem[:type]).to   eq('https://kiosk.tech/problems/pow_required')
+      expect(problem[:type]).to   eq('https://kiosk-hq.github.io/problems/pow_required')
       expect(problem[:status]).to eq(402)
       expect(problem[:challenges]).to be_an(Array)
       expect(problem[:challenges]).not_to be_empty
@@ -282,7 +282,7 @@ RSpec.describe Kiosk::Server::WireController do
       expect(status).to eq(400)
       expect(headers['Content-Type']).to include('application/problem+json')
       expect(problem[:code]).to   eq('bad_request')
-      expect(problem[:type]).to   eq('https://kiosk.tech/problems/bad_request')
+      expect(problem[:type]).to   eq('https://kiosk-hq.github.io/problems/bad_request')
       expect(problem[:status]).to eq(400)
       expect(problem[:hint]).to include('Kiosk-PoW', 'a single proof {"challenge": ', '"nonce": {"indices"',
                                         'a JSON array of such proofs')

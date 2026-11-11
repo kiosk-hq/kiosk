@@ -106,7 +106,7 @@ RSpec.describe Kiosk::Server::WireController do
         expect(headers['Content-Type']).to include('application/problem+json')
         # Body payload preserved (header names, body carries).
         expect(problem[:code]).to   eq('pow_required')
-        expect(problem[:type]).to   eq('https://kiosk.tech/problems/pow_required')
+        expect(problem[:type]).to   eq('https://kiosk-hq.github.io/problems/pow_required')
         expect(problem[:status]).to eq(402)
         expect(problem[:challenges]).to be_an(Array)
         expect(problem[:challenges]).not_to be_empty
@@ -129,7 +129,7 @@ RSpec.describe Kiosk::Server::WireController do
         expect(headers['Cache-Control']).to eq('no-store')
         expect(headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
         expect(body[:code]).to   eq('pow_required')
-        expect(body[:type]).to   eq('https://kiosk.tech/problems/pow_required')
+        expect(body[:type]).to   eq('https://kiosk-hq.github.io/problems/pow_required')
         expect(body[:status]).to eq(402)
         expect(body[:challenges]).to be_an(Array)
         expect(body[:challenges]).not_to be_empty
@@ -183,7 +183,7 @@ RSpec.describe Kiosk::Server::WireController do
         # The other 402 of the pair — same status, same endpoint, different
         # code — which is why the code member is the branch point.
         expect(problem[:code]).to   eq('payment_setup_required')
-        expect(problem[:type]).to   eq('https://kiosk.tech/problems/payment_setup_required')
+        expect(problem[:type]).to   eq('https://kiosk-hq.github.io/problems/payment_setup_required')
         expect(problem[:status]).to eq(402)
         expect(problem[:hint]).to include('payment_setup')
         expect(problem).not_to have_key(:challenges)

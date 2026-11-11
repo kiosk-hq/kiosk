@@ -40,7 +40,7 @@ RSpec.describe Kiosk::TestHelpers::SkillPin do
   end
 
   it 'fails when the configuration sets its own skill_url' do
-    Kiosk.configure { |c| c.skill_url = 'https://kiosk.tech/skill-v0.0.1.md' }
+    Kiosk.configure { |c| c.skill_url = 'https://kiosk-hq.github.io/skill-v0.0.1.md' }
 
     expect(described_class.problem(hashed_version: version)).to include('Remove the line `c.skill_url = ...`')
   end

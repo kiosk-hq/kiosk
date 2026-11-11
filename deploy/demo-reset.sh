@@ -53,7 +53,7 @@ if [ "${1:-}" != --on-box ]; then
   exec ssh "$host" "bash /srv/kiosk/deploy/demo-reset.sh --on-box $*"
 fi
 shift
-export PATH="/home/ubuntu/.local/bin:/home/ubuntu/.local/share/mise/installs/ruby/4.0.1/bin:$PATH"
+export PATH="/home/ubuntu/.local/bin:/home/ubuntu/.local/share/mise/installs/ruby/4.0.9/bin:$PATH"
 
 WIPE_GG=0; [ "${1:-}" = "--all" ] && WIPE_GG=1
 

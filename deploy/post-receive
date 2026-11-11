@@ -5,7 +5,7 @@
 set -eu
 WORK_TREE=/srv/kiosk
 GIT_DIR=/srv/kiosk.git
-export PATH="/home/ubuntu/.local/bin:/home/ubuntu/.local/share/mise/installs/ruby/4.0.1/bin:$PATH"
+export PATH="/home/ubuntu/.local/bin:/home/ubuntu/.local/share/mise/installs/ruby/4.0.9/bin:$PATH"
 MAIN=0
 FAILED=
 while read -r _o _n ref; do [ "$ref" = "refs/heads/main" ] && MAIN=1; done

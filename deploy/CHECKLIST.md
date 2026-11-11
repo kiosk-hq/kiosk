@@ -11,7 +11,7 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 
 ## 2. Provision the VPS (one small box, ~2–4 GB)
 - [ ] Install: **Caddy** (stock — there is no rate-limit module to add, see §6), **PostgreSQL**
-      (17), **Ruby 4.0.1** via **mise**, git.
+      (17), **Ruby 4.0.9** via **mise**, git.
 - [ ] For comparison, the box this fleet actually runs on, MEASURED over ssh 2026-09-06: an OVH VPS
       with **2 vCPU** (`nproc`) and **3814 MB** RAM (`free -m` total), carrying every deployed app
       plus Postgres plus Caddy. Every throughput number written down in this repository was taken on a
@@ -259,7 +259,7 @@ getgrocery's real third-party orders included.
       any deploy. The push must end `deploy complete.`
 - [ ] By hand instead of the push, per app on the box, as the hook does:
       ```
-      export PATH=$HOME/.local/share/mise/installs/ruby/4.0.1/bin:$PATH
+      export PATH=$HOME/.local/share/mise/installs/ruby/4.0.9/bin:$PATH
       cd /srv/kiosk/kiosk-demo-<app>
       (set -a; . /etc/kiosk-demo/<app>.env; set +a; bundle exec rails db:migrate && bundle exec rails db:seed)
       sudo systemctl start kiosk-demo@<app>

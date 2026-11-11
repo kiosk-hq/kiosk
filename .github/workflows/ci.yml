@@ -16,7 +16,7 @@ env:
 jobs:
   gems:
     name: ${{ matrix.gem }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
@@ -68,7 +68,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       # Five gem jobs run a Python solver. kiosk-redteam, kiosk-test-support and
@@ -123,7 +123,7 @@ jobs:
 
   demos:
     name: ${{ matrix.demo }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -159,7 +159,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
       - name: Set up Python (Equihash solver)
         uses: actions/setup-python@v7
@@ -295,7 +295,7 @@ jobs:
   # covered twice and no single-line revert of it reddens anything.
   skooti-firmware:
     name: skooti lock firmware — C verifier vs. the two Ruby readers (make test)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     # Both compilers named here rather than defaulted per step — see above.
     env:
@@ -308,7 +308,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: The C toolchain this job needs, named rather than assumed
@@ -340,7 +340,7 @@ jobs:
   # fingerprint re-measuring at the commit its row names.
   conformance-drift-baseline:
     name: the drift baseline is self-consistent (bin/check-conformance-drift --check)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -351,7 +351,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: The generated baseline is one its own generator could have written
@@ -364,7 +364,7 @@ jobs:
   # private key.
   publication-paths:
     name: nothing shipped cites what does not ship (bin/check-publication-paths)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -372,7 +372,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: check-publication-paths self-test
@@ -385,7 +385,7 @@ jobs:
   # path that is missing or untracked.
   shipped-archaeology:
     name: no unresolvable citation in shipped files (bin/check-shipped-archaeology)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -393,7 +393,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: check-shipped-archaeology self-test
@@ -406,7 +406,7 @@ jobs:
   # optionality label; its `required:` declaration already says that.
   descriptor-prose:
     name: no optionality label in descriptor descriptions (bin/check-descriptor-prose)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -414,7 +414,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: check-descriptor-prose self-test
@@ -427,7 +427,7 @@ jobs:
   # fails until it is declared.
   demo-file-sync:
     name: duplicated demo files agree (bin/check-demo-copies)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -435,7 +435,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: Hand-copied demo files agree, or the divergence is declared
@@ -448,7 +448,7 @@ jobs:
   # refusal's own words, not only the status and code.
   refusal-assertions:
     name: a 400-refusal beat reads the refusal's own words (bin/check-refusal-assertions)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -456,7 +456,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: Every beat claiming a 400 refusal reads the sentence it claims
@@ -495,7 +495,7 @@ jobs:
   # its own final line.
   deploy-caddy:
     name: the declarative Caddy deploy works (deploy/deploy-caddy.sh)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -519,7 +519,7 @@ jobs:
   # derivation must still find the fleet in the shipped template.
   deploy-live-hsts:
     name: the deploy HSTS probe works (deploy/check-live-hsts.sh)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -536,7 +536,7 @@ jobs:
   # secret across the two files that name it differently, and prints no secret.
   deploy-rollout:
     name: the declarative env rollout works (deploy/rollout.sh)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -594,7 +594,7 @@ jobs:
   #     fleet against the working tree, and those differ until the next deploy.
   published-bytes:
     name: skill pins vs the published bytes (kiosk.tech sibling)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       # The umbrella layout, reproduced: this repo and kiosk.tech as siblings.
@@ -612,7 +612,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       # Fails loudly rather than letting the steps below decide for
@@ -657,7 +657,7 @@ jobs:
   # Brakeman over every Rails app; the root Gemfile holds the three tools.
   lint:
     name: lint and security (bin/lint)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -665,7 +665,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: true
 
       - name: RuboCop, bundler-audit, Brakeman
@@ -675,7 +675,7 @@ jobs:
   # same MAJOR.MINOR.PATCH (protocol.md §14.1).
   version-parity:
     name: version parity (bin/check-version-parity)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -683,7 +683,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: Gems, lockfiles and skill pins carry the protocol version
@@ -694,7 +694,7 @@ jobs:
   # history, so the checkout is full.
   changelog-structure:
     name: changelogs answer each kind once, new entries are short (bin/check-changelog)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -704,7 +704,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: The script is red on a plant of every arm
@@ -738,7 +738,7 @@ jobs:
   # signal. See deploy/production-smoke.sh; any assertion miss fails the job.
   demo-production-smoke:
     name: production-boot smoke (stylish + proveli + tudu)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     services:
       postgres:
@@ -785,7 +785,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: Install stylish dependencies
@@ -846,7 +846,7 @@ jobs:
 
   e2e:
     name: kiosk OSS end-to-end
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     services:
       postgres:
@@ -874,7 +874,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.9"
           bundler-cache: false
 
       - name: Install Rails

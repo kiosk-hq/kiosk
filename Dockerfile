@@ -9,7 +9,7 @@
 # The Ruby version is a build argument, and `bin/check-demo-copies` holds it to
 # a version this repository's CI actually runs and to the floor the gemspecs
 # declare, so it cannot drift into naming a Ruby nothing here is tested on.
-ARG RUBY_VERSION=4.0.1
+ARG RUBY_VERSION=4.0.9
 FROM ruby:${RUBY_VERSION}-slim
 
 # python3-numpy for the Equihash solver (the Debian package, so no pip and no

@@ -138,7 +138,7 @@ deliberately no default edge throttle — see "Edge rate-limit" below.)
    `.mise.toml` and `.ruby-version` are gitignored repository-wide, so a clone
    carries none and the interpreter is yours to pick. What the apps are built
    and gated on is the version `.github/workflows/ci.yml` names at its
-   `setup-ruby` steps — `4.0.1` today, typed in the workflow.
+   `setup-ruby` steps — `4.0.9` today, typed in the workflow.
 
    **What the box we actually run IS, measured over ssh 2026-09-06 and written
    down because until now nothing anywhere recorded it:** an **OVH** VPS (the

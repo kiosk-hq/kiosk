@@ -40,8 +40,8 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
   pin ships** — `mise.toml`, `.mise.toml` and `.ruby-version` are gitignored
   repository-wide, so a clone carries none and each developer manages their
   own. What the harness is gated on is the version `.github/workflows/ci.yml`'s
-  `e2e` job names at its `setup-ruby` step (`4.0.1` today, typed in the
-  workflow), which is also the gems' declared floor.
+  `e2e` job names at its `setup-ruby` step (`4.0.9` today, typed in the
+  workflow). The gems declare `>= 4.0`.
 - **PostgreSQL** reachable (default: `localhost` with the running user as superuser; e.g. `brew services start postgresql`)
 - **`rails` gem** — the script installs it automatically if missing
 - **`curl`** and **`jq`** on the PATH

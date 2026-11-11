@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-11-11: Every link to the Kiosk site names https://kiosk-hq.github.io, the gem homepages included. A flaw in the specification is reported at kiosk-hq/kiosk-hq.github.io.
 - 2026-10-26: deploy: the root README, deploy/README.md and rollout.sh agree on the env values an operator supplies; deploy/README.md lists them, the database passwords included.
 - 2026-10-26: deploy: CHECKLIST.md drops the done prove-to-proveli move; kyc-pairing-audit.sh calls `KIOSK_PROVELI_<OP>_SECRET` the broker's name and takes `--fix-names`.
 - 2026-10-26: kiosk-server, kiosk-core and kiosk-kyc-proveli: the KYC example passes the operator's own broker `url:`; the default demo broker serves only the Kiosk demos.

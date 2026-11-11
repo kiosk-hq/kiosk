@@ -95,7 +95,7 @@ or out-of-zone address there is likewise a clean 400.
 tell a fabricated-but-plausible in-zone address (`"1 Nonexistent Way, Dublin 2"`)
 from a real one — there is no address-book lookup. This gate adds realism and
 catches gross fakes; it is not proof the address exists. The real defense is the
-**human** providing/confirming the address — the [Kiosk skill](https://kiosk.tech/skill.md)
+**human** providing/confirming the address — the [Kiosk skill](https://kiosk-hq.github.io/skill.md)
 instructs assistants to obtain such real-world details from the human and never
 invent a placeholder.
 

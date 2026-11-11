@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-11-11: The homepage and the README name https://kiosk-hq.github.io, the address of the Kiosk site.
+
 ## [0.6.28] — 2026-10-26
 
 - 2026-10-26: Version 0.6.28, the tree cut that matches skill 0.6.28.

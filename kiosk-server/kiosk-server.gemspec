@@ -39,7 +39,7 @@ Gem::Specification.new do |spec|
     into the host — then one route per query and action the block names. It
     also auto-injects the headers middleware.
   DESC
-  spec.homepage      = 'https://kiosk.tech'
+  spec.homepage      = 'https://kiosk-hq.github.io'
   spec.license       = 'Apache-2.0'
   spec.required_ruby_version = '>= 4.0'
 

@@ -34,7 +34,7 @@ Gem::Specification.new do |spec|
     subclasses Kiosk::PaymentProviders::Base and assigns the instance to
     Kiosk.configuration.payment_provider.
   DESC
-  spec.homepage    = 'https://kiosk.tech'
+  spec.homepage    = 'https://kiosk-hq.github.io'
   spec.license     = 'Apache-2.0'
   spec.required_ruby_version = '>= 4.0'
 

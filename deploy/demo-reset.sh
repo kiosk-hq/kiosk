@@ -13,7 +13,7 @@
 # placed against this origin — the Hermes-verified order f8bc3efb among them.
 # Those rows are evidence of a run that happened, and seeding cannot reproduce
 # one: a wipe destroys the record permanently rather than refreshing it. No page
-# kiosk.tech serves cites any of these order ids -- the reason to keep them is
+# kiosk-hq.github.io serves cites any of these order ids -- the reason to keep them is
 # the evidence itself, not a link.
 #
 #   deploy/demo-reset.sh        # reset the 6; getgrocery additive (keeps the real runs)

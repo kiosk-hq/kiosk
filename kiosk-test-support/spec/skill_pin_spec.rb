@@ -13,7 +13,7 @@ require 'kiosk/server/oauth_error'
 #
 # This spec owns what needs the published BYTES:
 #   * INTEGRITY: each pinned `skill_sha256` equals the SHA-256 of the default
-#     file as kiosk.tech publishes it. A hash-verifying AI assistant refuses the
+#     file as kiosk-hq.github.io publishes it. A hash-verifying AI assistant refuses the
 #     skill on a mismatch, so a stale pin stops the operator being usable.
 #   * PATCH AGREEMENT: the engine default and every demo's `hashed_version:`
 #     name the SAME cut.

@@ -28,7 +28,7 @@ Gem::Specification.new do |spec|
 
     Does not depend on kiosk-core or Rails — pure Ruby, no native extensions.
   DESC
-  spec.homepage      = 'https://kiosk.tech'
+  spec.homepage      = 'https://kiosk-hq.github.io'
   spec.license       = 'Apache-2.0'
   spec.required_ruby_version = '>= 4.0'
 

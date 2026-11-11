@@ -1,6 +1,6 @@
 # kiosk-user-idp-devise
 
-The Devise sign-in adapter for [Kiosk](https://kiosk.tech) — for Rails operators that authenticate customers through Devise. Install it explicitly; it is not bundled by `kiosk-all`.
+The Devise sign-in adapter for [Kiosk](https://kiosk-hq.github.io) — for Rails operators that authenticate customers through Devise. Install it explicitly; it is not bundled by `kiosk-all`.
 
 ## What it does
 
@@ -84,5 +84,5 @@ Apache-2.0 — see `LICENSE.txt`.
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech)
+- [kiosk-hq.github.io](https://kiosk-hq.github.io)
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

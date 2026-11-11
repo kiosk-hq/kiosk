@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
     Assign an instance to Kiosk.configuration.kyc_provider and kiosk-server
     serves request_kyc and the broker's callback.
   DESC
-  spec.homepage    = 'https://kiosk.tech'
+  spec.homepage    = 'https://kiosk-hq.github.io'
   spec.license     = 'Apache-2.0'
   spec.required_ruby_version = '>= 4.0'
 

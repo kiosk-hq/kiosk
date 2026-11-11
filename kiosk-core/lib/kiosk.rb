@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# kiosk-core — foundation for the Kiosk framework (https://kiosk.tech).
+# kiosk-core — foundation for the Kiosk framework (https://kiosk-hq.github.io).
 
 require 'kiosk/version'
 require 'kiosk/protocol'

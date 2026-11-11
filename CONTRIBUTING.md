@@ -3,7 +3,7 @@
 Thanks for looking. This is the reference implementation of the Kiosk protocol:
 a Ruby gems monorepo, eight demo Rails applications that exercise it, and an
 end-to-end harness that builds a fresh app from scratch and drives it over HTTP.
-The protocol itself is specified at [kiosk.tech](https://kiosk.tech) and the
+The protocol itself is specified at [kiosk-hq.github.io](https://kiosk-hq.github.io) and the
 specification is normative — code and documents conform to it, not the other way
 round.
 
@@ -19,7 +19,7 @@ useful report carries.
 | A bug in a gem, a demo or the harness | An [issue](https://github.com/kiosk-hq/kiosk/issues) |
 | A question about the protocol, or a disagreement with the spec | An issue, and quote the section you are arguing with |
 | A security vulnerability in the implementation | An [issue here](https://github.com/kiosk-hq/kiosk/issues) — read [SECURITY.md](SECURITY.md) first; it is public the moment you file it |
-| A security vulnerability in the specification | An [issue on `kiosk-hq/kiosk.tech`](https://github.com/kiosk-hq/kiosk.tech/issues) — same page, same caveat |
+| A security vulnerability in the specification | An [issue on `kiosk-hq/kiosk-hq.github.io`](https://github.com/kiosk-hq/kiosk-hq.github.io/issues) — same page, same caveat |
 | A fix you have already written | A pull request, with the gate below green |
 
 A bug report is most useful with the commit you were on, the gem or demo it is

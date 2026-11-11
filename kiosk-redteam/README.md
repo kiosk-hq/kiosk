@@ -1,6 +1,6 @@
 # kiosk-redteam
 
-Adversarial regression harness for [Kiosk](https://kiosk.tech) operators — it
+Adversarial regression harness for [Kiosk](https://kiosk-hq.github.io) operators — it
 drives hostile HTTP scenarios against a running Kiosk origin and asserts each
 attack is correctly blocked.
 
@@ -246,6 +246,6 @@ Apache-2.0 — see `LICENSE.txt`.
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech) — landing + docs
-- [Specification](https://kiosk.tech/specification.html) — the normative spec
+- [kiosk-hq.github.io](https://kiosk-hq.github.io) — landing + docs
+- [Specification](https://kiosk-hq.github.io/specification.html) — the normative spec
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

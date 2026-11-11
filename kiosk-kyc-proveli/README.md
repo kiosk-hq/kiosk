@@ -1,6 +1,6 @@
 # kiosk-kyc-proveli
 
-Proveli KYC broker adapter for [Kiosk](https://kiosk.tech). Implements
+Proveli KYC broker adapter for [Kiosk](https://kiosk-hq.github.io). Implements
 `Kiosk::KycProviders::Base` against the Proveli anonymizing broker.
 
 ## Install

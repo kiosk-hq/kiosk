@@ -1,6 +1,6 @@
 # Kiosk — OSS reference implementation
 
-Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets the AI assistants of visitors and customers discover, transact with, and pay an operator's service, and its Ruby reference implementation (one HTTP API, several assistants on one customer account, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail).
+Apache-2.0 monorepo for [Kiosk](https://kiosk-hq.github.io) — the standards-based open protocol that lets the AI assistants of visitors and customers discover, transact with, and pay an operator's service, and its Ruby reference implementation (one HTTP API, several assistants on one customer account, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail).
 
 ## Install
 
@@ -50,7 +50,7 @@ file that EXISTS from a file that is PACKAGED. Do not copy the `path:` form into
 app outside this repository.
 
 The step-by-step operator walkthrough — install through a served protocol, with a
-worked operation — is [kiosk.tech/onboarding.html](https://kiosk.tech/onboarding.html).
+worked operation — is [kiosk-hq.github.io/onboarding.html](https://kiosk-hq.github.io/onboarding.html).
 
 ## Layout
 
@@ -220,7 +220,7 @@ gate is; and what this repository expects of a changelog entry and a comment.
 fact that filing one is public disclosure.
 
 Before 1.0 every gem carries the protocol's full version — the version parity
-the spec promises ([protocol §14.1](https://kiosk.tech/spec/protocol.md)): the
+the spec promises ([protocol §14.1](https://kiosk-hq.github.io/spec/protocol.md)): the
 protocol, every gem here and the published skill read the same MAJOR.MINOR.PATCH,
 and a new cut of any one of them moves all of them. From 1.0 they share
 MAJOR.MINOR. The number is `Kiosk::Protocol::API_VERSION`, and the `~> MAJOR.MINOR.0`
@@ -268,7 +268,7 @@ Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is t
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech) — landing page + AI-assistant skill
-- [kiosk.tech/skill.md](https://kiosk.tech/skill.md) — universal AI-assistant skill
+- [kiosk-hq.github.io](https://kiosk-hq.github.io) — landing page + AI-assistant skill
+- [kiosk-hq.github.io/skill.md](https://kiosk-hq.github.io/skill.md) — universal AI-assistant skill
 - [ROADMAP.md](ROADMAP.md) — what 0.6 ships, what comes next, what is out of scope
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

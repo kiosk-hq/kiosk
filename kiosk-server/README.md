@@ -1,6 +1,6 @@
 # kiosk-server
 
-The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
+The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk-hq.github.io).
 
 
 ## What's in this release
@@ -295,7 +295,7 @@ its message tells you how to make the new digest.
 The toll keeps spent challenge ids in `c.pow_spent_store`, by default
 `Kiosk::Server::PowSpentStores::ActiveRecord`: the `kiosk_pow_spent` table that
 `bin/rails g kiosk:install` lays down. Every process and every deploy shares it,
-so a proof is accepted once (kiosk.tech `protocol.md` §15.2). The token
+so a proof is accepted once (kiosk-hq.github.io `protocol.md` §15.2). The token
 endpoint keeps the `jti` of each client assertion in the same store, so an
 assertion is accepted once too.
 
@@ -690,5 +690,5 @@ Apache-2.0 — see `LICENSE.txt`.
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech)
+- [kiosk-hq.github.io](https://kiosk-hq.github.io)
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

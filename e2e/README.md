@@ -23,7 +23,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - Key rotation (`POST /kiosk/auth/rotate`): a registered client puts a new key on its identity with both keys signing a client assertion and the old key's assertion naming the new key; the client and its account stay, the token endpoint issues a token for the new key only, that token works only with the new key, a token from before answers 401 and the old key's token request `invalid_client`
 - The principal flows into handlers: the `book_appointment` Action reads `Kiosk.current_user_id` and the `my_appointments` query returns only the calling principal's rows (`Appointment.own`)
 - The `pay` verb settles a checkout through the two closed AP2 mandates: `pay_flow.rb` self-registers a synthetic principal, runs `payment_setup` (the setup page, then `ready`), signs a checkout with the operator's key as an action would, signs the checkout and payment mandates (SD-JWT), pays through `kiosk-pay-stripe` against a local stripe-mock; assertions cover the unenveloped `pay` response body and the three DB tables (`checkout_mandates`, `payment_mandates`, `settlements`)
-- The EVENT STREAM, over a real WebSocket, driven by the PINNED listener (`kiosk-server/listen.py` — the same file an assistant fetches from kiosk.tech and verifies by SHA-256, rather than a client written for this harness). A salon marks an appointment confirmed at its own back-office page — OUTSIDE the mount and not a Kiosk handler, so nothing the assistant called produced it — and the event reaches a subscriber that was already waiting: with its subject and its published payload, never carrying another principal's row, resumable from `since` by a listener started cold afterwards, refused at subscribe time for a subject that is not the caller's, and disconnected with `reconnect: false` for a token that does not resolve
+- The EVENT STREAM, over a real WebSocket, driven by the PINNED listener (`kiosk-server/listen.py` — the same file an assistant fetches from kiosk-hq.github.io and verifies by SHA-256, rather than a client written for this harness). A salon marks an appointment confirmed at its own back-office page — OUTSIDE the mount and not a Kiosk handler, so nothing the assistant called produced it — and the event reaches a subscriber that was already waiting: with its subject and its published payload, never carrying another principal's row, resumable from `since` by a listener started cold afterwards, refused at subscribe time for a subject that is not the caller's, and disconnected with `reconnect: false` for a token that does not resolve
 
 ## What it does NOT verify (deferred)
 
@@ -49,7 +49,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - **python packages** — `e2e/requirements.txt` declares them: `numpy` for the
   register-time Equihash toll the golden path solves, `websockets` for the
   event-stream leg, which runs `kiosk-server/listen.py` — the SAME file an
-  assistant fetches from kiosk.tech and verifies by SHA-256 before executing —
+  assistant fetches from kiosk-hq.github.io and verifies by SHA-256 before executing —
   and `pyjwt` with `cryptography` for `e2e/dpop.py`, which signs the DPoP proof
   of every call that carries a token.
   CI installs that file; so should you:

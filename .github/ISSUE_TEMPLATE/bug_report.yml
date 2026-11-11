@@ -9,7 +9,7 @@ body:
         [SECURITY.md](https://github.com/kiosk-hq/kiosk/blob/main/SECURITY.md)
         first — this tracker is the channel, but an issue is public from the
         moment you file it, and a flaw in the specification rather than the
-        implementation goes to `kiosk-hq/kiosk.tech` instead.
+        implementation goes to `kiosk-hq/kiosk-hq.github.io` instead.
   - type: input
     id: commit
     attributes:

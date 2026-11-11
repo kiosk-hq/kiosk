@@ -1,6 +1,6 @@
 # kiosk-rls-rspec
 
-RSpec integration for the [Kiosk](https://kiosk.tech) journey-test DSL.
+RSpec integration for the [Kiosk](https://kiosk-hq.github.io) journey-test DSL.
 
 ## What it does
 
@@ -84,6 +84,6 @@ Apache-2.0 — see `LICENSE.txt`.
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech)
+- [kiosk-hq.github.io](https://kiosk-hq.github.io)
 - [kiosk-test-support](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-test-support) — shared DSL
 - [kiosk-rls-minitest](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-rls-minitest) — Minitest analogue

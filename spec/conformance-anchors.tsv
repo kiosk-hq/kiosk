@@ -37,7 +37,7 @@ CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
 CHANGELOG.md	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
 CLAUDE.md	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-proveli`
 README.md	Apache-2.0 for every gem in this repo.
-README.md	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets the AI assistants of visitors and customers discover, transact with, and pay an operator's service, and its Ruby reference implementation
+README.md	Apache-2.0 monorepo for [Kiosk](https://kiosk-hq.github.io) — the standards-based open protocol that lets the AI assistants of visitors and customers discover, transact with, and pay an operator's service, and its Ruby reference implementation
 README.md	Customer reputation factors
 README.md	Equihash (n=168, k=7)
 README.md	Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is the whole list
@@ -886,7 +886,7 @@ kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	production params (n=168, k=7
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	rejects a valid solution with 2**64 added to an index, without hashing
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	returns n:168, k:7 by default
 kiosk-pow-equihash/spec/readme_lever_spec.rb	README's own benchmarks give, or state that it is unbenched.
-kiosk-redteam/README.md	Adversarial regression harness for [Kiosk](https://kiosk.tech) operators — it
+kiosk-redteam/README.md	Adversarial regression harness for [Kiosk](https://kiosk-hq.github.io) operators — it
 kiosk-redteam/README.md	attack is correctly blocked.
 kiosk-redteam/README.md	drives hostile HTTP scenarios against a running Kiosk origin and asserts each
 kiosk-redteam/README.md	finds a real breach fails loudly: `Battery#report!` answers 1 and the
@@ -2073,7 +2073,7 @@ kiosk-test-support/spec/verb_reach_spec.rb	the reviewed inventory is exactly wha
 kiosk-user-idp-devise/README.md	**Lockable / confirmable handling is implicit.** Devise's `active_for_authentication?` already gates the Warden user, so
 kiosk-user-idp-devise/README.md	Add the adapter explicitly — the `kiosk-all` meta-gem pulls in only `kiosk-core` and `kiosk-server`, so IdP adapters are
 kiosk-user-idp-devise/README.md	Reads the signed-in user from the incoming request's Warden proxy and returns a `Kiosk::Identity` for the human-side surfaces
-kiosk-user-idp-devise/README.md	The Devise sign-in adapter for [Kiosk](https://kiosk.tech) — for Rails operators that authenticate customers through Devise.
+kiosk-user-idp-devise/README.md	The Devise sign-in adapter for [Kiosk](https://kiosk-hq.github.io) — for Rails operators that authenticate customers through Devise.
 kiosk-user-idp-devise/README.md	The adapter is **agnostic about how the customer signed in**: Devise's `database_authenticatable` and `omniauthable` modules
 kiosk-user-idp-devise/README.md	kiosk-server calls the adapter with an `ActionDispatch::Request` from the human-side page gate
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	        Kiosk::Identity.new(

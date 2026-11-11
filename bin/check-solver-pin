@@ -16,7 +16,7 @@ end
 ROOT   = File.expand_path('..', __dir__)
 SOLVER = File.join(ROOT, 'kiosk-pow-equihash', 'solve.py')
 SITE   = File.expand_path('../kiosk.tech', ROOT)
-PIN    = %r{https://kiosk\.tech/pow/(solve-(\h{12})\.py)\b.*?\b(\h{64})\b}m
+PIN    = %r{https://kiosk-hq\.github\.io/pow/(solve-(\h{12})\.py)\b.*?\b(\h{64})\b}m
 
 failures = []
 flag = ->(msg) { (failures << msg) && puts("  FAIL: #{msg}") }
@@ -37,7 +37,7 @@ abort "x solver pin: no skill-v*.md in #{SITE}" unless cut
 
 match = File.read(cut).match(PIN)
 if match.nil?
-  flag.call("#{File.basename(cut)} pins no https://kiosk.tech/pow/solve-<digest>.py with a sha256")
+  flag.call("#{File.basename(cut)} pins no https://kiosk-hq.github.io/pow/solve-<digest>.py with a sha256")
 else
   pinned_file, prefix, pinned_sha = match.captures
   flag.call("#{File.basename(cut)} pins #{pinned_sha}, but solve.py hashes to #{digest}") unless pinned_sha == digest

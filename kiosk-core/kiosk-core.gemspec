@@ -20,7 +20,7 @@ Gem::Specification.new do |spec|
     No Rails dependency. Loadable in any Ruby app; the heavier kiosk-server
     and kiosk-rls gems build on top of this.
   DESC
-  spec.homepage      = 'https://kiosk.tech'
+  spec.homepage      = 'https://kiosk-hq.github.io'
   spec.license       = 'Apache-2.0'
   spec.required_ruby_version = '>= 4.0'
 

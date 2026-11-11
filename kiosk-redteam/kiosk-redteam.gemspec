@@ -22,7 +22,7 @@ Gem::Specification.new do |spec|
     `require "kiosk/redteam"` loads no Rails. Through kiosk-test-support,
     installing the gem installs Rails.
   DESC
-  spec.homepage      = 'https://kiosk.tech'
+  spec.homepage      = 'https://kiosk-hq.github.io'
   spec.license       = 'Apache-2.0'
   spec.required_ruby_version = '>= 4.0'
 

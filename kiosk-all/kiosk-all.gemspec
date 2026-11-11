@@ -30,9 +30,9 @@ Gem::Specification.new do |spec|
       - Adapter gems (kiosk-user-idp-*, kiosk-pay-*) —
         providers pick per market/stack.
 
-    See https://kiosk.tech.
+    See https://kiosk-hq.github.io.
   DESC
-  spec.homepage      = 'https://kiosk.tech'
+  spec.homepage      = 'https://kiosk-hq.github.io'
   spec.license       = 'Apache-2.0'
   spec.required_ruby_version = '>= 4.0'
 

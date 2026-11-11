@@ -1,6 +1,6 @@
 # kiosk-test-support
 
-Test helpers for [Kiosk](https://kiosk.tech) origins, and the journey-test DSL of the Kiosk test harnesses.
+Test helpers for [Kiosk](https://kiosk-hq.github.io) origins, and the journey-test DSL of the Kiosk test harnesses.
 
 ## What it does
 
@@ -139,7 +139,7 @@ end
 
 ## The skill pin
 
-kiosk-server gives the URL of the skill that AI assistants read, and each kiosk-server release gives the skill of its own version. You set `skill_sha256`, the SHA-256 of that file, in `config/initializers/kiosk.rb`. This command downloads the file from kiosk.tech and calculates the digest:
+kiosk-server gives the URL of the skill that AI assistants read, and each kiosk-server release gives the skill of its own version. You set `skill_sha256`, the SHA-256 of that file, in `config/initializers/kiosk.rb`. This command downloads the file from kiosk-hq.github.io and calculates the digest:
 
 ```bash
 curl -fsS "$(bin/rails runner 'puts Kiosk.configuration.skill_url')" | shasum -a 256
@@ -187,5 +187,5 @@ Apache-2.0 — see `LICENSE.txt`.
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech)
+- [kiosk-hq.github.io](https://kiosk-hq.github.io)
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

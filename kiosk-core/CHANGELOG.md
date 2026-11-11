@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-11-11: The homepage and the README name https://kiosk-hq.github.io, the address of the Kiosk site.
 - 2026-10-26: The `kyc_provider` example passes the operator's own broker `url:`; the default demo broker serves only the Kiosk demos.
 
 ## [0.6.28] — 2026-10-26

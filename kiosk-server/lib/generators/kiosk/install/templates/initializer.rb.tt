@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Kiosk configuration. Every option: https://kiosk.tech and the kiosk-server README.
+# Kiosk configuration. Every option: https://kiosk-hq.github.io and the kiosk-server README.
 
 Kiosk.configure do |c|
   # Your user model class name, resolved at request time.

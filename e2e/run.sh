@@ -116,7 +116,7 @@ command -v stripe-mock >/dev/null || fail "stripe-mock not on PATH — the pay f
 # interpreters are separate because their callers are. The register-time
 # Equihash solver needs numpy under plain `python3` — kiosk-pow-equihash names
 # that interpreter itself. The event-stream leg runs the PINNED listener (the
-# same file an assistant fetches from kiosk.tech and verifies by SHA-256) and
+# same file an assistant fetches from kiosk-hq.github.io and verifies by SHA-256) and
 # needs websockets under `KIOSK_PYTHON`; e2e/dpop.py signs every DPoP proof
 # and needs pyjwt and cryptography there too. `KIOSK_PYTHON` is how a venv is pointed at
 # where `pip install` is refused system-wide.
@@ -549,7 +549,7 @@ ok "auth + binding HTTP bytes captured: $auth_capture_out"
 #
 # Spec §16.3 anchor 1. The assistant above asserts field by field, in
 # this harness's own words; this step asserts the SAME responses against the
-# normative JSON Schemas kiosk.tech publishes. The two are different oracles
+# normative JSON Schemas kiosk-hq.github.io publishes. The two are different oracles
 # and the second is the one an outside implementer can run: a protocol that drifts
 # from the published schema fails here even when every assertion above still
 # passes. Run from the generated app dir

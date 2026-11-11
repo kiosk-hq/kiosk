@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # kiosk-server: the Rails engine, its protocol, auth and discovery controllers, and
-# the install generator. See https://kiosk.tech.
+# the install generator. See https://kiosk-hq.github.io.
 
 require 'kiosk'
 require 'active_record'

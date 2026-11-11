@@ -35,7 +35,7 @@ module Kiosk
         <<~MESSAGE
           #{cause(version, hashed_version, sha256)}
           Do these steps:
-          1. Download the skill #{version} from kiosk.tech and calculate its SHA-256:
+          1. Download the skill #{version} from kiosk-hq.github.io and calculate its SHA-256:
                curl -fsS #{url} | shasum -a 256
           2. Set `c.skill_sha256` in config/initializers/kiosk.rb to that digest.
           3. Set `hashed_version: '#{version}'` in this test.

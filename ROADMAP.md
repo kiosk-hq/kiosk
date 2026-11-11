@@ -41,8 +41,8 @@ building on.
 - **Discovery.** Standard files tell an assistant what the site offers and
   where the skill is: agents.txt, the API catalogue, OAuth server metadata,
   the agent skills index.
-- **One specification, one skill.** kiosk.tech/specification.html defines the
-  protocol. kiosk.tech/skill.md teaches it to an assistant.
+- **One specification, one skill.** kiosk-hq.github.io/specification.html defines the
+  protocol. kiosk-hq.github.io/skill.md teaches it to an assistant.
 - **A Ruby on Rails reference implementation**, in this repository.
 
 ## 0.7: stronger where others are weak
@@ -53,7 +53,7 @@ building on.
   and the least work.
 - AP2 open mandates: the customer signs limits with their own key, and the
   assistant buys within them later, while the customer is away.
-- A client script on kiosk.tech that an assistant runs, so that it does not
+- A client script on kiosk-hq.github.io that an assistant runs, so that it does not
   write its own client first.
 - DNS records (DNS-AID) that point an assistant at each demo.
 - Find out whether a Kiosk operator can also answer Poppy's business side.

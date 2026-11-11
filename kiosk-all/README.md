@@ -1,6 +1,6 @@
 # kiosk-all
 
-The «I just want to start» meta-gem for the [Kiosk](https://kiosk.tech) framework.
+The «I just want to start» meta-gem for the [Kiosk](https://kiosk-hq.github.io) framework.
 
 ## What it pulls in
 
@@ -91,5 +91,5 @@ Apache-2.0 — see `LICENSE.txt`.
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech)
+- [kiosk-hq.github.io](https://kiosk-hq.github.io)
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

@@ -1,6 +1,6 @@
 # kiosk-pow-argon2id
 
-Argon2id memory-hard proof-of-work backend for the [Kiosk](https://kiosk.tech) framework.
+Argon2id memory-hard proof-of-work backend for the [Kiosk](https://kiosk-hq.github.io) framework.
 
 > **Opt-in.** The shipped default proof-of-work backend is
 > [`kiosk-pow-equihash`](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-pow-equihash).
@@ -103,7 +103,7 @@ It only reads `"salt"` and `"params"` from the challenge — the other fields
 to pass directly.
 
 Agent-facing guidance is **not** duplicated in this gem. The canonical skill is
-[kiosk.tech/skill.md](https://kiosk.tech/skill.md); it teaches the `402
+[kiosk-hq.github.io/skill.md](https://kiosk-hq.github.io/skill.md); it teaches the `402
 pow_required` retry — the same request body, unchanged, with the proof(s) in a
 `Kiosk-PoW` request header as raw JSON — and it teaches it for the
 shipped Equihash default, not for this backend. An operator that opts into

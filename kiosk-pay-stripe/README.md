@@ -1,6 +1,6 @@
 # kiosk-pay-stripe
 
-Stripe PSP adapter for [Kiosk](https://kiosk.tech). Implements
+Stripe PSP adapter for [Kiosk](https://kiosk-hq.github.io). Implements
 `Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
 
 ## Install

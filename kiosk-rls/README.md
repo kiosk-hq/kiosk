@@ -1,6 +1,6 @@
 # kiosk-rls
 
-Optional DB-layer defense-in-depth for [Kiosk](https://kiosk.tech) operators.
+Optional DB-layer defense-in-depth for [Kiosk](https://kiosk-hq.github.io) operators.
 
 ## Security model overview
 
@@ -128,5 +128,5 @@ Apache-2.0 — see `LICENSE.txt`.
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech)
+- [kiosk-hq.github.io](https://kiosk-hq.github.io)
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

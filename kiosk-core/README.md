@@ -1,6 +1,6 @@
 # kiosk-core
 
-Core abstractions for the [Kiosk](https://kiosk.tech) framework.
+Core abstractions for the [Kiosk](https://kiosk-hq.github.io) framework.
 
 ## What is Kiosk
 
@@ -52,6 +52,6 @@ Apache-2.0 — see `LICENSE.txt`.
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech) — landing + docs
-- [Specification](https://kiosk.tech/specification.html) — the normative spec
+- [kiosk-hq.github.io](https://kiosk-hq.github.io) — landing + docs
+- [Specification](https://kiosk-hq.github.io/specification.html) — the normative spec
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

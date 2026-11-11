@@ -22,7 +22,7 @@ Gem::Specification.new do |spec|
     for asserting the structured error classes — both also exposed as
     the Minitest `must_raise_*` / `wont_raise_*` spec-DSL forms.
   DESC
-  spec.homepage      = 'https://kiosk.tech'
+  spec.homepage      = 'https://kiosk-hq.github.io'
   spec.license       = 'Apache-2.0'
   spec.required_ruby_version = '>= 4.0'
 

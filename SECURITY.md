@@ -17,7 +17,7 @@ server.
 | The flaw is in | File it in |
 | --- | --- |
 | the **implementation** — a gem, a demo application, the e2e harness, a deploy runbook | [`kiosk-hq/kiosk`](https://github.com/kiosk-hq/kiosk/issues), this repository |
-| the **specification** — the normative `specification.html`, the formal spec and its JSON Schemas, the assistant skill | [`kiosk-hq/kiosk.tech`](https://github.com/kiosk-hq/kiosk.tech/issues) |
+| the **specification** — the normative `specification.html`, the formal spec and its JSON Schemas, the assistant skill | [`kiosk-hq/kiosk-hq.github.io`](https://github.com/kiosk-hq/kiosk-hq.github.io/issues) |
 
 If a flaw is in both — the spec permits something the engine should not do, or
 the engine does something the spec never described — file it here and say so;

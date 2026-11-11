@@ -1,6 +1,6 @@
 # kiosk-pow
 
-The base of the proof-of-work backends of the [Kiosk](https://kiosk.tech) framework.
+The base of the proof-of-work backends of the [Kiosk](https://kiosk-hq.github.io) framework.
 
 A backend verifies one proof of work for one algorithm. kiosk-pow holds the code
 that the backends share:

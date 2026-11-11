@@ -573,7 +573,7 @@ jobs:
   # file, verify this digest, refuse it on a mismatch. Sibling-less, nothing can
   # compare them.
   #
-  # `kiosk-hq/kiosk.tech` is a PUBLIC repository, so the default GITHUB_TOKEN
+  # `kiosk-hq/kiosk-hq.github.io` is a PUBLIC repository, so the default GITHUB_TOKEN
   # clones it, and a published `skill-vX.Y.Z.md` is never edited
   # (kiosk.tech/bin/check-skill-immutability enforces it in that repo), so this
   # job compares against a fixed artefact rather than a moving branch.
@@ -606,7 +606,7 @@ jobs:
 
       - uses: actions/checkout@v7
         with:
-          repository: kiosk-hq/kiosk.tech
+          repository: kiosk-hq/kiosk-hq.github.io
           path: kiosk.tech
 
       - name: Set up Ruby

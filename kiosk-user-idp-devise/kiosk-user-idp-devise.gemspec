@@ -30,7 +30,7 @@ Gem::Specification.new do |spec|
     request's Warden user, so the provider's already-installed Devise
     satisfies the requirement.
   DESC
-  spec.homepage      = 'https://kiosk.tech'
+  spec.homepage      = 'https://kiosk-hq.github.io'
   spec.license       = 'Apache-2.0'
   spec.required_ruby_version = '>= 4.0'
 

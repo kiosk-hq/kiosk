@@ -1,6 +1,6 @@
 # kiosk-pow-cuckoo
 
-Cuckatoo-Cycle proof-of-work backend for [Kiosk](https://kiosk.tech).
+Cuckatoo-Cycle proof-of-work backend for [Kiosk](https://kiosk-hq.github.io).
 
 > **Opt-in.** The shipped default proof-of-work backend is
 > [`kiosk-pow-equihash`](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-pow-equihash).

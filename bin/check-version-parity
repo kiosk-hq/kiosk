@@ -97,7 +97,7 @@ end
 
 # ── Discovery signal (§4.5) ──────────────────────────────────────────────────
 ACCESSOR = 'Kiosk.configuration.skill_url'
-LITERAL  = %r{https://kiosk\.tech/skill[-.][^"'\s)>]*}
+LITERAL  = %r{https://kiosk-hq\.github\.io/skill[-.][^"'\s)>]*}
 SIGNAL   = /rel=("|&quot;)kiosk\1/
 EMITS    = /href\s*=|set_header/
 # A page controller sends the header through the engine's concern.

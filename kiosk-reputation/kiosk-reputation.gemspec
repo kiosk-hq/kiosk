@@ -27,7 +27,7 @@ Gem::Specification.new do |spec|
     Ships one policy, Policies::RecentSpend: it asks one proof of a session,
     by a chance that the customer's recent spend lowers.
   DESC
-  spec.homepage      = 'https://kiosk.tech'
+  spec.homepage      = 'https://kiosk-hq.github.io'
   spec.license       = 'Apache-2.0'
   spec.required_ruby_version = '>= 4.0'
 

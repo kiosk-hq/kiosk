@@ -8,7 +8,7 @@ the default, `kiosk-pow-cuckoo` and `kiosk-pow-argon2id`), security (`kiosk-repu
 `kiosk-redteam`), eight demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-proveli`
 KYC broker), and the `e2e/` harness. Gem table: `README.md`.
 
-The normative spec is `specification.html` at https://kiosk.tech; the agent
+The normative spec is `specification.html` at https://kiosk-hq.github.io; the agent
 skill is `skill.md` on the same site.
 
 ## The five rules

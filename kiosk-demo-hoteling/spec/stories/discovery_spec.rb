@@ -68,7 +68,8 @@ RSpec.describe 'Discovering the hotel', type: :story do
       { 'text/markdown, */*' => 'text/markdown', 'text/markdown;q=1.0, */*;q=0.1' => 'text/markdown',
         'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' => 'text/html' }.each do |accept, type|
         page = Net::HTTP.get_response(URI("#{live_url}/"), 'Accept' => accept)
-        expect([page.code, page.content_type, page['Vary']]).to eq(['200', type, 'Accept']), accept
+        expect([page.code, page.content_type]).to eq(['200', type]), accept
+        expect(page['Vary'].split(', ')).to include('Accept'), accept
       end
     end
 

@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-11-11: The demo lockfiles and the root bundle take the patched Rails 8.1.4.1, rack 3.2.8, nokogiri, loofah and rails-html-sanitizer releases.
+
 - 2026-11-11: kiosk-server: a verb response keeps the specification's `Vary` on Rails 8.1.4.1, which adds `Accept` and `X-Requested-With` at render time.
 
 ## [0.6.29] — 2026-11-11

@@ -77,7 +77,8 @@ class DiscoveryStory < StoryTest
       'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' => 'text/html' }.each do |accept, type|
       page = Net::HTTP.get_response(URI("#{live_url}/"), 'Accept' => accept)
 
-      assert_equal ['200', type, 'Accept'], [page.code, page.content_type, page['Vary']], accept
+      assert_equal ['200', type], [page.code, page.content_type], accept
+      assert_includes page['Vary'].split(', '), 'Accept', accept
     end
   end
 

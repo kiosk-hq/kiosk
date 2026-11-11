@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-11-11: A verb response keeps the specification's `Vary` on Rails 8.1.4.1, which adds `Accept` and `X-Requested-With` at render time.
+
 ## [0.6.29] — 2026-11-11
 
 - 2026-11-11: Version 0.6.29, the tree cut that matches skill 0.6.29. The default `skill_url` is https://kiosk-hq.github.io/skill-v0.6.29.md.

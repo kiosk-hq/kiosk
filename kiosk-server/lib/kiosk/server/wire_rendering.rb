@@ -22,7 +22,7 @@ module Kiosk
           render(**render_options(json, :ok, content_type))
         end
 
-        # Last: Rails stamps `Vary: Accept` at render time.
+        # Last: Rails stamps `Vary` at render time.
         response.headers.delete('Vary')
       end
 
@@ -86,7 +86,10 @@ module Kiosk
           response.headers, status: ::Rack::Utils.status_code(status)
         )
         add_error_headers(error) if error
+        vary = response.headers['Vary']
         render(**render_options(body, status, content_type))
+        # Rails adds the headers it negotiates a format on; this answer is JSON whatever they say.
+        response.headers['Vary'] = vary
       end
 
       def render_options(body, status, content_type)

@@ -510,7 +510,7 @@ RSpec.describe Kiosk::Server::VerbController do
 
     # WHY THE PROPAGATION LIST HAS EXACTLY ONE ENTRY, measured rather than
     # asserted. The handler renders in the protocol request, `HTTP_ACCEPT`
-    # included, so Rails' own `_set_vary_header` stamps `Vary: Accept` on the
+    # included, so Rails' own `_set_vary_header` puts `Accept` in `Vary` on the
     # handler's render. A blanket copy of the render's headers would
     # import that onto the protocol, where it is false — the answer is JSON
     # whatever the caller asked for — and would split a cache by Accept string
@@ -523,7 +523,7 @@ RSpec.describe Kiosk::Server::VerbController do
         seen = response.headers['Vary']
       end
       call_verb(:get, 'salons', accept: 'application/json')
-      expect(seen).to eq('Accept')
+      expect(seen).to start_with('Accept')
       expect(last_headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
     end
   end

@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-11-11: kiosk-server: a verb response keeps the specification's `Vary` on Rails 8.1.4.1, which adds `Accept` and `X-Requested-With` at render time.
+
 ## [0.6.29] — 2026-11-11
 
 - 2026-11-11: **Every gem and `API_VERSION` are 0.6.29, matching skill 0.6.29 on https://kiosk-hq.github.io; every demo pins its digest.** `MIN_CLIENT` is 0.6.29: an older skill refuses that host.

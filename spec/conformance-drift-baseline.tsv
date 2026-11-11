@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-26 at 8d35f68c
+# recorded: 2026-11-11 at 85aac352
 # 2062 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	7def39e3	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	f917a3b8a01e4bef	7def39e3	        if: matrix.demo != 'kiosk-demo-proveli'
@@ -17,19 +17,19 @@ CHANGELOG.md	5dbd7506f7dc669e	7def39e3	## [0.6.0] — 2026-10-21
 CHANGELOG.md	4570005aad48e6ba	7def39e3	Surfaced by a live hosted Hermes run. (K-437)
 CHANGELOG.md	ab88745a8a9ff044	7def39e3	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
 CLAUDE.md	a2edd71184df304c	7def39e3	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-proveli`
-README.md	6bca48efdaf6a781	7def39e3	Apache-2.0 for every gem in this repo.
-README.md	88f700cb359f8a05	7def39e3	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets the AI assistants of visitors and customers discover, transact with, and pay an operator's service, and its Ruby reference implementation
-README.md	0551acbe30207b0f	7def39e3	Customer reputation factors
-README.md	145bd05db2127030	7def39e3	Equihash (n=168, k=7)
-README.md	4dba863d213eea06	7def39e3	Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is the whole list
-README.md	9ca73fa7714d1994	7def39e3	Meta-gem; `bundle add kiosk-all` installs core + server
-README.md	47cbdd138358ee83	7def39e3	Opt-in RLS DSL + migration helpers
-README.md	007d886004e83fb9	7def39e3	PSP adapter — Stripe, AP2 mandate trail
-README.md	9bc89b240866fb1e	7def39e3	Rails engine, routes, OAuth client registration and DPoP token endpoint, executor
-README.md	6042f43c74867d5f	7def39e3	Red-team scenarios, adversarial test harness
-README.md	88f700cb359f8a05	7def39e3	app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth
-README.md	88f700cb359f8a05	7def39e3	several assistants on one customer account
-README.md	007d886004e83fb9	7def39e3	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
+README.md	6bca48efdaf6a781	85aac352	Apache-2.0 for every gem in this repo.
+README.md	fc138f43c49b1b65	85aac352	Apache-2.0 monorepo for [Kiosk](https://kiosk-hq.github.io) — the standards-based open protocol that lets the AI assistants of visitors and customers discover, transact with, and pay an operator's service, and its Ruby reference implementation
+README.md	0551acbe30207b0f	85aac352	Customer reputation factors
+README.md	145bd05db2127030	85aac352	Equihash (n=168, k=7)
+README.md	4dba863d213eea06	85aac352	Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is the whole list
+README.md	9ca73fa7714d1994	85aac352	Meta-gem; `bundle add kiosk-all` installs core + server
+README.md	47cbdd138358ee83	85aac352	Opt-in RLS DSL + migration helpers
+README.md	007d886004e83fb9	85aac352	PSP adapter — Stripe, AP2 mandate trail
+README.md	9bc89b240866fb1e	85aac352	Rails engine, routes, OAuth client registration and DPoP token endpoint, executor
+README.md	6042f43c74867d5f	85aac352	Red-team scenarios, adversarial test harness
+README.md	fc138f43c49b1b65	85aac352	app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth
+README.md	fc138f43c49b1b65	85aac352	several assistants on one customer account
+README.md	007d886004e83fb9	85aac352	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
 deploy/Caddyfile	10cb71c5bcdec3da	7def39e3	atablefor.demo.kiosk.tech {
 deploy/Caddyfile	aed3d85fef818329	7def39e3	getgrocery.demo.kiosk.tech {
 deploy/Caddyfile	daa67467d812c94b	7def39e3	hoteling.demo.kiosk.tech {
@@ -72,184 +72,184 @@ e2e/README.md	051214e824541696	7def39e3	The principal flows into handlers: the `
 e2e/README.md	8545cc024eea8ca9	7def39e3	The protocol carries no SQL: there is no arbitrary-SQL surface.
 e2e/README.md	90f78e4898e2c41d	7def39e3	`.github/workflows/ci.yml` invokes the same script (the `e2e` job) after standard Ruby + Postgres setup.
 e2e/README.md	dac0c5771ed86142	7def39e3	└── fixtures/                               # files copied into the generated app
-e2e/assistant.sh	7e10b403edbedbeb	7def39e3	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	32ea9a773eca7bad	7def39e3	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	f9dc523d4a428d91	7def39e3	$public_doc is really being read (control token)
-e2e/assistant.sh	cd4eddd677e611ab	7def39e3	$public_doc names no verb ($verb_name) — pointer, not copy
-e2e/assistant.sh	d41cd84579bfa314	7def39e3	=== the event stream (pinned listener) ===
-e2e/assistant.sh	52a16a65def7b005	7def39e3	?v=<digest> is immutable for a year
-e2e/assistant.sh	de71535d9f908166	7def39e3	GET /kiosk/schema is unenveloped
-e2e/assistant.sh	be84dc69a52f0de8	7def39e3	GET at an action's path → 404
-e2e/assistant.sh	0e42a2b846f5fe80	7def39e3	If-None-Match on the digest → 304
-e2e/assistant.sh	fc5ed1c45af6f66d	7def39e3	KYC at an origin that serves no KYC → 501
-e2e/assistant.sh	2cb1d4a638ff83d5	7def39e3	Kiosk-API-Version is MAJOR.MINOR.PATCH
-e2e/assistant.sh	0c6e61a6e86b5b4a	7def39e3	Kiosk-API-Version present
-e2e/assistant.sh	bc7d2b93abf90689	7def39e3	Kiosk-Min-Client is a version, and it is advertised
-e2e/assistant.sh	a6b6c17e5d494b55	7def39e3	Kiosk-Min-Client present
-e2e/assistant.sh	87deaf53b2cad295	7def39e3	Kiosk-Server-Version present
-e2e/assistant.sh	cb17459ec2775ab4	7def39e3	POST /kiosk/$undrawn unauthenticated → 404 too
-e2e/assistant.sh	a34c9ec317cae464	7def39e3	POST /kiosk/$undrawn → 404
-e2e/assistant.sh	4bb3da33897158f5	7def39e3	POST at a query's path → 404
-e2e/assistant.sh	6cf148d0f731b35e	7def39e3	There is no name-dispatch endpoint: a verb
-e2e/assistant.sh	c59f5eadf745850a	7def39e3	Vary names all three request headers
-e2e/assistant.sh	df0d94a1b986f270	7def39e3	X-Total-Count is not dressed up as a standard
-e2e/assistant.sh	4cd879b78cb0c183	7def39e3	a COMPLETE answer carries X-Total-Count
-e2e/assistant.sh	ef224c9cb44cbb95	7def39e3	a handler MAY relax its own 200 (§3.7.4) — the public catalogue does
-e2e/assistant.sh	b76eae5f3c62353f	7def39e3	a query's 200 declares Link and X-Total-Count as HEADERS
-e2e/assistant.sh	3f173be1e2e5e6d4	7def39e3	a routing 404 UNDER the mount is a 404
-e2e/assistant.sh	1153e4e62d193b74	7def39e3	agents.json has no root extension
-e2e/assistant.sh	a4869ee1251f12dd	7def39e3	agents.json → 200
-e2e/assistant.sh	4302286ec0f51acd	7def39e3	agents.txt claims no payment protocol
-e2e/assistant.sh	71aea049653fa43d	7def39e3	agents.txt names oauth2
-e2e/assistant.sh	4865e3df051b115e	7def39e3	agents.txt → 200
-e2e/assistant.sh	27623ecc0e894ec5	7def39e3	alice: 1 appointment exists
-e2e/assistant.sh	e78676291551400a	7def39e3	alice: does NOT see bob's row
-e2e/assistant.sh	02b6ca6cf2c18c64	7def39e3	alice: sees her own row
-e2e/assistant.sh	8828ef7892c3b853	7def39e3	all three version headers on all 19 mount routes
-e2e/assistant.sh	cde0ddb3a718eb34	7def39e3	an action declares no pagination headers
-e2e/assistant.sh	e7f6ac53881df8f6	7def39e3	an ancient client is SERVED, not refused — the floor is advisory
-e2e/assistant.sh	495ef79de3304b32	7def39e3	an unhandled 500 UNDER the mount is a 500
-e2e/assistant.sh	f341aefffc443aea	7def39e3	api-catalog advertises it as a service-desc
-e2e/assistant.sh	0a416c3fbc34fac4	7def39e3	api-catalog hyperlinks $verb_name, unauthenticated
-e2e/assistant.sh	925c895ed1752035	7def39e3	api-catalog → 200
-e2e/assistant.sh	e11c6988d2261b05	7def39e3	appointment_id returned
-e2e/assistant.sh	7721465eb758443d	7def39e3	assert "kiosk.auth.claim_url"
-e2e/assistant.sh	1a3b3b66274ce81c	7def39e3	assert "kiosk.auth.registration_url"
-e2e/assistant.sh	b17085dbb497a597	7def39e3	assert "kiosk.auth.rotate_url"
-e2e/assistant.sh	4f2bb50b57e6740c	7def39e3	assert "kiosk.auth.token_url"
-e2e/assistant.sh	92d4c091191b4943	7def39e3	assert "no Authorization header → 200"  "$oa_anon" "200"
-e2e/assistant.sh	0e49e161b51f30b4	7def39e3	assert "no Authorization header → 200"  "$sch_status" "200"
-e2e/assistant.sh	8162f19f3c75904b	7def39e3	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
-e2e/assistant.sh	63296b35e0f9aa9f	7def39e3	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" then has("ok") else false end')" "false"
-e2e/assistant.sh	f5e466c5fafd1254	7def39e3	assert "…and NO Vary at all"            "$(echo "$sch_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	6d1f2f3ec664cf33	7def39e3	assert "…and NO Vary at all"        "$(echo "$oa_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	3c03c2f4e3a8fac4	7def39e3	assert "…served public, one minute"     "$(echo "$sch_headers"
-e2e/assistant.sh	3c03c2f4e3a8fac4	7def39e3	assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
-e2e/assistant.sh	8260833a5969c6bb	7def39e3	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
-e2e/assistant.sh	5ec9c5643e59e568	7def39e3	auth.md opens with the auth.md heading
-e2e/assistant.sh	0d0f836bd68acf3d	7def39e3	binding: /auth.md served
-e2e/assistant.sh	55624896d2c7bb95	7def39e3	binding: claim and token poll each solved one toll
-e2e/assistant.sh	399767f2dd5cc88d	7def39e3	binding: claim of an unknown code → 404
-e2e/assistant.sh	107d8a6c71642ab9	7def39e3	binding: client_credentials refresh
-e2e/assistant.sh	2bbd0fc251be7c9b	7def39e3	binding: device_authorization fields
-e2e/assistant.sh	ccb93f1a98523323	7def39e3	binding: fast poll → slow_down
-e2e/assistant.sh	70635320f2eb5a70	7def39e3	binding: held token dies at unlink
-e2e/assistant.sh	72f676ec402b4865	7def39e3	binding: human approve → 200
-e2e/assistant.sh	a068223c610f6da1	7def39e3	binding: link-code mint (session)
-e2e/assistant.sh	6e893aa87445408b	7def39e3	binding: link-code redeem → human
-e2e/assistant.sh	54ad1edd79a08dfa	7def39e3	binding: pending before approval
-e2e/assistant.sh	331bdc8120102cc0	7def39e3	binding: poll without proof denied
-e2e/assistant.sh	7bc46d58008d7620	7def39e3	binding: role refused on the opening request
-e2e/assistant.sh	d5b18fb08d192dac	7def39e3	binding: same-second token dies too
-e2e/assistant.sh	d52066dd8a06c571	7def39e3	binding: the client keeps its client_id
-e2e/assistant.sh	2a1b3270ce906612	7def39e3	binding: token bound to the human
-e2e/assistant.sh	a92959d2a629be82	7def39e3	binding: token request after unlink → invalid_client
-e2e/assistant.sh	5f5e9e3953bd6731	7def39e3	binding: token role is the approver's
-e2e/assistant.sh	f3a3396abdde3394	7def39e3	binding: unlink → 204 (no body)
-e2e/assistant.sh	b85b32b2136cb0b8	7def39e3	binding: verb as bound account
-e2e/assistant.sh	35b499b046497416	7def39e3	binding: …and the code is not_found
-e2e/assistant.sh	692925c46ed7d205	7def39e3	binding: …type names it
-e2e/assistant.sh	dc02931f1a65a16a	7def39e3	bob: 1 appointment exists
-e2e/assistant.sh	35dbfa8f87dfa9b2	7def39e3	bob: does NOT see alice's row
-e2e/assistant.sh	3be4f489259f2eac	7def39e3	db: 1 checkout_mandate
-e2e/assistant.sh	16f1a4a2bf981b02	7def39e3	db: 1 payment_mandate
-e2e/assistant.sh	06a4610a0edea43d	7def39e3	db: settlement amount 1599
-e2e/assistant.sh	ed6b1367f15e3dc1	7def39e3	declares OpenAPI 3.1
-e2e/assistant.sh	d41454e28b1e7886	7def39e3	es256: the token with its ES256 proof → 200
-e2e/assistant.sh	35f292ac2372b6d2	7def39e3	every parameter writes style and explode
-e2e/assistant.sh	efe9e4d4b1d7260a	7def39e3	exactly 1 salon
-e2e/assistant.sh	656b0c791b2e4775	7def39e3	garbage token → 401
-e2e/assistant.sh	d99743899d17776f	7def39e3	jwks: alg=EdDSA
-e2e/assistant.sh	9aeb0747055be8c8	7def39e3	jwks: keys[] present
-e2e/assistant.sh	a730a05d2e6d3873	7def39e3	jwks: kty=OKP
-e2e/assistant.sh	b2ee3e99d7568864	7def39e3	jwks: no private d field
-e2e/assistant.sh	532fa3d4713fe001	7def39e3	jwks: use=sig
-e2e/assistant.sh	6201a16fa0a921bb	7def39e3	kiosk.auth has no kind
-e2e/assistant.sh	1a3b3b66274ce81c	7def39e3	kiosk.auth.registration_url"
-e2e/assistant.sh	6e3bcf018a1f61b9	7def39e3	kiosk.capabilities[]
-e2e/assistant.sh	f9112efaabed8a59	7def39e3	kiosk.endpoint correct
-e2e/assistant.sh	8eab52eaf2363e28	7def39e3	kiosk.schema_url is digest-versioned
-e2e/assistant.sh	d579e23ce8062bcd	7def39e3	kiosk.version present
-e2e/assistant.sh	e84d99154b561b20	7def39e3	limit and cursor are injected into a query
-e2e/assistant.sh	038644421408493c	7def39e3	my_appointments declares salon_id as a query parameter
-e2e/assistant.sh	44fb3eeebeb7d35e	7def39e3	no auth → 401
-e2e/assistant.sh	d6335de3c6bfc03f	7def39e3	oauth metadata names private_key_jwt
-e2e/assistant.sh	e6a9b52cc45247f5	7def39e3	oauth metadata names the device endpoint
-e2e/assistant.sh	e9e8ff3cd069d686	7def39e3	oauth metadata names the issuer
-e2e/assistant.sh	003f29d06a53e67a	7def39e3	oauth metadata names the registration endpoint
-e2e/assistant.sh	fbcc8cc09baa8c03	7def39e3	one path per verb the canonical catalog publishes
-e2e/assistant.sh	1e9077ac4f7c7830	7def39e3	pay: a Stripe PaymentIntent
-e2e/assistant.sh	10ffb9d3b874f3a5	7def39e3	pay: checkout receipt names the checkout mandate
-e2e/assistant.sh	748f2225b621319d	7def39e3	pay: http 200
-e2e/assistant.sh	01769e799aaae284	7def39e3	pay: payment receipt names the payment mandate
-e2e/assistant.sh	886ad4c00be64e15	7def39e3	pay: payment receipt names the settlement
-e2e/assistant.sh	bcb08892f428d28f	7def39e3	pay: settled 1599
-e2e/assistant.sh	a857334f9cd8098d	7def39e3	pay: settlement_id
-e2e/assistant.sh	852f48828eddcdd9	7def39e3	pay: unenveloped
-e2e/assistant.sh	f5ffa128d497b6ec	7def39e3	payment_setup: once the card is saved → ready
-e2e/assistant.sh	85a0cd7c49a0afa4	7def39e3	payment_setup: served by the engine → setup_required
-e2e/assistant.sh	ff614cf8e3579a06	7def39e3	register-pow: 1 challenge issued
-e2e/assistant.sh	296cc8a8da7d3020	7def39e3	register-pow: code pow_required
-e2e/assistant.sh	b9889725bd4bdd32	7def39e3	register-pow: minted token on a verb → 200
-e2e/assistant.sh	83cb3cf0d792a0b7	7def39e3	register-pow: no-proof → 402
-e2e/assistant.sh	eb77fdb8c475fee3	7def39e3	register-pow: role pinned customer
-e2e/assistant.sh	6396f70927fa5f0d	7def39e3	register-pow: served (n,k) IS the gem default
-e2e/assistant.sh	d6440cc5cecd3f3a	7def39e3	register-pow: solve+proof → registered
-e2e/assistant.sh	f8d02d7f9e1e20bb	7def39e3	register-pow: the expected (n,k) was READ from the gem
-e2e/assistant.sh	c41814da9f90e244	7def39e3	request_kyc at an origin that serves no KYC → 501
-e2e/assistant.sh	5227abc963e74bf4	7def39e3	reserved limit/cursor accepted → 200
-e2e/assistant.sh	5c2f93ff97e0b1c6	7def39e3	rotate: a token from before the rotation → 401
-e2e/assistant.sh	4e69033d1f339af9	7def39e3	rotate: both keys signed → 200
-e2e/assistant.sh	5a1ea60c1b86767f	7def39e3	rotate: the old key gets no token → 401
-e2e/assistant.sh	d1ed6d02e950eee9	7def39e3	rotate: the same agent_id
-e2e/assistant.sh	450dedb70035e84c	7def39e3	rsa: registration of an RSA key → 400
-e2e/assistant.sh	a8664229f3a352f9	7def39e3	salon name is Combette
-e2e/assistant.sh	51e1c6d825c87950	7def39e3	schema publishes {queries, actions, events} and nothing else
-e2e/assistant.sh	4dd6e4bdab26ea40	7def39e3	status restates the HTTP status
-e2e/assistant.sh	5faf8b659059c918	7def39e3	the OPERATOR's own 200 outside the mount carries none
-e2e/assistant.sh	bd4514200645ffd1	7def39e3	the body is a bare array
-e2e/assistant.sh	62baa4b1702a1abb	7def39e3	the body is the action's object
-e2e/assistant.sh	ca77b6e308979ec0	7def39e3	the descriptor's description travels verbatim
-e2e/assistant.sh	0682d7fb66bc44a9	7def39e3	the reserved parameters are form/explode:true
-e2e/assistant.sh	1e9405441576fe3b	7def39e3	the two 'it is not here' answers are two DIFFERENT codes
-e2e/assistant.sh	a44e3a4f72bd6a57	7def39e3	title is the code's, not the incident's
-e2e/assistant.sh	c6a9404addc1896a	7def39e3	two origins: first's token on second → 401
-e2e/assistant.sh	e12539c452ad6da0	7def39e3	two origins: issuer is the first origin
-e2e/assistant.sh	ec1172912739901f	7def39e3	two origins: issuer is the second origin
-e2e/assistant.sh	70f5c7d56295ad58	7def39e3	two origins: same key, second account
-e2e/assistant.sh	bdea24d4d4b02d2b	7def39e3	type names the code
-e2e/assistant.sh	d5f2babc5f8abb49	7def39e3	unknown query → 404
-e2e/assistant.sh	44966e689e87b8e5	7def39e3	…a query is advertised GET
-e2e/assistant.sh	ba604e7462629406	7def39e3	…a stale ?v= still answers the CURRENT catalogue, short-lived
-e2e/assistant.sh	2260fca65574498f	7def39e3	…an action is advertised POST
-e2e/assistant.sh	89ed2eaaaec56fa7	7def39e3	…and NO Link header, because there is no next page
-e2e/assistant.sh	ff53dce362c1da79	7def39e3	…and NOT forbidden
-e2e/assistant.sh	279cfb70b77f7522	7def39e3	…and is itself an RFC 9457 document
-e2e/assistant.sh	1aec2e6ba0769424	7def39e3	…and kiosk.json itself expires quickly
-e2e/assistant.sh	7365c8fc057fc73b	7def39e3	…and links the catalog at its versioned url
-e2e/assistant.sh	efb81ff034c053fb	7def39e3	…and neither does the operator's own 500 — same exception path
-e2e/assistant.sh	69e443dba65ee078	7def39e3	…and never a 402: the toll went with the gate
-e2e/assistant.sh	09918c8c250f4cf0	7def39e3	…and the body is no envelope
-e2e/assistant.sh	22d22b6da7976dbb	7def39e3	…and the boot digest IS the ETag
-e2e/assistant.sh	d81b8d1896d34fed	7def39e3	…and the module set lives in kiosk.json alone
-e2e/assistant.sh	651f65938444bd59	7def39e3	…and the route loop actually ran
-e2e/assistant.sh	4d1c6faa12f88aa5	7def39e3	…and the write never ran
-e2e/assistant.sh	99e541f202237a2c	7def39e3	…and with --token-command it mints a fresh one and carries on
-e2e/assistant.sh	6bca2bfea6562cb2	7def39e3	…by \$ref into components.headers
-e2e/assistant.sh	992754f67571b9b3	7def39e3	…code is module_not_served
-e2e/assistant.sh	abe144a08e285d82	7def39e3	…detail names the module
-e2e/assistant.sh	6bada86079f88c7e	7def39e3	…into each of the two queries
-e2e/assistant.sh	52fa1c92a224dd15	7def39e3	…not a problem document
-e2e/assistant.sh	ddd8021a01baccbc	7def39e3	…public, one minute at the bare path
-e2e/assistant.sh	4dd6e4bdab26ea40	7def39e3	…status restates the HTTP status
-e2e/assistant.sh	5fe2e13e122c3fec	7def39e3	…the catalog is the body itself
-e2e/assistant.sh	17a6a3b925163d46	7def39e3	…the events array carries this origin's topic and payment_setup
-e2e/assistant.sh	a44e3a4f72bd6a57	7def39e3	…title is the code's, not the incident's
-e2e/assistant.sh	f616315f74fab8eb	7def39e3	…while a ROOT discovery surface carries none of them
-e2e/assistant.sh	b993275ea6622f13	7def39e3	…while an identity-scoped 200 keeps private, no-store
-e2e/assistant.sh	ad9e4f15916df873	7def39e3	…while the same request with a bad token is still 401
-e2e/assistant.sh	f1636056fbcf93c1	7def39e3	…with no Allow on it
-e2e/assistant.sh	18d2cd878d48540b	7def39e3	…with no code to branch on
+e2e/assistant.sh	7e10b403edbedbeb	85aac352	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	32ea9a773eca7bad	85aac352	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	f9dc523d4a428d91	85aac352	$public_doc is really being read (control token)
+e2e/assistant.sh	cd4eddd677e611ab	85aac352	$public_doc names no verb ($verb_name) — pointer, not copy
+e2e/assistant.sh	d41cd84579bfa314	85aac352	=== the event stream (pinned listener) ===
+e2e/assistant.sh	52a16a65def7b005	85aac352	?v=<digest> is immutable for a year
+e2e/assistant.sh	de71535d9f908166	85aac352	GET /kiosk/schema is unenveloped
+e2e/assistant.sh	be84dc69a52f0de8	85aac352	GET at an action's path → 404
+e2e/assistant.sh	0e42a2b846f5fe80	85aac352	If-None-Match on the digest → 304
+e2e/assistant.sh	fc5ed1c45af6f66d	85aac352	KYC at an origin that serves no KYC → 501
+e2e/assistant.sh	2cb1d4a638ff83d5	85aac352	Kiosk-API-Version is MAJOR.MINOR.PATCH
+e2e/assistant.sh	0c6e61a6e86b5b4a	85aac352	Kiosk-API-Version present
+e2e/assistant.sh	bc7d2b93abf90689	85aac352	Kiosk-Min-Client is a version, and it is advertised
+e2e/assistant.sh	a6b6c17e5d494b55	85aac352	Kiosk-Min-Client present
+e2e/assistant.sh	87deaf53b2cad295	85aac352	Kiosk-Server-Version present
+e2e/assistant.sh	cb17459ec2775ab4	85aac352	POST /kiosk/$undrawn unauthenticated → 404 too
+e2e/assistant.sh	a34c9ec317cae464	85aac352	POST /kiosk/$undrawn → 404
+e2e/assistant.sh	4bb3da33897158f5	85aac352	POST at a query's path → 404
+e2e/assistant.sh	6cf148d0f731b35e	85aac352	There is no name-dispatch endpoint: a verb
+e2e/assistant.sh	c59f5eadf745850a	85aac352	Vary names all three request headers
+e2e/assistant.sh	df0d94a1b986f270	85aac352	X-Total-Count is not dressed up as a standard
+e2e/assistant.sh	4cd879b78cb0c183	85aac352	a COMPLETE answer carries X-Total-Count
+e2e/assistant.sh	ef224c9cb44cbb95	85aac352	a handler MAY relax its own 200 (§3.7.4) — the public catalogue does
+e2e/assistant.sh	b76eae5f3c62353f	85aac352	a query's 200 declares Link and X-Total-Count as HEADERS
+e2e/assistant.sh	3f173be1e2e5e6d4	85aac352	a routing 404 UNDER the mount is a 404
+e2e/assistant.sh	1153e4e62d193b74	85aac352	agents.json has no root extension
+e2e/assistant.sh	a4869ee1251f12dd	85aac352	agents.json → 200
+e2e/assistant.sh	4302286ec0f51acd	85aac352	agents.txt claims no payment protocol
+e2e/assistant.sh	71aea049653fa43d	85aac352	agents.txt names oauth2
+e2e/assistant.sh	4865e3df051b115e	85aac352	agents.txt → 200
+e2e/assistant.sh	27623ecc0e894ec5	85aac352	alice: 1 appointment exists
+e2e/assistant.sh	e78676291551400a	85aac352	alice: does NOT see bob's row
+e2e/assistant.sh	02b6ca6cf2c18c64	85aac352	alice: sees her own row
+e2e/assistant.sh	8828ef7892c3b853	85aac352	all three version headers on all 19 mount routes
+e2e/assistant.sh	cde0ddb3a718eb34	85aac352	an action declares no pagination headers
+e2e/assistant.sh	e7f6ac53881df8f6	85aac352	an ancient client is SERVED, not refused — the floor is advisory
+e2e/assistant.sh	495ef79de3304b32	85aac352	an unhandled 500 UNDER the mount is a 500
+e2e/assistant.sh	f341aefffc443aea	85aac352	api-catalog advertises it as a service-desc
+e2e/assistant.sh	0a416c3fbc34fac4	85aac352	api-catalog hyperlinks $verb_name, unauthenticated
+e2e/assistant.sh	925c895ed1752035	85aac352	api-catalog → 200
+e2e/assistant.sh	e11c6988d2261b05	85aac352	appointment_id returned
+e2e/assistant.sh	7721465eb758443d	85aac352	assert "kiosk.auth.claim_url"
+e2e/assistant.sh	1a3b3b66274ce81c	85aac352	assert "kiosk.auth.registration_url"
+e2e/assistant.sh	b17085dbb497a597	85aac352	assert "kiosk.auth.rotate_url"
+e2e/assistant.sh	4f2bb50b57e6740c	85aac352	assert "kiosk.auth.token_url"
+e2e/assistant.sh	92d4c091191b4943	85aac352	assert "no Authorization header → 200"  "$oa_anon" "200"
+e2e/assistant.sh	0e49e161b51f30b4	85aac352	assert "no Authorization header → 200"  "$sch_status" "200"
+e2e/assistant.sh	8162f19f3c75904b	85aac352	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
+e2e/assistant.sh	63296b35e0f9aa9f	85aac352	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" then has("ok") else false end')" "false"
+e2e/assistant.sh	f5e466c5fafd1254	85aac352	assert "…and NO Vary at all"            "$(echo "$sch_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	6d1f2f3ec664cf33	85aac352	assert "…and NO Vary at all"        "$(echo "$oa_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	3c03c2f4e3a8fac4	85aac352	assert "…served public, one minute"     "$(echo "$sch_headers"
+e2e/assistant.sh	3c03c2f4e3a8fac4	85aac352	assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
+e2e/assistant.sh	8260833a5969c6bb	85aac352	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
+e2e/assistant.sh	5ec9c5643e59e568	85aac352	auth.md opens with the auth.md heading
+e2e/assistant.sh	0d0f836bd68acf3d	85aac352	binding: /auth.md served
+e2e/assistant.sh	55624896d2c7bb95	85aac352	binding: claim and token poll each solved one toll
+e2e/assistant.sh	399767f2dd5cc88d	85aac352	binding: claim of an unknown code → 404
+e2e/assistant.sh	107d8a6c71642ab9	85aac352	binding: client_credentials refresh
+e2e/assistant.sh	2bbd0fc251be7c9b	85aac352	binding: device_authorization fields
+e2e/assistant.sh	ccb93f1a98523323	85aac352	binding: fast poll → slow_down
+e2e/assistant.sh	70635320f2eb5a70	85aac352	binding: held token dies at unlink
+e2e/assistant.sh	72f676ec402b4865	85aac352	binding: human approve → 200
+e2e/assistant.sh	a068223c610f6da1	85aac352	binding: link-code mint (session)
+e2e/assistant.sh	6e893aa87445408b	85aac352	binding: link-code redeem → human
+e2e/assistant.sh	54ad1edd79a08dfa	85aac352	binding: pending before approval
+e2e/assistant.sh	331bdc8120102cc0	85aac352	binding: poll without proof denied
+e2e/assistant.sh	7bc46d58008d7620	85aac352	binding: role refused on the opening request
+e2e/assistant.sh	d5b18fb08d192dac	85aac352	binding: same-second token dies too
+e2e/assistant.sh	d52066dd8a06c571	85aac352	binding: the client keeps its client_id
+e2e/assistant.sh	2a1b3270ce906612	85aac352	binding: token bound to the human
+e2e/assistant.sh	a92959d2a629be82	85aac352	binding: token request after unlink → invalid_client
+e2e/assistant.sh	5f5e9e3953bd6731	85aac352	binding: token role is the approver's
+e2e/assistant.sh	f3a3396abdde3394	85aac352	binding: unlink → 204 (no body)
+e2e/assistant.sh	b85b32b2136cb0b8	85aac352	binding: verb as bound account
+e2e/assistant.sh	35b499b046497416	85aac352	binding: …and the code is not_found
+e2e/assistant.sh	139757c81686a02d	85aac352	binding: …type names it
+e2e/assistant.sh	dc02931f1a65a16a	85aac352	bob: 1 appointment exists
+e2e/assistant.sh	35dbfa8f87dfa9b2	85aac352	bob: does NOT see alice's row
+e2e/assistant.sh	3be4f489259f2eac	85aac352	db: 1 checkout_mandate
+e2e/assistant.sh	16f1a4a2bf981b02	85aac352	db: 1 payment_mandate
+e2e/assistant.sh	06a4610a0edea43d	85aac352	db: settlement amount 1599
+e2e/assistant.sh	ed6b1367f15e3dc1	85aac352	declares OpenAPI 3.1
+e2e/assistant.sh	d41454e28b1e7886	85aac352	es256: the token with its ES256 proof → 200
+e2e/assistant.sh	35f292ac2372b6d2	85aac352	every parameter writes style and explode
+e2e/assistant.sh	efe9e4d4b1d7260a	85aac352	exactly 1 salon
+e2e/assistant.sh	656b0c791b2e4775	85aac352	garbage token → 401
+e2e/assistant.sh	d99743899d17776f	85aac352	jwks: alg=EdDSA
+e2e/assistant.sh	9aeb0747055be8c8	85aac352	jwks: keys[] present
+e2e/assistant.sh	a730a05d2e6d3873	85aac352	jwks: kty=OKP
+e2e/assistant.sh	b2ee3e99d7568864	85aac352	jwks: no private d field
+e2e/assistant.sh	532fa3d4713fe001	85aac352	jwks: use=sig
+e2e/assistant.sh	6201a16fa0a921bb	85aac352	kiosk.auth has no kind
+e2e/assistant.sh	1a3b3b66274ce81c	85aac352	kiosk.auth.registration_url"
+e2e/assistant.sh	6e3bcf018a1f61b9	85aac352	kiosk.capabilities[]
+e2e/assistant.sh	f9112efaabed8a59	85aac352	kiosk.endpoint correct
+e2e/assistant.sh	8eab52eaf2363e28	85aac352	kiosk.schema_url is digest-versioned
+e2e/assistant.sh	d579e23ce8062bcd	85aac352	kiosk.version present
+e2e/assistant.sh	e84d99154b561b20	85aac352	limit and cursor are injected into a query
+e2e/assistant.sh	038644421408493c	85aac352	my_appointments declares salon_id as a query parameter
+e2e/assistant.sh	44fb3eeebeb7d35e	85aac352	no auth → 401
+e2e/assistant.sh	d6335de3c6bfc03f	85aac352	oauth metadata names private_key_jwt
+e2e/assistant.sh	e6a9b52cc45247f5	85aac352	oauth metadata names the device endpoint
+e2e/assistant.sh	e9e8ff3cd069d686	85aac352	oauth metadata names the issuer
+e2e/assistant.sh	003f29d06a53e67a	85aac352	oauth metadata names the registration endpoint
+e2e/assistant.sh	fbcc8cc09baa8c03	85aac352	one path per verb the canonical catalog publishes
+e2e/assistant.sh	1e9077ac4f7c7830	85aac352	pay: a Stripe PaymentIntent
+e2e/assistant.sh	10ffb9d3b874f3a5	85aac352	pay: checkout receipt names the checkout mandate
+e2e/assistant.sh	748f2225b621319d	85aac352	pay: http 200
+e2e/assistant.sh	01769e799aaae284	85aac352	pay: payment receipt names the payment mandate
+e2e/assistant.sh	886ad4c00be64e15	85aac352	pay: payment receipt names the settlement
+e2e/assistant.sh	bcb08892f428d28f	85aac352	pay: settled 1599
+e2e/assistant.sh	a857334f9cd8098d	85aac352	pay: settlement_id
+e2e/assistant.sh	852f48828eddcdd9	85aac352	pay: unenveloped
+e2e/assistant.sh	f5ffa128d497b6ec	85aac352	payment_setup: once the card is saved → ready
+e2e/assistant.sh	85a0cd7c49a0afa4	85aac352	payment_setup: served by the engine → setup_required
+e2e/assistant.sh	ff614cf8e3579a06	85aac352	register-pow: 1 challenge issued
+e2e/assistant.sh	296cc8a8da7d3020	85aac352	register-pow: code pow_required
+e2e/assistant.sh	b9889725bd4bdd32	85aac352	register-pow: minted token on a verb → 200
+e2e/assistant.sh	83cb3cf0d792a0b7	85aac352	register-pow: no-proof → 402
+e2e/assistant.sh	eb77fdb8c475fee3	85aac352	register-pow: role pinned customer
+e2e/assistant.sh	6396f70927fa5f0d	85aac352	register-pow: served (n,k) IS the gem default
+e2e/assistant.sh	d6440cc5cecd3f3a	85aac352	register-pow: solve+proof → registered
+e2e/assistant.sh	f8d02d7f9e1e20bb	85aac352	register-pow: the expected (n,k) was READ from the gem
+e2e/assistant.sh	c41814da9f90e244	85aac352	request_kyc at an origin that serves no KYC → 501
+e2e/assistant.sh	5227abc963e74bf4	85aac352	reserved limit/cursor accepted → 200
+e2e/assistant.sh	5c2f93ff97e0b1c6	85aac352	rotate: a token from before the rotation → 401
+e2e/assistant.sh	4e69033d1f339af9	85aac352	rotate: both keys signed → 200
+e2e/assistant.sh	5a1ea60c1b86767f	85aac352	rotate: the old key gets no token → 401
+e2e/assistant.sh	d1ed6d02e950eee9	85aac352	rotate: the same agent_id
+e2e/assistant.sh	450dedb70035e84c	85aac352	rsa: registration of an RSA key → 400
+e2e/assistant.sh	a8664229f3a352f9	85aac352	salon name is Combette
+e2e/assistant.sh	51e1c6d825c87950	85aac352	schema publishes {queries, actions, events} and nothing else
+e2e/assistant.sh	4dd6e4bdab26ea40	85aac352	status restates the HTTP status
+e2e/assistant.sh	5faf8b659059c918	85aac352	the OPERATOR's own 200 outside the mount carries none
+e2e/assistant.sh	bd4514200645ffd1	85aac352	the body is a bare array
+e2e/assistant.sh	62baa4b1702a1abb	85aac352	the body is the action's object
+e2e/assistant.sh	ca77b6e308979ec0	85aac352	the descriptor's description travels verbatim
+e2e/assistant.sh	0682d7fb66bc44a9	85aac352	the reserved parameters are form/explode:true
+e2e/assistant.sh	1e9405441576fe3b	85aac352	the two 'it is not here' answers are two DIFFERENT codes
+e2e/assistant.sh	a44e3a4f72bd6a57	85aac352	title is the code's, not the incident's
+e2e/assistant.sh	c6a9404addc1896a	85aac352	two origins: first's token on second → 401
+e2e/assistant.sh	e12539c452ad6da0	85aac352	two origins: issuer is the first origin
+e2e/assistant.sh	ec1172912739901f	85aac352	two origins: issuer is the second origin
+e2e/assistant.sh	70f5c7d56295ad58	85aac352	two origins: same key, second account
+e2e/assistant.sh	1210352a01d3564e	85aac352	type names the code
+e2e/assistant.sh	d5f2babc5f8abb49	85aac352	unknown query → 404
+e2e/assistant.sh	44966e689e87b8e5	85aac352	…a query is advertised GET
+e2e/assistant.sh	ba604e7462629406	85aac352	…a stale ?v= still answers the CURRENT catalogue, short-lived
+e2e/assistant.sh	2260fca65574498f	85aac352	…an action is advertised POST
+e2e/assistant.sh	89ed2eaaaec56fa7	85aac352	…and NO Link header, because there is no next page
+e2e/assistant.sh	ff53dce362c1da79	85aac352	…and NOT forbidden
+e2e/assistant.sh	279cfb70b77f7522	85aac352	…and is itself an RFC 9457 document
+e2e/assistant.sh	1aec2e6ba0769424	85aac352	…and kiosk.json itself expires quickly
+e2e/assistant.sh	7365c8fc057fc73b	85aac352	…and links the catalog at its versioned url
+e2e/assistant.sh	efb81ff034c053fb	85aac352	…and neither does the operator's own 500 — same exception path
+e2e/assistant.sh	69e443dba65ee078	85aac352	…and never a 402: the toll went with the gate
+e2e/assistant.sh	09918c8c250f4cf0	85aac352	…and the body is no envelope
+e2e/assistant.sh	22d22b6da7976dbb	85aac352	…and the boot digest IS the ETag
+e2e/assistant.sh	d81b8d1896d34fed	85aac352	…and the module set lives in kiosk.json alone
+e2e/assistant.sh	651f65938444bd59	85aac352	…and the route loop actually ran
+e2e/assistant.sh	4d1c6faa12f88aa5	85aac352	…and the write never ran
+e2e/assistant.sh	99e541f202237a2c	85aac352	…and with --token-command it mints a fresh one and carries on
+e2e/assistant.sh	6bca2bfea6562cb2	85aac352	…by \$ref into components.headers
+e2e/assistant.sh	992754f67571b9b3	85aac352	…code is module_not_served
+e2e/assistant.sh	abe144a08e285d82	85aac352	…detail names the module
+e2e/assistant.sh	6bada86079f88c7e	85aac352	…into each of the two queries
+e2e/assistant.sh	52fa1c92a224dd15	85aac352	…not a problem document
+e2e/assistant.sh	ddd8021a01baccbc	85aac352	…public, one minute at the bare path
+e2e/assistant.sh	4dd6e4bdab26ea40	85aac352	…status restates the HTTP status
+e2e/assistant.sh	5fe2e13e122c3fec	85aac352	…the catalog is the body itself
+e2e/assistant.sh	17a6a3b925163d46	85aac352	…the events array carries this origin's topic and payment_setup
+e2e/assistant.sh	a44e3a4f72bd6a57	85aac352	…title is the code's, not the incident's
+e2e/assistant.sh	f616315f74fab8eb	85aac352	…while a ROOT discovery surface carries none of them
+e2e/assistant.sh	b993275ea6622f13	85aac352	…while an identity-scoped 200 keeps private, no-store
+e2e/assistant.sh	ad9e4f15916df873	85aac352	…while the same request with a bad token is still 401
+e2e/assistant.sh	f1636056fbcf93c1	85aac352	…with no Allow on it
+e2e/assistant.sh	18d2cd878d48540b	85aac352	…with no code to branch on
 e2e/fixtures/bookings_controller.rb	30ed27acbc6cfcd6	7def39e3	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
 e2e/fixtures/bookings_controller.rb	55790f84c5e0843f	7def39e3	# controller may declare BOTH kinds: `my_appointments` is a query
 e2e/fixtures/bookings_controller.rb	e36d833ef9bfe902	7def39e3	Appointment.own.order(:id)
@@ -324,7 +324,7 @@ kiosk-core/lib/kiosk/configuration.rb	f93913e953f166ea	7def39e3	    # to the iss
 kiosk-core/lib/kiosk/configuration.rb	26e6c45479a4cc5c	7def39e3	A table that Rails made with its default key is :bigint.
 kiosk-core/lib/kiosk/configuration.rb	eb55ac83bee281d4	7def39e3	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	0b9b9bb8049ae29f	7def39e3	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	79246b848dae4f04	7def39e3	API_VERSION = '0.6.
+kiosk-core/lib/kiosk/protocol.rb	ee5dc22c50cb79a7	85aac352	API_VERSION = '0.6.
 kiosk-core/spec/kiosk/kyc_providers/base_spec.rb	d4efc7346062c77b	7def39e3	refuses a key that is not Ed25519
 kiosk-core/spec/spec_helper.rb	c89ca3f73742cd52	7def39e3	require 'kiosk'
 kiosk-demo-atablefor/README.md	de2e6695f6f8d33a	7def39e3	Restaurant table-booking demo operator for Kiosk, and the reference for the
@@ -350,9 +350,9 @@ kiosk-demo-atablefor/db/seeds.rb	e76a84632db36917	7def39e3	# clock (Restaurant#u
 kiosk-demo-atablefor/test/restaurant_test.rb	ef78e756410e6c1f	7def39e3	the upcoming seatings roll forward on each restaurant's clock
 kiosk-demo-atablefor/test/stories/booking_test.rb	2eb3b01a14594adb	7def39e3	Time.iso8601(it['seating_at']).hour == 20
 kiosk-demo-atablefor/test/stories/booking_test.rb	8dd57e78fbbf86a2	7def39e3	a diner with no account books a table for two at eight and finds it among their bookings
-kiosk-demo-atablefor/test/stories/discovery_test.rb	5d09a7861c9532f3	7def39e3	    assert_equal %w[actions queries schema], kiosk['capabilities'].sort
-kiosk-demo-atablefor/test/stories/discovery_test.rb	5d09a7861c9532f3	7def39e3	assert_equal %w[actions queries schema], kiosk['capabilities'].sort
-kiosk-demo-atablefor/test/stories/discovery_test.rb	ae95e9e57b144a4f	7def39e3	the home page and the reservations board point an assistant at the skill this origin pins
+kiosk-demo-atablefor/test/stories/discovery_test.rb	5d09a7861c9532f3	85aac352	    assert_equal %w[actions queries schema], kiosk['capabilities'].sort
+kiosk-demo-atablefor/test/stories/discovery_test.rb	5d09a7861c9532f3	85aac352	assert_equal %w[actions queries schema], kiosk['capabilities'].sort
+kiosk-demo-atablefor/test/stories/discovery_test.rb	8bb6be00d522fa5c	85aac352	the home page and the reservations board point an assistant at the skill this origin pins
 kiosk-demo-atablefor/test/stories/link_test.rb	9b07cbaa646f0c99	7def39e3	Diego links his assistant from the restaurant site, and the table it books is his
 kiosk-demo-atablefor/test/stories/link_test.rb	723b26ca8cf634f7	7def39e3	assert_equal diego.id, Booking.find(booking['booking_id']).user_id
 kiosk-demo-atablefor/test/stories/privacy_test.rb	6f3ff7f39561ad8e	7def39e3	one diner can neither cancel nor see another's booking
@@ -649,8 +649,8 @@ kiosk-demo-stylish/config/routes.rb	9bf0728493684b31	7def39e3	kiosk do
 kiosk-demo-stylish/config/routes.rb	16adeb2bb4d34c0d	7def39e3	queries :my_appointments, :salon_calendar, :salons, :service_menu
 kiosk-demo-stylish/test/book_appointment_test.rb	7ac62782885c3c4c	7def39e3	a slot without an offset names no instant and is refused
 kiosk-demo-stylish/test/book_appointment_test.rb	91215efe9c4a3e9d	7def39e3	one instant in any spelling is one booking, answered on the salon's clock
-kiosk-demo-stylish/test/stories/discovery_test.rb	876c5760e9019d12	7def39e3	an assistant that knows nothing finds out, without an account, what the salon offers and how to book
-kiosk-demo-stylish/test/stories/discovery_test.rb	a005d7c7f9d3f9ff	7def39e3	class DiscoveryStory < StoryTest
+kiosk-demo-stylish/test/stories/discovery_test.rb	876c5760e9019d12	85aac352	an assistant that knows nothing finds out, without an account, what the salon offers and how to book
+kiosk-demo-stylish/test/stories/discovery_test.rb	91ab63d294315340	85aac352	class DiscoveryStory < StoryTest
 kiosk-demo-stylish/test/stories/linking_test.rb	8b58f903b3d6038b	a5a498fa	  test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
 kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	a5a498fa	  test 'Alice approves the code her assistant shows her, and it books in her name' do
 kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	a5a498fa	Alice approves the code her assistant shows her, and it books in her name
@@ -867,10 +867,10 @@ kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	8c2cddfc04203164	7def39e3	pro
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	88b98c19a2705f9f	7def39e3	rejects a valid solution with 2**64 added to an index, without hashing
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	a9f559a96a0c992f	7def39e3	returns n:168, k:7 by default
 kiosk-pow-equihash/spec/readme_lever_spec.rb	72474fa162332f2d	7def39e3	README's own benchmarks give, or state that it is unbenched.
-kiosk-redteam/README.md	600c1169bd0b33ee	7def39e3	Adversarial regression harness for [Kiosk](https://kiosk.tech) operators — it
-kiosk-redteam/README.md	31c52b5f46869d3c	7def39e3	attack is correctly blocked.
-kiosk-redteam/README.md	5cbd677af81e11c1	7def39e3	drives hostile HTTP scenarios against a running Kiosk origin and asserts each
-kiosk-redteam/README.md	d076b9a8a6327c10	7def39e3	finds a real breach fails loudly: `Battery#report!` answers 1 and the
+kiosk-redteam/README.md	e0eed34bb2f1554a	85aac352	Adversarial regression harness for [Kiosk](https://kiosk-hq.github.io) operators — it
+kiosk-redteam/README.md	31c52b5f46869d3c	85aac352	attack is correctly blocked.
+kiosk-redteam/README.md	5cbd677af81e11c1	85aac352	drives hostile HTTP scenarios against a running Kiosk origin and asserts each
+kiosk-redteam/README.md	d076b9a8a6327c10	85aac352	finds a real breach fails loudly: `Battery#report!` answers 1 and the
 kiosk-redteam/lib/kiosk/redteam/battery.rb	f5d7e28775689a79	7def39e3	#{blocked.size} BLOCKED, #{skipped.size} SKIPPED, 0 BREACH — all attacks blocked.
 kiosk-redteam/lib/kiosk/redteam/runner.rb	98334728c0e86200	7def39e3	        @client  = Kiosk::TestHelpers::Assistant.new(base_url:)
 kiosk-redteam/lib/kiosk/redteam/scenarios/privilege_self_selection.rb	8cc1b50451c03864	7def39e3	class PrivilegeSelfSelection < Scenario
@@ -1072,13 +1072,13 @@ kiosk-server/lib/kiosk/server/client_assertion.rb	7b38dcb6424b5f76	7def39e3	issu
 kiosk-server/lib/kiosk/server/client_registration.rb	93acfb9b02cf3a3a	7def39e3	# RFC 7591 open registration of an AI assistant's public key, with no human:
 kiosk-server/lib/kiosk/server/client_registration.rb	08037059c8fd4ec7	7def39e3	AuthToll.gate(verb: 'oauth/register', body: { key: AssistantKey.thumbprint(key) }, pow: pow, config: config)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	c1e0f9e32b401aa9	7def39e3	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	424787bb935b92ec	a5a498fa	        @skill_url ||= 'https://kiosk.tech/skill-v
-kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	a5a498fa	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
-kiosk-server/lib/kiosk/server/configuration_extension.rb	d463cdaf59bff685	a5a498fa	      attr_accessor :spending_cap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	a5a498fa	      def computed_capabilities
-kiosk-server/lib/kiosk/server/configuration_extension.rb	b3c25f51ead41bac	a5a498fa	# Decides when and how hard to challenge. Default nil: never.
-kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	a5a498fa	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
-kiosk-server/lib/kiosk/server/configuration_extension.rb	59e6dd41e77efef5	a5a498fa	def reputation_policy=
+kiosk-server/lib/kiosk/server/configuration_extension.rb	eb55cfef0f8dea76	85aac352	        @skill_url ||= 'https://kiosk-hq.github.io/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	85aac352	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
+kiosk-server/lib/kiosk/server/configuration_extension.rb	d463cdaf59bff685	85aac352	      attr_accessor :spending_cap
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	85aac352	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	b3c25f51ead41bac	85aac352	# Decides when and how hard to challenge. Default nil: never.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	3a4cd49a06336d79	85aac352	c.signing_key is not set. #{SigningKey::HINT.capitalize}.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	59e6dd41e77efef5	85aac352	def reputation_policy=
 kiosk-server/lib/kiosk/server/device_code_grant.rb	0127c4b9e1aef66b	7def39e3	# The claim ceremony on the RFC 8628 device-grant endpoints: binds a registered
 kiosk-server/lib/kiosk/server/device_code_grant.rb	8077327e193a9d87	7def39e3	da = authorization_of(client, store.lookup_by_device_code_hash(hash))
 kiosk-server/lib/kiosk/server/engine.rb	9a04fe52f1e0a44f	7def39e3	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
@@ -1102,16 +1102,16 @@ kiosk-server/lib/kiosk/server/engine.rb	ec53c7de2d0745ad	7def39e3	get '/.well-kn
 kiosk-server/lib/kiosk/server/engine.rb	e8b0dbb9e3a57f26	7def39e3	get '/agents.txt',  to: 'kiosk/server/discovery#agents_txt'
 kiosk-server/lib/kiosk/server/engine.rb	21729d2761a03a10	7def39e3	get 'openapi.json', to: 'open_api#show'
 kiosk-server/lib/kiosk/server/engine.rb	ae5eb88c94c205b9	7def39e3	post 'kyc/callback', to: 'kyc_callback#create'
-kiosk-server/lib/kiosk/server/errors.rb	98c9628b7703021f	7def39e3	      class ModuleNotServed < Base
-kiosk-server/lib/kiosk/server/errors.rb	6a67434d7712f13a	7def39e3	'pow_required' => 402,
-kiosk-server/lib/kiosk/server/errors.rb	5f0c01ad6ef54bfe	7def39e3	'spending_cap_exceeded' => 403,
-kiosk-server/lib/kiosk/server/errors.rb	1c5f18e3639a4247	7def39e3	CODE        = 'spending_cap_exceeded'
-kiosk-server/lib/kiosk/server/errors.rb	96d78d4f72fab4f6	7def39e3	PROBLEM_CONTENT_TYPE = 'application/problem+json'
-kiosk-server/lib/kiosk/server/errors.rb	7e9982f4b7f3301c	7def39e3	PROBLEM_TYPE_BASE = 'https://kiosk.tech/problems/'
-kiosk-server/lib/kiosk/server/errors.rb	824911bd38ed0e7e	7def39e3	TITLES = {
-kiosk-server/lib/kiosk/server/errors.rb	57153897ee73c9bc	7def39e3	class Forbidden < Base
-kiosk-server/lib/kiosk/server/errors.rb	0b5bd01dc22045a5	7def39e3	class NotFound < Base
-kiosk-server/lib/kiosk/server/errors.rb	3b5cce268e8882d3	7def39e3	class PowRequired < Base
+kiosk-server/lib/kiosk/server/errors.rb	98c9628b7703021f	85aac352	      class ModuleNotServed < Base
+kiosk-server/lib/kiosk/server/errors.rb	6a67434d7712f13a	85aac352	'pow_required' => 402,
+kiosk-server/lib/kiosk/server/errors.rb	5f0c01ad6ef54bfe	85aac352	'spending_cap_exceeded' => 403,
+kiosk-server/lib/kiosk/server/errors.rb	1c5f18e3639a4247	85aac352	CODE        = 'spending_cap_exceeded'
+kiosk-server/lib/kiosk/server/errors.rb	96d78d4f72fab4f6	85aac352	PROBLEM_CONTENT_TYPE = 'application/problem+json'
+kiosk-server/lib/kiosk/server/errors.rb	fca090221566e777	85aac352	PROBLEM_TYPE_BASE = 'https://kiosk-hq.github.io/problems/'
+kiosk-server/lib/kiosk/server/errors.rb	824911bd38ed0e7e	85aac352	TITLES = {
+kiosk-server/lib/kiosk/server/errors.rb	57153897ee73c9bc	85aac352	class Forbidden < Base
+kiosk-server/lib/kiosk/server/errors.rb	0b5bd01dc22045a5	85aac352	class NotFound < Base
+kiosk-server/lib/kiosk/server/errors.rb	3b5cce268e8882d3	85aac352	class PowRequired < Base
 kiosk-server/lib/kiosk/server/events_cable.rb	34cf56cef07148ec	7def39e3	config.disable_request_forgery_protection = true
 kiosk-server/lib/kiosk/server/events_connection.rb	a0cde188e9223fc8	7def39e3	Kiosk::Server::IdentityResolution.resolve(request)
 kiosk-server/lib/kiosk/server/executor.rb	fd836ff63bed510a	7def39e3	            'this operator does not serve the payment module',
@@ -1185,8 +1185,8 @@ kiosk-server/lib/kiosk/server/routing.rb	6abc130d9b2c9a88	7def39e3	def queries(*
 kiosk-server/lib/kiosk/server/routing.rb	f6bce994e58fbc48	7def39e3	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-server/lib/kiosk/server/routing.rb	acaa40e04cddd9b7	7def39e3	registry = HandlerMixin.registry_for(@kind)
 kiosk-server/lib/kiosk/server/schema_document.rb	c3e57ca0dcf95e5c	7def39e3	    module SchemaDocument
-kiosk-server/lib/kiosk/server/schemas/auth.schema.json	7774b07097bb4218	7def39e3	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
-kiosk-server/lib/kiosk/server/schemas/binding.schema.json	c95748bf8d047c93	7def39e3	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
+kiosk-server/lib/kiosk/server/schemas/auth.schema.json	7a6fad80bc737e35	85aac352	VENDORED copy of the normative kiosk-hq.github.io schema at spec/schemas/auth.schema.json.
+kiosk-server/lib/kiosk/server/schemas/binding.schema.json	4757b7bac4a0a271	85aac352	VENDORED copy of the normative kiosk-hq.github.io schema at spec/schemas/binding.schema.json.
 kiosk-server/lib/kiosk/server/tolled_calls.rb	fcf8dbbf71d78377	7def39e3	The count belongs to the account: the
 kiosk-server/lib/kiosk/server/verb_registry.rb	d1dae4cdb2720c8e	7def39e3	          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
 kiosk-server/lib/kiosk/server/verb_wire.rb	8b05aaed37814ca4	7def39e3	PowGate.gate(
@@ -1300,10 +1300,10 @@ kiosk-server/spec/kiosk/server/auth_toll_spec.rb	54dea87073e0d513	7def39e3	binds
 kiosk-server/spec/kiosk/server/auth_toll_spec.rb	b3f25febf53f5c9c	7def39e3	demands `count` challenges (402) when no proof is submitted
 kiosk-server/spec/kiosk/server/auth_toll_spec.rb	e25450c2d9b2533a	7def39e3	is a no-op when registration_pow_count is 0 (default)
 kiosk-server/spec/kiosk/server/auth_toll_spec.rb	5e36b2a2fb5516a3	7def39e3	proceeds when the real verifier accepts the proof
-kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	49ffca7ea2971c1a	7def39e3	answers #{method} #{path} with 501 module_not_served
-kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	cc053a342e24303e	7def39e3	answers the OAuth error object rather than refusing the module
-kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	32cc4dfcc91bf597	7def39e3	publishes all five auth URLs and adds no capability for binding
-kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	9bddcc0085261b73	7def39e3	still serves the token endpoint, which refuses the device-code grant as OAuth does
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	7ba811773b27338f	85aac352	answers #{method} #{path} with 501 module_not_served
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	cc053a342e24303e	85aac352	answers the OAuth error object rather than refusing the module
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	32cc4dfcc91bf597	85aac352	publishes all five auth URLs and adds no capability for binding
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	9bddcc0085261b73	85aac352	still serves the token endpoint, which refuses the device-code grant as OAuth does
 kiosk-server/spec/kiosk/server/caller_timezone_spec.rb	7bd7d5221093af1b	7def39e3	refuses a UTC offset by name
 kiosk-server/spec/kiosk/server/checkout_spec.rb	1ac9b891a5bc9ae6	7def39e3	answers the claims of a checkout this origin signed for this account
 kiosk-server/spec/kiosk/server/checkout_spec.rb	b999c7b779d630d2	7def39e3	carries a jti of 128 random bits
@@ -1454,26 +1454,26 @@ kiosk-server/spec/kiosk/server/engine_routes_spec.rb	555f886a07d5c2f9	7def39e3	d
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	1d61d030c29b15fa	7def39e3	reserves exactly the first segments it draws — and `query`/`run` left both
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	f3baa3ac3a86fac7	7def39e3	still owns every reserved path, and the mount being drawn FIRST is why
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	cb73ef2c22519a3e	7def39e3	the per-verb endpoints, which this table deliberately does NOT draw
-kiosk-server/spec/kiosk/server/errors_spec.rb	108954bee711c60f	7def39e3	#to_problem — the 0.4 error shape (RFC 9457)
-kiosk-server/spec/kiosk/server/errors_spec.rb	be9958b9b74ba8df	7def39e3	#{klass.name.split('::').last} → code=#{code.inspect} http=#{http_status}
-kiosk-server/spec/kiosk/server/errors_spec.rb	c28684ef9b4b5b8a	7def39e3	Kiosk::Server::Errors::KycRequired => ['kyc_required', 403]
-kiosk-server/spec/kiosk/server/errors_spec.rb	e5b0d34fcb0604b3	7def39e3	carries a handler's own extra fields through
-kiosk-server/spec/kiosk/server/errors_spec.rb	b1636dd152076529	7def39e3	carries the PoW challenges as a TOP-LEVEL extension member
-kiosk-server/spec/kiosk/server/errors_spec.rb	0a4a9c6d1ec44ea0	7def39e3	carries the method the verb DOES accept, as the header RFC 9110 makes mandatory
-kiosk-server/spec/kiosk/server/errors_spec.rb	b776aa7b2da9e149	7def39e3	carries the vocabulary code TWICE: as the type URI and as the branch point
-kiosk-server/spec/kiosk/server/errors_spec.rb	401b5bdfaf631525	7def39e3	does not map 501 — module_not_served is not a status a handler raise can mean
-kiosk-server/spec/kiosk/server/errors_spec.rb	71094fa24285a83c	7def39e3	drops a nil hint and never emits `instance`
-kiosk-server/spec/kiosk/server/errors_spec.rb	17aa45d010a0d6f7	7def39e3	each agrees with the CODES table on both code and status
-kiosk-server/spec/kiosk/server/errors_spec.rb	16b02823825b2c5c	7def39e3	every Kiosk::Server::Errors::* subclass rescues as Base
-kiosk-server/spec/kiosk/server/errors_spec.rb	b083feae1d778da3	7def39e3	is exactly the spec's closed `code` table
-kiosk-server/spec/kiosk/server/errors_spec.rb	53ffcbda2a9e711f	7def39e3	maps every status to a vocabulary code
-kiosk-server/spec/kiosk/server/errors_spec.rb	3a18eab6b5bb735e	7def39e3	mints one problem type URI per code and nothing else
-kiosk-server/spec/kiosk/server/errors_spec.rb	ddaebf91d25bd609	7def39e3	names every code in TITLES — a problem document without a title is not one
-kiosk-server/spec/kiosk/server/errors_spec.rb	110f7d7ee2861513	7def39e3	never guesses 402 (three codes share it) or 500 (action_failed vs internal_error)
-kiosk-server/spec/kiosk/server/errors_spec.rb	1b06b045534784b8	7def39e3	refuses a code outside the closed vocabulary
-kiosk-server/spec/kiosk/server/errors_spec.rb	1567eabfa5ad6673	7def39e3	refuses a plausible near-miss of a T-158 member
-kiosk-server/spec/kiosk/server/errors_spec.rb	d23feb416c3c5dd8	7def39e3	refuses to exist without one — a 405 with no Allow is not a 405
-kiosk-server/spec/kiosk/server/errors_spec.rb	69a94ed151eaaeb4	7def39e3	still maps 404 to not_found, the only 404 a handler raise can mean
+kiosk-server/spec/kiosk/server/errors_spec.rb	9d5cd24668a4303f	85aac352	#to_problem — the 0.4 error shape (RFC 9457)
+kiosk-server/spec/kiosk/server/errors_spec.rb	be9958b9b74ba8df	85aac352	#{klass.name.split('::').last} → code=#{code.inspect} http=#{http_status}
+kiosk-server/spec/kiosk/server/errors_spec.rb	c28684ef9b4b5b8a	85aac352	Kiosk::Server::Errors::KycRequired => ['kyc_required', 403]
+kiosk-server/spec/kiosk/server/errors_spec.rb	e5b0d34fcb0604b3	85aac352	carries a handler's own extra fields through
+kiosk-server/spec/kiosk/server/errors_spec.rb	b1636dd152076529	85aac352	carries the PoW challenges as a TOP-LEVEL extension member
+kiosk-server/spec/kiosk/server/errors_spec.rb	0a4a9c6d1ec44ea0	85aac352	carries the method the verb DOES accept, as the header RFC 9110 makes mandatory
+kiosk-server/spec/kiosk/server/errors_spec.rb	5bae357103ac1504	85aac352	carries the vocabulary code TWICE: as the type URI and as the branch point
+kiosk-server/spec/kiosk/server/errors_spec.rb	401b5bdfaf631525	85aac352	does not map 501 — module_not_served is not a status a handler raise can mean
+kiosk-server/spec/kiosk/server/errors_spec.rb	c08d8e2bd8dc2f22	85aac352	drops a nil hint and never emits `instance`
+kiosk-server/spec/kiosk/server/errors_spec.rb	17aa45d010a0d6f7	85aac352	each agrees with the CODES table on both code and status
+kiosk-server/spec/kiosk/server/errors_spec.rb	16b02823825b2c5c	85aac352	every Kiosk::Server::Errors::* subclass rescues as Base
+kiosk-server/spec/kiosk/server/errors_spec.rb	b083feae1d778da3	85aac352	is exactly the spec's closed `code` table
+kiosk-server/spec/kiosk/server/errors_spec.rb	53ffcbda2a9e711f	85aac352	maps every status to a vocabulary code
+kiosk-server/spec/kiosk/server/errors_spec.rb	28e514a7de29d0f9	85aac352	mints one problem type URI per code and nothing else
+kiosk-server/spec/kiosk/server/errors_spec.rb	ddaebf91d25bd609	85aac352	names every code in TITLES — a problem document without a title is not one
+kiosk-server/spec/kiosk/server/errors_spec.rb	110f7d7ee2861513	85aac352	never guesses 402 (three codes share it) or 500 (action_failed vs internal_error)
+kiosk-server/spec/kiosk/server/errors_spec.rb	1b06b045534784b8	85aac352	refuses a code outside the closed vocabulary
+kiosk-server/spec/kiosk/server/errors_spec.rb	1567eabfa5ad6673	85aac352	refuses a plausible near-miss of a T-158 member
+kiosk-server/spec/kiosk/server/errors_spec.rb	d23feb416c3c5dd8	85aac352	refuses to exist without one — a 405 with no Allow is not a 405
+kiosk-server/spec/kiosk/server/errors_spec.rb	69a94ed151eaaeb4	85aac352	still maps 404 to not_found, the only 404 a handler raise can mean
 kiosk-server/spec/kiosk/server/event_stores_spec.rb	fa744c7957b65d69	7def39e3	assigns ids that are monotonic per ORIGIN, across identities and topics
 kiosk-server/spec/kiosk/server/event_stores_spec.rb	5537717f6b50f931	7def39e3	keeps identities apart
 kiosk-server/spec/kiosk/server/event_stores_spec.rb	86884ffbec4e3e66	7def39e3	keeps rows inside the window
@@ -1559,59 +1559,59 @@ kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	b5b8be19b92c4961	7de
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	aa4cf78c125f1d06	7def39e3	raises the unique violation the Executor maps to 409 when the same reference is replayed
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	f3c32af3f1df50c4	7def39e3	refuses a new checkout above the cap
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	59d4e743c61483b2	7def39e3	settles a second pair after the first was declined
-kiosk-server/spec/kiosk/server/executor_spec.rb	0822822ba385be2a	7def39e3	answers 409 conflict to a repeat of a declined pair
-kiosk-server/spec/kiosk/server/executor_spec.rb	7d0e4eb30e1c34da	7def39e3	answers 409 to a second live pair for one checkout, before any capture
-kiosk-server/spec/kiosk/server/executor_spec.rb	3e87fa94c48236bd	7def39e3	answers `eur` to a checkout already in `eur`, which is the only case where the bytes match
-kiosk-server/spec/kiosk/server/executor_spec.rb	d85bad500fe0f8a0	7def39e3	answers `eur` to a checkout in `EUR`
-kiosk-server/spec/kiosk/server/executor_spec.rb	9db8d820ef40d4f5	7def39e3	answers a payment-free origin with module_not_served even when NO mandates are sent (K-800)
-kiosk-server/spec/kiosk/server/executor_spec.rb	165acff8c7aa0746	7def39e3	answers the two receipts, naming each mandate by its reference
-kiosk-server/spec/kiosk/server/executor_spec.rb	bb297bbb74d83d8b	7def39e3	charges again for a pair that pays another checkout
-kiosk-server/spec/kiosk/server/executor_spec.rb	3305d11d8a49dbde	7def39e3	charges once and replays the ORIGINAL settlement the second time (K-850)
-kiosk-server/spec/kiosk/server/executor_spec.rb	4cbe556858cc4be0	7def39e3	does not answer a settled replay with an error at all (K-850)
-kiosk-server/spec/kiosk/server/executor_spec.rb	e739364a7ec95ad6	7def39e3	does not enforce when no spending_cap seam is configured (default)
-kiosk-server/spec/kiosk/server/executor_spec.rb	69bee590314585e6	7def39e3	is gone from the vocabulary entirely — one list, not two
-kiosk-server/spec/kiosk/server/executor_spec.rb	248726e7455f46da	7def39e3	maps a non-retryable capture-time PaymentFailed to a 402 whose hint sends the same mandates again
-kiosk-server/spec/kiosk/server/executor_spec.rb	7445769b259b6f81	7def39e3	maps a retryable capture-time PaymentFailed to Errors::PaymentFailed (402, payment_failed)
-kiosk-server/spec/kiosk/server/executor_spec.rb	9f177fa51d7b282b	7def39e3	omits `next` when a paginating handler signals the last page (Page with nil cursor)
-kiosk-server/spec/kiosk/server/executor_spec.rb	ec965a4d8a8279ec	7def39e3	proceeds when the checkout total equals the cap
-kiosk-server/spec/kiosk/server/executor_spec.rb	67d077dcde78e590	7def39e3	puts module_not_served/501 in the response for it, not a 403
-kiosk-server/spec/kiosk/server/executor_spec.rb	cfe7b25e5a066564	7def39e3	raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true
-kiosk-server/spec/kiosk/server/executor_spec.rb	ee1df6c1b5377168	7def39e3	raises Unauthenticated when identity is nil
-kiosk-server/spec/kiosk/server/executor_spec.rb	2320ba795a3a821c	7def39e3	re-raises a capture-time SetupRequired as PaymentSetupRequired (402)
-kiosk-server/spec/kiosk/server/executor_spec.rb	000333d9b31b81ba	7def39e3	reads the cap currency case-insensitively
-kiosk-server/spec/kiosk/server/executor_spec.rb	c0177888927b9b26	7def39e3	refuses a checkout in a currency other than the cap's, before capture
-kiosk-server/spec/kiosk/server/executor_spec.rb	2362160900570b9a	7def39e3	refuses a second pair for a settled checkout, before any capture
-kiosk-server/spec/kiosk/server/executor_spec.rb	abc802cc8af69ccb	7def39e3	refuses a settled reference re-presented with different bytes (K-850)
-kiosk-server/spec/kiosk/server/executor_spec.rb	bbd4e6ba477a5556	7def39e3	rejects with SpendingCapExceeded (403) and does NOT capture when the cap would be exceeded
-kiosk-server/spec/kiosk/server/executor_spec.rb	a7a29ea83cd2a666	7def39e3	resumes a pair whose capture ran but whose settlement was never written
-kiosk-server/spec/kiosk/server/executor_spec.rb	eb804aabf1e64ab3	7def39e3	settles a new pair for the same checkout after a declined charge
-kiosk-server/spec/kiosk/server/executor_spec.rb	829401601821f9b2	7def39e3	threads a Page's next_cursor and total onto the Result, not into the body
-kiosk-server/spec/kiosk/server/executor_spec.rb	50d0ece3bb9b055b	7def39e3	treats a cap of 0 as disabled (any charge rejected)
-kiosk-server/spec/kiosk/server/executor_spec.rb	be4d8d6433dfb655	7def39e3	verifies the mandates, captures, and returns the full settlement payload
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	5dfec588376146f5	7def39e3	404s a request that did not come through the Kiosk HTTP API
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	8ed1e3da89602cc8	7def39e3	accepts a verb that declares limit as an integer with its largest page
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	675e30f7f0d241db	7def39e3	accepts the verb name #{name.inspect}
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	bb31f8266b936d5b	7def39e3	carries a 403 code a bare status cannot name (rls_denied)
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	bec800f55f3188b6	7def39e3	emits NO WWW-Authenticate on payment_failed — the third 402, which no scheme names
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	f71cc117816704de	7def39e3	exposes the resolved identity as kiosk_identity
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	3254d1a8d0fcf024	7def39e3	gives a RENDERED payment_setup_required the same WWW-Authenticate as a raised one
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	19839c608412431b	7def39e3	omits params — the slot left the protocol (ADR-0023 retired it, T-085 removed it)
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	32eb13be4e0712cb	7def39e3	refuses a declaration with no input_schema
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	27e70f782a9e9c35	7def39e3	refuses a declaration with no output_schema
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	dd8bb64af62c6e51	7def39e3	refuses a reach outside the four the spec names
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	2118c077f1fb589f	7def39e3	refuses a verb name that is not one legal path segment
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	77843b523a494e08	7def39e3	refuses a verb name the engine draws itself
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	3e9c77b92cd98ef1	7def39e3	refuses a verb that declares cursor
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	fa0bd5e81e348f07	7def39e3	refuses a verb that declares limit as anything but an integer
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	dd6933f9194dcce4	7def39e3	refuses the verb name #{name.inspect}
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	52ccfa6bf4e48b9e	7def39e3	reserves every first path segment the engine draws under the mount
+kiosk-server/spec/kiosk/server/executor_spec.rb	0822822ba385be2a	85aac352	answers 409 conflict to a repeat of a declined pair
+kiosk-server/spec/kiosk/server/executor_spec.rb	7d0e4eb30e1c34da	85aac352	answers 409 to a second live pair for one checkout, before any capture
+kiosk-server/spec/kiosk/server/executor_spec.rb	3e87fa94c48236bd	85aac352	answers `eur` to a checkout already in `eur`, which is the only case where the bytes match
+kiosk-server/spec/kiosk/server/executor_spec.rb	d85bad500fe0f8a0	85aac352	answers `eur` to a checkout in `EUR`
+kiosk-server/spec/kiosk/server/executor_spec.rb	9db8d820ef40d4f5	85aac352	answers a payment-free origin with module_not_served even when NO mandates are sent (K-800)
+kiosk-server/spec/kiosk/server/executor_spec.rb	165acff8c7aa0746	85aac352	answers the two receipts, naming each mandate by its reference
+kiosk-server/spec/kiosk/server/executor_spec.rb	bb297bbb74d83d8b	85aac352	charges again for a pair that pays another checkout
+kiosk-server/spec/kiosk/server/executor_spec.rb	3305d11d8a49dbde	85aac352	charges once and replays the ORIGINAL settlement the second time (K-850)
+kiosk-server/spec/kiosk/server/executor_spec.rb	4cbe556858cc4be0	85aac352	does not answer a settled replay with an error at all (K-850)
+kiosk-server/spec/kiosk/server/executor_spec.rb	e739364a7ec95ad6	85aac352	does not enforce when no spending_cap seam is configured (default)
+kiosk-server/spec/kiosk/server/executor_spec.rb	69bee590314585e6	85aac352	is gone from the vocabulary entirely — one list, not two
+kiosk-server/spec/kiosk/server/executor_spec.rb	248726e7455f46da	85aac352	maps a non-retryable capture-time PaymentFailed to a 402 whose hint sends the same mandates again
+kiosk-server/spec/kiosk/server/executor_spec.rb	7445769b259b6f81	85aac352	maps a retryable capture-time PaymentFailed to Errors::PaymentFailed (402, payment_failed)
+kiosk-server/spec/kiosk/server/executor_spec.rb	9f177fa51d7b282b	85aac352	omits `next` when a paginating handler signals the last page (Page with nil cursor)
+kiosk-server/spec/kiosk/server/executor_spec.rb	ec965a4d8a8279ec	85aac352	proceeds when the checkout total equals the cap
+kiosk-server/spec/kiosk/server/executor_spec.rb	ad6ce88e685fadbd	85aac352	puts module_not_served/501 in the response for it, not a 403
+kiosk-server/spec/kiosk/server/executor_spec.rb	cfe7b25e5a066564	85aac352	raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true
+kiosk-server/spec/kiosk/server/executor_spec.rb	ee1df6c1b5377168	85aac352	raises Unauthenticated when identity is nil
+kiosk-server/spec/kiosk/server/executor_spec.rb	2320ba795a3a821c	85aac352	re-raises a capture-time SetupRequired as PaymentSetupRequired (402)
+kiosk-server/spec/kiosk/server/executor_spec.rb	000333d9b31b81ba	85aac352	reads the cap currency case-insensitively
+kiosk-server/spec/kiosk/server/executor_spec.rb	c0177888927b9b26	85aac352	refuses a checkout in a currency other than the cap's, before capture
+kiosk-server/spec/kiosk/server/executor_spec.rb	2362160900570b9a	85aac352	refuses a second pair for a settled checkout, before any capture
+kiosk-server/spec/kiosk/server/executor_spec.rb	abc802cc8af69ccb	85aac352	refuses a settled reference re-presented with different bytes (K-850)
+kiosk-server/spec/kiosk/server/executor_spec.rb	bbd4e6ba477a5556	85aac352	rejects with SpendingCapExceeded (403) and does NOT capture when the cap would be exceeded
+kiosk-server/spec/kiosk/server/executor_spec.rb	a7a29ea83cd2a666	85aac352	resumes a pair whose capture ran but whose settlement was never written
+kiosk-server/spec/kiosk/server/executor_spec.rb	eb804aabf1e64ab3	85aac352	settles a new pair for the same checkout after a declined charge
+kiosk-server/spec/kiosk/server/executor_spec.rb	829401601821f9b2	85aac352	threads a Page's next_cursor and total onto the Result, not into the body
+kiosk-server/spec/kiosk/server/executor_spec.rb	50d0ece3bb9b055b	85aac352	treats a cap of 0 as disabled (any charge rejected)
+kiosk-server/spec/kiosk/server/executor_spec.rb	be4d8d6433dfb655	85aac352	verifies the mandates, captures, and returns the full settlement payload
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	8383a9e6fe1ce1cd	85aac352	404s a request that did not come through the Kiosk HTTP API
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	8ed1e3da89602cc8	85aac352	accepts a verb that declares limit as an integer with its largest page
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	675e30f7f0d241db	85aac352	accepts the verb name #{name.inspect}
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	bb31f8266b936d5b	85aac352	carries a 403 code a bare status cannot name (rls_denied)
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	bec800f55f3188b6	85aac352	emits NO WWW-Authenticate on payment_failed — the third 402, which no scheme names
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	f71cc117816704de	85aac352	exposes the resolved identity as kiosk_identity
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	3254d1a8d0fcf024	85aac352	gives a RENDERED payment_setup_required the same WWW-Authenticate as a raised one
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	19839c608412431b	85aac352	omits params — the slot left the protocol (ADR-0023 retired it, T-085 removed it)
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	32eb13be4e0712cb	85aac352	refuses a declaration with no input_schema
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	27e70f782a9e9c35	85aac352	refuses a declaration with no output_schema
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	dd8bb64af62c6e51	85aac352	refuses a reach outside the four the spec names
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	2118c077f1fb589f	85aac352	refuses a verb name that is not one legal path segment
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	77843b523a494e08	85aac352	refuses a verb name the engine draws itself
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	3e9c77b92cd98ef1	85aac352	refuses a verb that declares cursor
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	fa0bd5e81e348f07	85aac352	refuses a verb that declares limit as anything but an integer
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	dd6933f9194dcce4	85aac352	refuses the verb name #{name.inspect}
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	52ccfa6bf4e48b9e	85aac352	reserves every first path segment the engine draws under the mount
 kiosk-server/spec/kiosk/server/handler_registrations_spec.rb	0e18ddaca5e72eb8	7def39e3	refuses a name declared as both a query and an action
 kiosk-server/spec/kiosk/server/handler_registrations_spec.rb	e6db303dc0cb8335	7def39e3	registers the verbs of every handler, from an empty registry
-kiosk-server/spec/kiosk/server/handler_serving_spec.rb	0ad1deff6effa91d	7def39e3	carries the challenges a handler renders on pow_required
-kiosk-server/spec/kiosk/server/handler_serving_spec.rb	f3e1db753dd233e8	7def39e3	keeps type, title and status those of the code, and drops instance and challenges
-kiosk-server/spec/kiosk/server/handler_serving_spec.rb	548257d5e9b77c23	7def39e3	refuses an empty next_cursor, whose next link would lead back to page one
-kiosk-server/spec/kiosk/server/handler_serving_spec.rb	0c2fce5ee2467a20	7def39e3	rejects a page whose rows are not an array
-kiosk-server/spec/kiosk/server/handler_serving_spec.rb	1ee8ad1198ac5a92	7def39e3	rejects a query that answers an object, paginating or not
+kiosk-server/spec/kiosk/server/handler_serving_spec.rb	0ad1deff6effa91d	85aac352	carries the challenges a handler renders on pow_required
+kiosk-server/spec/kiosk/server/handler_serving_spec.rb	9f7e9830c57d2fd4	85aac352	keeps type, title and status those of the code, and drops instance and challenges
+kiosk-server/spec/kiosk/server/handler_serving_spec.rb	548257d5e9b77c23	85aac352	refuses an empty next_cursor, whose next link would lead back to page one
+kiosk-server/spec/kiosk/server/handler_serving_spec.rb	0c2fce5ee2467a20	85aac352	rejects a page whose rows are not an array
+kiosk-server/spec/kiosk/server/handler_serving_spec.rb	1ee8ad1198ac5a92	85aac352	rejects a query that answers an object, paginating or not
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	ee67886a37e8f0bc	7def39e3	injects the headers on any /kiosk/* sub-path
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	9c93175ad60d0766	7def39e3	injects the three Kiosk headers on /kiosk root
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	152fc4712ac804e4	7def39e3	respects an overridden mount_path
@@ -1662,27 +1662,27 @@ kiosk-server/spec/kiosk/server/kyc_spec.rb	1a21002961a504cb	7def39e3	refuses a w
 kiosk-server/spec/kiosk/server/kyc_spec.rb	1237ff7e1529b967	7def39e3	refuses with kyc_required until the person holds every declared claim
 kiosk-server/spec/kiosk/server/kyc_spec.rb	d56c2071fd8e44c3	7def39e3	replaces the grant set
 kiosk-server/spec/kiosk/server/kyc_spec.rb	6bd541eb3892f66b	7def39e3	stops counting a verification after the window, or once approved, or another person's
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	ed2afb9f4a16f172	7def39e3	%i[exp iss sub].each do |claim|
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	806c80f056bdcc94	7def39e3	I1: raises Errors::Forbidden when level is missing entirely
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	6f8b87038204bf49	7def39e3	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4b40a456c300dd4e	7def39e3	I2: raises Errors::Forbidden when #{claim} claim is absent
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	db3c5b2f0d421ea0	7def39e3	accepts an attestation whose aud matches the provider's audience (happy path)
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	8cda57d18df3622d	7def39e3	defaults the audience to the operator issuer when the provider names none
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1da47c95e35be352	7def39e3	drops any non-true attribute value (no truthy-but-not-true grants)
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	dc4a79fe3d33d95c	7def39e3	on a bigint-PK host (Integer identity, String attestation sub)
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	fc13c580389e944f	7def39e3	puts module_not_served/501 in the response for it, and names the module in detail
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	fe9f3e86b46c3c73	7def39e3	raises Errors::Forbidden for a tampered / wrong-key signature
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	f8d8bc1e01b9e81b	7def39e3	raises Errors::Forbidden for an attestation signed RS256
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4d595cfaf5ffd8d4	7def39e3	raises Errors::Forbidden for an expired attestation
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	8f4d2a71bc6db51a	7def39e3	raises Errors::Forbidden when attributes is not an object
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	ffd1fa9f61af84c2	7def39e3	raises Errors::Forbidden when aud does not match the provider's audience
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	a93c7651670ccc59	7def39e3	raises Errors::Forbidden when the aud claim is absent
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	c238a9831d33bb89	7def39e3	raises Errors::Forbidden when the iss does not match the provider's issuer
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	6365edd5453b7228	7def39e3	raises Errors::Forbidden when the sub does not match identity.user_id
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	88b858aa8b78b1eb	7def39e3	raises Errors::ModuleNotServed when kyc_provider is not configured
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	621a516df7f11072	7def39e3	returns an empty attribute set for a bare binary attestation (backward-compat)
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	a2c6ceff9cd81ad5	7def39e3	returns claims hash for a valid attestation
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4164d54aebfd7541	7def39e3	returns the granted named boolean attributes (String-keyed)
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	ed2afb9f4a16f172	85aac352	%i[exp iss sub].each do |claim|
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	806c80f056bdcc94	85aac352	I1: raises Errors::Forbidden when level is missing entirely
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	6f8b87038204bf49	85aac352	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4b40a456c300dd4e	85aac352	I2: raises Errors::Forbidden when #{claim} claim is absent
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	db3c5b2f0d421ea0	85aac352	accepts an attestation whose aud matches the provider's audience (happy path)
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	8cda57d18df3622d	85aac352	defaults the audience to the operator issuer when the provider names none
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1da47c95e35be352	85aac352	drops any non-true attribute value (no truthy-but-not-true grants)
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	dc4a79fe3d33d95c	85aac352	on a bigint-PK host (Integer identity, String attestation sub)
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	edc333cd6e363b7f	85aac352	puts module_not_served/501 in the response for it, and names the module in detail
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	fe9f3e86b46c3c73	85aac352	raises Errors::Forbidden for a tampered / wrong-key signature
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	f8d8bc1e01b9e81b	85aac352	raises Errors::Forbidden for an attestation signed RS256
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4d595cfaf5ffd8d4	85aac352	raises Errors::Forbidden for an expired attestation
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	8f4d2a71bc6db51a	85aac352	raises Errors::Forbidden when attributes is not an object
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	ffd1fa9f61af84c2	85aac352	raises Errors::Forbidden when aud does not match the provider's audience
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	a93c7651670ccc59	85aac352	raises Errors::Forbidden when the aud claim is absent
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	c238a9831d33bb89	85aac352	raises Errors::Forbidden when the iss does not match the provider's issuer
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	6365edd5453b7228	85aac352	raises Errors::Forbidden when the sub does not match identity.user_id
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	88b858aa8b78b1eb	85aac352	raises Errors::ModuleNotServed when kyc_provider is not configured
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	621a516df7f11072	85aac352	returns an empty attribute set for a bare binary attestation (backward-compat)
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	a2c6ceff9cd81ad5	85aac352	returns claims hash for a valid attestation
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4164d54aebfd7541	85aac352	returns the granted named boolean attributes (String-keyed)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	9e67ae65b4a8f4f0	7def39e3	binds the client to the holder with the holder's role, and consumes the code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	4a626b5a25f75c2a	7def39e3	creates a pre-approved :link row bound to the holder and returns the plain code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	04191b85a196448d	7def39e3	lets only ONE of two clients bind with one code
@@ -1718,10 +1718,10 @@ kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	95c
 kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	ce8fa339ad93b2ab	7def39e3	refuses a role, also an empty one: the assistant does not choose its role
 kiosk-server/spec/kiosk/server/oauth_error_spec.rb	f5fc45fdfa6419e4	7def39e3	answers {error, error_description}, 401 for invalid_client and 400 for every other code
 kiosk-server/spec/kiosk/server/oauth_error_spec.rb	5347278198fd17c7	7def39e3	refuses a code outside the vocabulary
-kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	54d3d79aade905c1	7def39e3	answers 201 with the client information, which no cache keeps
-kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	c8259ce597783441	7def39e3	answers 400 invalid_client_metadata for a body that is not JSON, or has no key
-kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	65346bb9f93040c1	7def39e3	answers the problem document 402 pow_required with WWW-Authenticate: Kiosk-PoW, and registers nothing
-kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	0928e92a1f20d9cc	7def39e3	answers the same client_id for the same key
+kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	54d3d79aade905c1	85aac352	answers 201 with the client information, which no cache keeps
+kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	c8259ce597783441	85aac352	answers 400 invalid_client_metadata for a body that is not JSON, or has no key
+kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	90396f4f7e402833	85aac352	answers the problem document 402 pow_required with WWW-Authenticate: Kiosk-PoW, and registers nothing
+kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	0928e92a1f20d9cc	85aac352	answers the same client_id for the same key
 kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	a36991f2e60eb1ef	7def39e3	answers 401 invalid_client for a refused client assertion, and says what to fix
 kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	91be6c12c6523d12	7def39e3	answers a DPoP token bound to the registered key, which no cache keeps
 kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	cec13631f18fbf23	7def39e3	answers authorization_pending until the holder approves
@@ -1783,35 +1783,35 @@ kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	dbdb057f43f91090	7d
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	b339bc911356c7cb	7def39e3	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	4e8273537416e849	7def39e3	re-challenges when the VERB differs (a catalog proof is not an orders proof)
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	a97277806838285b	7def39e3	rejects a WRONG nonce through the real verifier (403)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e5973ceb4762537e	a5a498fa	PowRequired carries a well-formed challenge
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c0b55b913e0d87ca	a5a498fa	PowRequired has HTTP status 402
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c8818a213e37a07e	a5a498fa	PowRequired#to_problem renders a pow_required 402 problem document
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	64906d83ddf07db1	a5a498fa	buys no later call made with the same access token
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	9fce75b0b1f5087b	a5a498fa	carries a hint steering to the shipped reference solver
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	acfbc2e7833add53	a5a498fa	def always_challenge_policy = @always_challenge_policy ||= AlwaysChallengePolicy.new
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	746f4737f42fe428	a5a498fa	does not disclose the construction, the parameters, or which check failed
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	4195d90b15a82a4d	a5a498fa	expect(error).not_to respond_to(:to_envelope)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	6bebde0903760d9d	a5a498fa	flattens a proxy comma-combined value {A},{B} (RFC 7230)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	b6b1a5daccdd4256	a5a498fa	flattens repeated header lines (Rack joins duplicates with
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	0b11f2218f3e1d63	a5a498fa	is deterministic: same inputs → same fingerprint
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	1d5fc28918d929e8	a5a498fa	is exactly SHA256(
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	afccf25f154f6298	a5a498fa	issues `count` challenges with distinct ids AND salts (no amortisation)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	d8d8d8750a9d0a27	a5a498fa	it 'raises Forbidden' do
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ce31dd7320e0a70b	a5a498fa	it 'raises PowRequired'
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ce31dd7320e0a70b	a5a498fa	it 'raises PowRequired' do
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	dbb855c1a71cffb4	a5a498fa	nil reputation_policy (the default)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c73461958a9f39f2	a5a498fa	parses a JSON-array value into the proofs list
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	7e520d8d761cc816	a5a498fa	pow_spent_store defaults to the database-backed store
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	253a673191cf8ea0	a5a498fa	re-challenge carries a well-formed NEW challenge (different id from the spent one)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	b3f559bf6dc155d3	a5a498fa	re-challenges when the ARGUMENTS differ
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	72ac62ac8c8a900c	a5a498fa	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	61c991cbcb9ed1cd	a5a498fa	re-challenges when the VERB differs (a catalog proof is not an orders proof)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ef885d83fd77e23b	a5a498fa	re-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	a02a012be872b420	a5a498fa	renders the documented forbidden problem document, carrying the hint
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	923ba26b26934295	a5a498fa	scales the challenge TTL by `count`, so a sequential solver does not lose the first
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	d30635fc6ca088f7	a5a498fa	still issues a 402 at the shipped equihash default — accepted set unchanged
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	3e3301774dc50ff0	a5a498fa	verifies for the identical method + verb + args (the control)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	951be4e4c59169fd	a5a498fa	wraps a single {…} proof into a one-element proofs list
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e5973ceb4762537e	85aac352	PowRequired carries a well-formed challenge
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c0b55b913e0d87ca	85aac352	PowRequired has HTTP status 402
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	52d922d0a77e7d35	85aac352	PowRequired#to_problem renders a pow_required 402 problem document
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	64906d83ddf07db1	85aac352	buys no later call made with the same access token
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	36daf12b96488626	85aac352	carries a hint steering to the shipped reference solver
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	acfbc2e7833add53	85aac352	def always_challenge_policy = @always_challenge_policy ||= AlwaysChallengePolicy.new
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	746f4737f42fe428	85aac352	does not disclose the construction, the parameters, or which check failed
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	4195d90b15a82a4d	85aac352	expect(error).not_to respond_to(:to_envelope)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	6bebde0903760d9d	85aac352	flattens a proxy comma-combined value {A},{B} (RFC 7230)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	b6b1a5daccdd4256	85aac352	flattens repeated header lines (Rack joins duplicates with
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	0b11f2218f3e1d63	85aac352	is deterministic: same inputs → same fingerprint
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	1d5fc28918d929e8	85aac352	is exactly SHA256(
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	afccf25f154f6298	85aac352	issues `count` challenges with distinct ids AND salts (no amortisation)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	d8d8d8750a9d0a27	85aac352	it 'raises Forbidden' do
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ce31dd7320e0a70b	85aac352	it 'raises PowRequired'
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ce31dd7320e0a70b	85aac352	it 'raises PowRequired' do
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	dbb855c1a71cffb4	85aac352	nil reputation_policy (the default)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c73461958a9f39f2	85aac352	parses a JSON-array value into the proofs list
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	7e520d8d761cc816	85aac352	pow_spent_store defaults to the database-backed store
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	253a673191cf8ea0	85aac352	re-challenge carries a well-formed NEW challenge (different id from the spent one)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	b3f559bf6dc155d3	85aac352	re-challenges when the ARGUMENTS differ
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	72ac62ac8c8a900c	85aac352	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	61c991cbcb9ed1cd	85aac352	re-challenges when the VERB differs (a catalog proof is not an orders proof)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ef885d83fd77e23b	85aac352	re-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	3fff4b26abf86734	85aac352	renders the documented forbidden problem document, carrying the hint
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	923ba26b26934295	85aac352	scales the challenge TTL by `count`, so a sequential solver does not lose the first
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	d30635fc6ca088f7	85aac352	still issues a 402 at the shipped equihash default — accepted set unchanged
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	3e3301774dc50ff0	85aac352	verifies for the identical method + verb + args (the control)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	951be4e4c59169fd	85aac352	wraps a single {…} proof into a one-element proofs list
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	f01606b795344abc	7def39e3	is idempotent and visible to a second instance
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	e133a65a09d35140	7def39e3	is laid down by the install generator
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	4e20db37947db123	7def39e3	leaves exactly one row for N racing claims of one id
@@ -1850,19 +1850,19 @@ kiosk-server/spec/kiosk/server/routing_spec.rb	259ddea28ca57a07	7def39e3	draws G
 kiosk-server/spec/kiosk/server/routing_spec.rb	14bba9a228b9fbec	7def39e3	draws POST <mount_path>/<name> for each action
 kiosk-server/spec/kiosk/server/routing_spec.rb	6b4755ec2cef0a21	7def39e3	draws no other method on a verb's path
 kiosk-server/spec/kiosk/server/routing_spec.rb	fd026b9db2586a34	7def39e3	mounts the engine FIRST, so the protocol plane wins by first match
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	f867e33117b9845d	7def39e3	answers an origin with nothing registered, rather than refusing
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	7537be5d0e429f5a	7def39e3	does not republish the module set the discovery document owns
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	48ab7784e22b7e2f	7def39e3	is 32 lowercase hex characters
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	56415c9f42537cb7	7def39e3	is STABLE across reads — the derivation happens once
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	a752b986e07b1521	7def39e3	is exactly {queries, actions, events} — sorted descriptors, and NO `verbs`
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	9efada58aa711d4a	7def39e3	is the digest, quoted, and STRONG — no `W/` prefix
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	45209feca98f8393	7def39e3	moves the digest when the derived value changes, with no reset and no restart
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	947d51580b8524c5	7def39e3	moves when a verb is ADDED
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	a6b18ab0cc6440bb	7def39e3	moves when a verb is REMOVED
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	b49fe41009fe07f3	7def39e3	moves when kiosk-server's own version moves, with the registry untouched
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	0b28f036213ecf9a	7def39e3	moves when only a DESCRIPTION changes
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	55e9773e07d5c216	7def39e3	moves when the mount path moves
-kiosk-server/spec/kiosk/server/schema_document_spec.rb	917727550f3a5a23	7def39e3	moves when the skill pin is re-issued
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	f867e33117b9845d	85aac352	answers an origin with nothing registered, rather than refusing
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	7537be5d0e429f5a	85aac352	does not republish the module set the discovery document owns
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	48ab7784e22b7e2f	85aac352	is 32 lowercase hex characters
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	56415c9f42537cb7	85aac352	is STABLE across reads — the derivation happens once
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	a752b986e07b1521	85aac352	is exactly {queries, actions, events} — sorted descriptors, and NO `verbs`
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	9efada58aa711d4a	85aac352	is the digest, quoted, and STRONG — no `W/` prefix
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	45209feca98f8393	85aac352	moves the digest when the derived value changes, with no reset and no restart
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	947d51580b8524c5	85aac352	moves when a verb is ADDED
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	a6b18ab0cc6440bb	85aac352	moves when a verb is REMOVED
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	b49fe41009fe07f3	85aac352	moves when kiosk-server's own version moves, with the registry untouched
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	0b28f036213ecf9a	85aac352	moves when only a DESCRIPTION changes
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	55e9773e07d5c216	85aac352	moves when the mount path moves
+kiosk-server/spec/kiosk/server/schema_document_spec.rb	ed7adc1833379e6d	85aac352	moves when the skill pin is re-issued
 kiosk-server/spec/kiosk/server/schema_slots_spec.rb	b631873365a6f17f	7def39e3	answers every caller with one descriptor, resolved once
 kiosk-server/spec/kiosk/server/schema_slots_spec.rb	5a04510987320267	7def39e3	re-resolves after the window, with no reset, no reload and no restart
 kiosk-server/spec/kiosk/server/schema_slots_spec.rb	4acecb379dbc0898	7def39e3	reuses a derived value no longer than the discovery document's freshness lifetime
@@ -1899,99 +1899,99 @@ kiosk-server/spec/kiosk/server/two_origins_spec.rb	a4b18fef92d1be56	7def39e3	adv
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	68eb22a4b5b693e8	7def39e3	advertises the default issuer on a host the operator does not serve
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	802fc26cdc136997	7def39e3	answers a host it does not serve as the default origin, and rejects an assertion carrying that host
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	6d862f9bf390e585	7def39e3	rejects an assertion for A presented on B
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	dc967854be461871	7def39e3	'not on a 200'
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	93db662ba2c50ca5	7def39e3	NOT on a refusal: a 4xx keeps the engine's own policy
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	980062e641791143	7def39e3	accepts limit and cursor on a verb that declares neither, with a CLOSED schema
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	aaf145d12c1ae269	7def39e3	an action is a POST at its own path
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	29f597f0dc87c5f1	7def39e3	answers 401 before it will say whether the verb exists
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	683ce8e4f2e3867a	7def39e3	answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	daa43d924e300a19	7def39e3	answers POST <endpoint>/run the same way — one unregistered name among others
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1aeacb9bfe5c2744	7def39e3	answers a GET at an ACTION's name 405, with Allow: POST
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	3b1138bd2f1c0132	7def39e3	answers a POST at a QUERY's name 405, with Allow: GET
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	efbb38169a85c4ef	7def39e3	answers an action POST with no credential 401 unauthenticated
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1e0b3b690b10cf70	7def39e3	answers an unknown name a problem document, naming what IS registered
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	9f3ea5fd2c24c3c4	7def39e3	answers with the handler's object VERBATIM — no `value` wrapper
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	9dc790691d76a7a6	7def39e3	answers with the handler's payload VERBATIM — a bare array, no envelope
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	45ac268c9859a17e	7def39e3	carries the cache policy every Kiosk response must carry
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	02943ae63d59de5e	7def39e3	derives X-Total-Count from a COMPLETE array answer, paginating or not
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	74d4bb61ffaa4df7	7def39e3	does not read a body on a GET — a query's arguments are its query string
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	5de37dd59fb1a017	7def39e3	does not read a query string on a POST — an action's arguments are its body
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	76bf559f2fd50d9f	7def39e3	draws no /query and no /run — the route table has no such paths
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7a5662341955670b	7def39e3	emits the handler's total on a truncated page
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	3e79e83b7bca6c7b	7def39e3	hands the handler an Integer, not the query string's String
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	9a0f9a0b6a322d7e	7def39e3	hands the handler nil when the caller declared none — silence is not an error
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	a2ef0d342c413e7a	7def39e3	hands the handler the caller's declared timezone
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	b8b9c66ec437a88c	7def39e3	is still private, no-store — a page is never shared-cacheable
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	74a8b86bdf996a7e	7def39e3	keeps `private, max-age=N` the handler set
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	949db256be575502	7def39e3	names YYYY-MM-DD when an action body carries a malformed date
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7f36c6feb1fa2765	7def39e3	names all three request headers on an action 200, a pay answer, a 400 and a 401
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	ca62220d622741ef	7def39e3	not even when the handler tried to set a policy of its own
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	ca82a1fa326af37c	7def39e3	not on a refusal
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	01bf970da82bdb92	7def39e3	not when only `public` is named, nor only `s-maxage`, nor only `must-revalidate`
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7e4a0c3fff22d28a	7def39e3	omits X-Total-Count on a truncated page whose handler gave no total
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	41e911ac6b29cc68	7def39e3	on an ACTION as well as a query
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1ca3df09f96ec2ce	7def39e3	puts the next page in a Link header with rel=next, not in the body
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	e0794cb1332344a3	7def39e3	refuses a UTC offset in Kiosk-Timezone with a 400 naming the header
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	16971270b54b5efb	7def39e3	refuses a limit above the largest page a verb declares, naming limit
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	20732c6bc668595d	7def39e3	refuses a value outside a declared enum — K-717's schema half
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	8f6ae4fe8d58a907	7def39e3	refuses a value that will not coerce with a 400 naming the parameter
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	a3b815290a8564ad	7def39e3	refuses a zone name nobody has, and never falls back
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	4c3413259f38c628	7def39e3	refuses an unreadable Kiosk-Timezone with 400 before asking for a proof
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	b29f975ea93d33fa	7def39e3	replaces an incoming cursor rather than appending a second one
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	cdac169888b92296	7def39e3	sends NO Link on the last page — its absence is what completeness means
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	0f59537c06d5a239	7def39e3	sends an ABSOLUTE Link target — fetchable verbatim, no resolution step
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	80b1b4256dffdb5c	7def39e3	sends neither header for an action
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	77705d5d93257d42	7def39e3	serves the tolled retry and asks the next call of the same token again
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	887521dced37300c	7def39e3	still refuses an undeclared parameter under additionalProperties: false
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	4ba3550ee50cf6f1	7def39e3	validates with validate_requests OFF — the flag no longer gates arguments
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	6f3e9c39b9b74995	7def39e3	…while GET <endpoint>/schema, which IS public, says so — the control
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	dc967854be461871	85aac352	'not on a 200'
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	93db662ba2c50ca5	85aac352	NOT on a refusal: a 4xx keeps the engine's own policy
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	980062e641791143	85aac352	accepts limit and cursor on a verb that declares neither, with a CLOSED schema
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	aaf145d12c1ae269	85aac352	an action is a POST at its own path
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	29f597f0dc87c5f1	85aac352	answers 401 before it will say whether the verb exists
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	2bb8c175028f4018	85aac352	answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	daa43d924e300a19	85aac352	answers POST <endpoint>/run the same way — one unregistered name among others
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7a86e2bc27abfc4a	85aac352	answers a GET at an ACTION's name 405, with Allow: POST
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	3b1138bd2f1c0132	85aac352	answers a POST at a QUERY's name 405, with Allow: GET
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	efbb38169a85c4ef	85aac352	answers an action POST with no credential 401 unauthenticated
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	86516981f0a7ed18	85aac352	answers an unknown name a problem document, naming what IS registered
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	9f3ea5fd2c24c3c4	85aac352	answers with the handler's object VERBATIM — no `value` wrapper
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	9dc790691d76a7a6	85aac352	answers with the handler's payload VERBATIM — a bare array, no envelope
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	45ac268c9859a17e	85aac352	carries the cache policy every Kiosk response must carry
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	02943ae63d59de5e	85aac352	derives X-Total-Count from a COMPLETE array answer, paginating or not
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	74d4bb61ffaa4df7	85aac352	does not read a body on a GET — a query's arguments are its query string
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	5de37dd59fb1a017	85aac352	does not read a query string on a POST — an action's arguments are its body
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	76bf559f2fd50d9f	85aac352	draws no /query and no /run — the route table has no such paths
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7a5662341955670b	85aac352	emits the handler's total on a truncated page
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	3e79e83b7bca6c7b	85aac352	hands the handler an Integer, not the query string's String
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	9a0f9a0b6a322d7e	85aac352	hands the handler nil when the caller declared none — silence is not an error
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	a2ef0d342c413e7a	85aac352	hands the handler the caller's declared timezone
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	b8b9c66ec437a88c	85aac352	is still private, no-store — a page is never shared-cacheable
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	74a8b86bdf996a7e	85aac352	keeps `private, max-age=N` the handler set
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	949db256be575502	85aac352	names YYYY-MM-DD when an action body carries a malformed date
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7f36c6feb1fa2765	85aac352	names all three request headers on an action 200, a pay answer, a 400 and a 401
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	ca62220d622741ef	85aac352	not even when the handler tried to set a policy of its own
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	ca82a1fa326af37c	85aac352	not on a refusal
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	01bf970da82bdb92	85aac352	not when only `public` is named, nor only `s-maxage`, nor only `must-revalidate`
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	7e4a0c3fff22d28a	85aac352	omits X-Total-Count on a truncated page whose handler gave no total
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	41e911ac6b29cc68	85aac352	on an ACTION as well as a query
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	1ca3df09f96ec2ce	85aac352	puts the next page in a Link header with rel=next, not in the body
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	e0794cb1332344a3	85aac352	refuses a UTC offset in Kiosk-Timezone with a 400 naming the header
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	16971270b54b5efb	85aac352	refuses a limit above the largest page a verb declares, naming limit
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	20732c6bc668595d	85aac352	refuses a value outside a declared enum — K-717's schema half
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	8f6ae4fe8d58a907	85aac352	refuses a value that will not coerce with a 400 naming the parameter
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	a3b815290a8564ad	85aac352	refuses a zone name nobody has, and never falls back
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	4c3413259f38c628	85aac352	refuses an unreadable Kiosk-Timezone with 400 before asking for a proof
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	b29f975ea93d33fa	85aac352	replaces an incoming cursor rather than appending a second one
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	cdac169888b92296	85aac352	sends NO Link on the last page — its absence is what completeness means
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	0f59537c06d5a239	85aac352	sends an ABSOLUTE Link target — fetchable verbatim, no resolution step
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	80b1b4256dffdb5c	85aac352	sends neither header for an action
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	77705d5d93257d42	85aac352	serves the tolled retry and asks the next call of the same token again
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	887521dced37300c	85aac352	still refuses an undeclared parameter under additionalProperties: false
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	4ba3550ee50cf6f1	85aac352	validates with validate_requests OFF — the flag no longer gates arguments
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	6f3e9c39b9b74995	85aac352	…while GET <endpoint>/schema, which IS public, says so — the control
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	3ed4704b3d1aa755	7def39e3	is refused AT CONFIGURATION TIME, not at the first tolled write
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	87bc7884ae09fe9d	7def39e3	is that the gate vocabulary names the write kind :run, not :action
-kiosk-server/spec/kiosk/server/well_known_spec.rb	fe68afe719a2ca4a	7def39e3	advertises OAuth 2.0 with the RFC 8414 metadata as its discovery document
-kiosk-server/spec/kiosk/server/well_known_spec.rb	309556b42a73d6c9	7def39e3	advertises an empty capability set when nothing is registered
-kiosk-server/spec/kiosk/server/well_known_spec.rb	2891edbc2916e3db	7def39e3	advertises kiosk-core's MIN_CLIENT as min_client
-kiosk-server/spec/kiosk/server/well_known_spec.rb	248da5e884b4bb60	7def39e3	advertises the binding endpoints also where the origin serves no binding (they answer 501)
-kiosk-server/spec/kiosk/server/well_known_spec.rb	be7fa0423e8c3a3b	7def39e3	advertises the computed module names (schema/queries/actions/pay)
-kiosk-server/spec/kiosk/server/well_known_spec.rb	15bd4014b1a77a12	7def39e3	advertises the configured issuer
-kiosk-server/spec/kiosk/server/well_known_spec.rb	f54e36f61c16b586	7def39e3	advertises the configured owner
-kiosk-server/spec/kiosk/server/well_known_spec.rb	f179813b6ac49aa2	7def39e3	advertises the document schema version
-kiosk-server/spec/kiosk/server/well_known_spec.rb	c236cfda50841b11	7def39e3	advertises the five auth endpoints under the same origin, in this order
-kiosk-server/spec/kiosk/server/well_known_spec.rb	9b633674c3935d05	7def39e3	advertises the skill descriptor when skill_sha256 is set
-kiosk-server/spec/kiosk/server/well_known_spec.rb	11c2deb95b66531e	7def39e3	computes the endpoint as base_url + mount_path
-kiosk-server/spec/kiosk/server/well_known_spec.rb	ce579e044f26da72	7def39e3	declares no payment protocol, even where the operator serves pay
-kiosk-server/spec/kiosk/server/well_known_spec.rb	eca96189540cbb8b	7def39e3	declares no payments block, even where the operator serves pay
-kiosk-server/spec/kiosk/server/well_known_spec.rb	7b00d88604b60cce	7def39e3	documents the OAuth error vocabulary of the /oauth/* endpoints
-kiosk-server/spec/kiosk/server/well_known_spec.rb	05c083413812a236	7def39e3	follows the canonical auth.md section order
-kiosk-server/spec/kiosk/server/well_known_spec.rb	e3417805512eaf1d	7def39e3	hyperlinks EVERY registered verb, at its own endpoint, unauthenticated
-kiosk-server/spec/kiosk/server/well_known_spec.rb	77b7b8987b5e2636	7def39e3	links every registered verb, then pay, as an item with its method
-kiosk-server/spec/kiosk/server/well_known_spec.rb	a6428f8c7c1bcaac	7def39e3	links the catalog at its digest-versioned, immutable URL
-kiosk-server/spec/kiosk/server/well_known_spec.rb	ad688a452c758d27	7def39e3	links the two versioned descriptions from the endpoint
-kiosk-server/spec/kiosk/server/well_known_spec.rb	69529a4d3f292694	7def39e3	moves that link when the catalog moves — that is the whole mechanism
-kiosk-server/spec/kiosk/server/well_known_spec.rb	1799dc618962ee69	7def39e3	names OAuth 2.0 by the identifier agents.txt registers for it
-kiosk-server/spec/kiosk/server/well_known_spec.rb	1ac4682b439c29c6	7def39e3	names the issuer, registration, the token endpoint and the device-code grant
-kiosk-server/spec/kiosk/server/well_known_spec.rb	8bfd73028f009cb9	7def39e3	never names a registered verb in this companion — pointer, not copy
-kiosk-server/spec/kiosk/server/well_known_spec.rb	125251b46fb23fb6	7def39e3	never names a registered verb in this document — pointer, not copy
-kiosk-server/spec/kiosk/server/well_known_spec.rb	aeea346567035d9f	7def39e3	omits the skill block when skill_sha256 is not set
-kiosk-server/spec/kiosk/server/well_known_spec.rb	6d5b9abb64dc1179	7def39e3	opens with an H1 that names auth.md
-kiosk-server/spec/kiosk/server/well_known_spec.rb	f991665aa0202d36	7def39e3	respects an overridden skill_url
-kiosk-server/spec/kiosk/server/well_known_spec.rb	bc503c08c4579ddc	7def39e3	returns a parse-able JSON string
-kiosk-server/spec/kiosk/server/well_known_spec.rb	bd25dcbd8ca23455	7def39e3	wraps everything under a top-level `kiosk` key
-kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	c084bf520f582691	7def39e3	answers 402 to a CONDITIONAL request — the toll runs before freshness
-kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	1a75e70b28e0bdb6	7def39e3	answers a per-verb GET the same gate as a problem document, uncacheable
-kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	e34ef6c9c898ba81	7def39e3	carries WWW-Authenticate: Kiosk-Payment-Setup
-kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	873711f80b50d1c4	7def39e3	carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	1c54467d48649c54	7def39e3	accepts a JSON-array Kiosk-PoW header (proceeds)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	22036718bb79061b	7def39e3	accepts a proxy comma-combined header value {A},{B} (RFC 7230)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	17c1b4ab20a78a4e	7def39e3	accepts a single-proof Kiosk-PoW header on a per-verb GET and proceeds (200)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	575810b01a49693c	7def39e3	accepts repeated header lines joined by \\n (Rack duplicate presentation)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	26836cbbb9c85171	7def39e3	accepts the matching POST proof on that same action (the control)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	65047eb5fe84656a	7def39e3	does NOT accept a GET proof on the POST endpoint of the same name
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	4bdb998dc7eacb31	7def39e3	does NOT accept a catalog proof on another query's endpoint
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	7d22504117a1605f	7def39e3	does NOT accept a proof placed in an action's BODY (the header is the channel)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	1cc1bb6c50377aab	7def39e3	never tolls GET /kiosk/schema, under a policy that challenges everything
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	28454dc220697a84	7def39e3	never tolls the JWKS document, under a policy that challenges everything
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	9a0fb635e658d409	7def39e3	re-challenges a per-verb GET with a fresh 402 problem document when no header is sent
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	e597f06694511b25	7def39e3	rejects a malformed Kiosk-PoW header with a 400 problem document + hint
+kiosk-server/spec/kiosk/server/well_known_spec.rb	fe68afe719a2ca4a	85aac352	advertises OAuth 2.0 with the RFC 8414 metadata as its discovery document
+kiosk-server/spec/kiosk/server/well_known_spec.rb	309556b42a73d6c9	85aac352	advertises an empty capability set when nothing is registered
+kiosk-server/spec/kiosk/server/well_known_spec.rb	2891edbc2916e3db	85aac352	advertises kiosk-core's MIN_CLIENT as min_client
+kiosk-server/spec/kiosk/server/well_known_spec.rb	248da5e884b4bb60	85aac352	advertises the binding endpoints also where the origin serves no binding (they answer 501)
+kiosk-server/spec/kiosk/server/well_known_spec.rb	be7fa0423e8c3a3b	85aac352	advertises the computed module names (schema/queries/actions/pay)
+kiosk-server/spec/kiosk/server/well_known_spec.rb	15bd4014b1a77a12	85aac352	advertises the configured issuer
+kiosk-server/spec/kiosk/server/well_known_spec.rb	f54e36f61c16b586	85aac352	advertises the configured owner
+kiosk-server/spec/kiosk/server/well_known_spec.rb	f179813b6ac49aa2	85aac352	advertises the document schema version
+kiosk-server/spec/kiosk/server/well_known_spec.rb	c236cfda50841b11	85aac352	advertises the five auth endpoints under the same origin, in this order
+kiosk-server/spec/kiosk/server/well_known_spec.rb	d69017c9be95b1ee	85aac352	advertises the skill descriptor when skill_sha256 is set
+kiosk-server/spec/kiosk/server/well_known_spec.rb	11c2deb95b66531e	85aac352	computes the endpoint as base_url + mount_path
+kiosk-server/spec/kiosk/server/well_known_spec.rb	ce579e044f26da72	85aac352	declares no payment protocol, even where the operator serves pay
+kiosk-server/spec/kiosk/server/well_known_spec.rb	eca96189540cbb8b	85aac352	declares no payments block, even where the operator serves pay
+kiosk-server/spec/kiosk/server/well_known_spec.rb	7b00d88604b60cce	85aac352	documents the OAuth error vocabulary of the /oauth/* endpoints
+kiosk-server/spec/kiosk/server/well_known_spec.rb	05c083413812a236	85aac352	follows the canonical auth.md section order
+kiosk-server/spec/kiosk/server/well_known_spec.rb	e3417805512eaf1d	85aac352	hyperlinks EVERY registered verb, at its own endpoint, unauthenticated
+kiosk-server/spec/kiosk/server/well_known_spec.rb	77b7b8987b5e2636	85aac352	links every registered verb, then pay, as an item with its method
+kiosk-server/spec/kiosk/server/well_known_spec.rb	a6428f8c7c1bcaac	85aac352	links the catalog at its digest-versioned, immutable URL
+kiosk-server/spec/kiosk/server/well_known_spec.rb	ad688a452c758d27	85aac352	links the two versioned descriptions from the endpoint
+kiosk-server/spec/kiosk/server/well_known_spec.rb	69529a4d3f292694	85aac352	moves that link when the catalog moves — that is the whole mechanism
+kiosk-server/spec/kiosk/server/well_known_spec.rb	1799dc618962ee69	85aac352	names OAuth 2.0 by the identifier agents.txt registers for it
+kiosk-server/spec/kiosk/server/well_known_spec.rb	1ac4682b439c29c6	85aac352	names the issuer, registration, the token endpoint and the device-code grant
+kiosk-server/spec/kiosk/server/well_known_spec.rb	8bfd73028f009cb9	85aac352	never names a registered verb in this companion — pointer, not copy
+kiosk-server/spec/kiosk/server/well_known_spec.rb	125251b46fb23fb6	85aac352	never names a registered verb in this document — pointer, not copy
+kiosk-server/spec/kiosk/server/well_known_spec.rb	aeea346567035d9f	85aac352	omits the skill block when skill_sha256 is not set
+kiosk-server/spec/kiosk/server/well_known_spec.rb	6d5b9abb64dc1179	85aac352	opens with an H1 that names auth.md
+kiosk-server/spec/kiosk/server/well_known_spec.rb	d09a35275c609a1a	85aac352	respects an overridden skill_url
+kiosk-server/spec/kiosk/server/well_known_spec.rb	bc503c08c4579ddc	85aac352	returns a parse-able JSON string
+kiosk-server/spec/kiosk/server/well_known_spec.rb	bd25dcbd8ca23455	85aac352	wraps everything under a top-level `kiosk` key
+kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	c084bf520f582691	85aac352	answers 402 to a CONDITIONAL request — the toll runs before freshness
+kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	5c3b31e0c19cf5c9	85aac352	answers a per-verb GET the same gate as a problem document, uncacheable
+kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	cde01b88b5431958	85aac352	carries WWW-Authenticate: Kiosk-Payment-Setup
+kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	a2c108274d005a3d	85aac352	carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	1c54467d48649c54	85aac352	accepts a JSON-array Kiosk-PoW header (proceeds)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	22036718bb79061b	85aac352	accepts a proxy comma-combined header value {A},{B} (RFC 7230)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	17c1b4ab20a78a4e	85aac352	accepts a single-proof Kiosk-PoW header on a per-verb GET and proceeds (200)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	575810b01a49693c	85aac352	accepts repeated header lines joined by \\n (Rack duplicate presentation)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	26836cbbb9c85171	85aac352	accepts the matching POST proof on that same action (the control)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	65047eb5fe84656a	85aac352	does NOT accept a GET proof on the POST endpoint of the same name
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	4bdb998dc7eacb31	85aac352	does NOT accept a catalog proof on another query's endpoint
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	7d22504117a1605f	85aac352	does NOT accept a proof placed in an action's BODY (the header is the channel)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	1cc1bb6c50377aab	85aac352	never tolls GET /kiosk/schema, under a policy that challenges everything
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	28454dc220697a84	85aac352	never tolls the JWKS document, under a policy that challenges everything
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	4cb7dd9d0b677ed1	85aac352	re-challenges a per-verb GET with a fresh 402 problem document when no header is sent
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	65ce13048fcd9d4c	85aac352	rejects a malformed Kiosk-PoW header with a 400 problem document + hint
 kiosk-server/spec/kiosk/server/wire_controller_validation_spec.rb	28d33d4d3b7fdac8	7def39e3	answers a proof for an algorithm it does not implement with a challenge for one it does, never a 400 on the nonce's shape
 kiosk-test-support/README.md	a4ba4190f7e5b341	7def39e3	Carries the shared pieces of the Kiosk journey-test DSL: the `Journey` module mixed into RSpec / Minitest tests, the pluggable `executor` contract, a `NullExecutor` for self-tests
 kiosk-test-support/README.md	6d6149171b41dd0f	7def39e3	For unit-shaped tests where you only care about call ordering, use the bundled `NullExecutor`:
@@ -2051,12 +2051,12 @@ kiosk-test-support/spec/verb_reach_spec.rb	be0316a58ed8b5a7	7def39e3	declares no
 kiosk-test-support/spec/verb_reach_spec.rb	f23365f06f4ac986	7def39e3	finds a principal name declared as a property (the matcher is not vacuous)
 kiosk-test-support/spec/verb_reach_spec.rb	1e2a6cb07cc33825	7def39e3	reads every input_schema in the fleet (the check is not vacuous)
 kiosk-test-support/spec/verb_reach_spec.rb	c34f3bcbfb4d9c02	7def39e3	the reviewed inventory is exactly what the fleet declares
-kiosk-user-idp-devise/README.md	30a1a7c5518e1bfc	7def39e3	**Lockable / confirmable handling is implicit.** Devise's `active_for_authentication?` already gates the Warden user, so
-kiosk-user-idp-devise/README.md	f6d7f8d434fcbea5	7def39e3	Add the adapter explicitly — the `kiosk-all` meta-gem pulls in only `kiosk-core` and `kiosk-server`, so IdP adapters are
-kiosk-user-idp-devise/README.md	e573a7b39cc5eb35	7def39e3	Reads the signed-in user from the incoming request's Warden proxy and returns a `Kiosk::Identity` for the human-side surfaces
-kiosk-user-idp-devise/README.md	cff7548ca481be5a	7def39e3	The Devise sign-in adapter for [Kiosk](https://kiosk.tech) — for Rails operators that authenticate customers through Devise.
-kiosk-user-idp-devise/README.md	ba0f17da74b26341	7def39e3	The adapter is **agnostic about how the customer signed in**: Devise's `database_authenticatable` and `omniauthable` modules
-kiosk-user-idp-devise/README.md	0550c5aa4c111955	7def39e3	kiosk-server calls the adapter with an `ActionDispatch::Request` from the human-side page gate
+kiosk-user-idp-devise/README.md	30a1a7c5518e1bfc	85aac352	**Lockable / confirmable handling is implicit.** Devise's `active_for_authentication?` already gates the Warden user, so
+kiosk-user-idp-devise/README.md	f6d7f8d434fcbea5	85aac352	Add the adapter explicitly — the `kiosk-all` meta-gem pulls in only `kiosk-core` and `kiosk-server`, so IdP adapters are
+kiosk-user-idp-devise/README.md	e573a7b39cc5eb35	85aac352	Reads the signed-in user from the incoming request's Warden proxy and returns a `Kiosk::Identity` for the human-side surfaces
+kiosk-user-idp-devise/README.md	934d9f59e1ccc331	85aac352	The Devise sign-in adapter for [Kiosk](https://kiosk-hq.github.io) — for Rails operators that authenticate customers through Devise.
+kiosk-user-idp-devise/README.md	ba0f17da74b26341	85aac352	The adapter is **agnostic about how the customer signed in**: Devise's `database_authenticatable` and `omniauthable` modules
+kiosk-user-idp-devise/README.md	0550c5aa4c111955	85aac352	kiosk-server calls the adapter with an `ActionDispatch::Request` from the human-side page gate
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	f213732e3e4d06a6	7def39e3	        Kiosk::Identity.new(
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	af7695ffaf364e81	7def39e3	      def current_user_from(request)
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	39d0d63346100688	7def39e3	      def rack_env_for(request)

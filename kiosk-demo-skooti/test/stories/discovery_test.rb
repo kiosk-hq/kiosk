@@ -32,7 +32,7 @@ class DiscoveryStory < StoryTest
   test 'the landing page advertises the skill this origin pins' do
     pinned = published('/.well-known/kiosk.json').dig('kiosk', 'skill', 'url')
 
-    assert_match %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}, pinned
+    assert_match %r{\Ahttps://kiosk-hq\.github\.io/skill-v\d+\.\d+\.\d+\.md\z}, pinned
 
     page = Net::HTTP.get_response(URI("#{live_url}/"))
 

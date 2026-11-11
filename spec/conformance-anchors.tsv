@@ -1091,7 +1091,7 @@ kiosk-server/lib/kiosk/server/client_assertion.rb	issuer = Kiosk.current_issuer
 kiosk-server/lib/kiosk/server/client_registration.rb	# RFC 7591 open registration of an AI assistant's public key, with no human:
 kiosk-server/lib/kiosk/server/client_registration.rb	AuthToll.gate(verb: 'oauth/register', body: { key: AssistantKey.thumbprint(key) }, pow: pow, config: config)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	        @skill_url ||= 'https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	        @skill_url ||= 'https://kiosk-hq.github.io/skill-v
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      attr_accessor :spending_cap
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      def computed_capabilities

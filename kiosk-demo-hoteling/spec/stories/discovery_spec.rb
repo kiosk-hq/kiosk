@@ -32,7 +32,7 @@ RSpec.describe 'Discovering the hotel', type: :story do
   describe 'the landing page' do
     it 'the landing page advertises the skill this origin pins' do
       pinned = published('/.well-known/kiosk.json').dig('kiosk', 'skill', 'url')
-      expect(pinned).to match(%r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z})
+      expect(pinned).to match(%r{\Ahttps://kiosk-hq\.github\.io/skill-v\d+\.\d+\.\d+\.md\z})
 
       page = Net::HTTP.get_response(URI("#{live_url}/"))
       expect(page.body[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1]).to eq(pinned)

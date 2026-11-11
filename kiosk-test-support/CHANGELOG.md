@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.29] — 2026-11-11
+
+- 2026-11-11: Version 0.6.29, the tree cut that matches skill 0.6.29.
 - 2026-11-11: The homepage, the README and the skill pin message name https://kiosk-hq.github.io, the address of the Kiosk site.
 
 ## [0.6.28] — 2026-10-26

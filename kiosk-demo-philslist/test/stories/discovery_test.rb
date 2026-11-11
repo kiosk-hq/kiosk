@@ -43,7 +43,7 @@ class DiscoveryStory < StoryTest
   test 'every page points an assistant at the skill this board pins' do
     pinned = published('/.well-known/kiosk.json').dig('kiosk', 'skill', 'url')
 
-    assert_match %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}, pinned
+    assert_match %r{\Ahttps://kiosk-hq\.github\.io/skill-v\d+\.\d+\.\d+\.md\z}, pinned
 
     %w[/ /listings].each do |path|
       page = Net::HTTP.get_response(URI("#{live_url}#{path}"))

@@ -161,7 +161,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       d = described_class.build(base_url: 'https://api.acme.example')
       expect(d[:kiosk][:skill]).to eq(url: Kiosk.configuration.skill_url, sha256: 'abc123')
       expect(Kiosk.configuration.skill_url)
-        .to match(%r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z})
+        .to match(%r{\Ahttps://kiosk-hq\.github\.io/skill-v\d+\.\d+\.\d+\.md\z})
     end
 
     it 'respects an overridden skill_url' do

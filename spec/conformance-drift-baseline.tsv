@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-11-11 at 85aac352
+# recorded: 2026-11-11 at 546eb55a
 # 2062 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	7def39e3	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	f917a3b8a01e4bef	7def39e3	        if: matrix.demo != 'kiosk-demo-proveli'
@@ -649,8 +649,8 @@ kiosk-demo-stylish/config/routes.rb	9bf0728493684b31	7def39e3	kiosk do
 kiosk-demo-stylish/config/routes.rb	16adeb2bb4d34c0d	7def39e3	queries :my_appointments, :salon_calendar, :salons, :service_menu
 kiosk-demo-stylish/test/book_appointment_test.rb	7ac62782885c3c4c	7def39e3	a slot without an offset names no instant and is refused
 kiosk-demo-stylish/test/book_appointment_test.rb	91215efe9c4a3e9d	7def39e3	one instant in any spelling is one booking, answered on the salon's clock
-kiosk-demo-stylish/test/stories/discovery_test.rb	876c5760e9019d12	85aac352	an assistant that knows nothing finds out, without an account, what the salon offers and how to book
-kiosk-demo-stylish/test/stories/discovery_test.rb	91ab63d294315340	85aac352	class DiscoveryStory < StoryTest
+kiosk-demo-stylish/test/stories/discovery_test.rb	876c5760e9019d12	546eb55a	an assistant that knows nothing finds out, without an account, what the salon offers and how to book
+kiosk-demo-stylish/test/stories/discovery_test.rb	c1059812123a06ee	546eb55a	class DiscoveryStory < StoryTest
 kiosk-demo-stylish/test/stories/linking_test.rb	8b58f903b3d6038b	a5a498fa	  test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
 kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	a5a498fa	  test 'Alice approves the code her assistant shows her, and it books in her name' do
 kiosk-demo-stylish/test/stories/linking_test.rb	2603a9ee0ee19c16	a5a498fa	Alice approves the code her assistant shows her, and it books in her name
